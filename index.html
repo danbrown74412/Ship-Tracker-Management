@@ -376,6 +376,67 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const auth = firebase.auth();
+
+// Default admin credentials
+const DEFAULT_ADMIN = {
+    email: 'dbrown@shiptracker.local',
+    password: 'admin123',
+    displayName: 'dbrown'
+};
+
+// Setup default admin on first load
+const setupDefaultAdmin = async () => {
+    try {
+        // Check if default admin exists in userProfiles
+        const adminQuery = await db.collection('userProfiles').where('email', '==', DEFAULT_ADMIN.email).get();
+        if (adminQuery.empty) {
+            // Try to create the user in Firebase Auth
+            try {
+                const userCred = await auth.createUserWithEmailAndPassword(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password);
+                await userCred.user.updateProfile({ displayName: DEFAULT_ADMIN.displayName });
+                // Create approved admin profile
+                await db.collection('userProfiles').doc(userCred.user.uid).set({
+                    uid: userCred.user.uid,
+                    email: DEFAULT_ADMIN.email,
+                    displayName: DEFAULT_ADMIN.displayName,
+                    isAdmin: true,
+                    status: 'approved',
+                    createdAt: new Date().toISOString()
+                });
+                console.log('Default admin created: dbrown@shiptracker.local / admin123');
+                await auth.signOut();
+            } catch (authErr) {
+                if (authErr.code === 'auth/email-already-in-use') {
+                    // User exists in Auth but not in profiles, sign in to get uid
+                    try {
+                        const userCred = await auth.signInWithEmailAndPassword(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password);
+                        await db.collection('userProfiles').doc(userCred.user.uid).set({
+                            uid: userCred.user.uid,
+                            email: DEFAULT_ADMIN.email,
+                            displayName: DEFAULT_ADMIN.displayName,
+                            isAdmin: true,
+                            status: 'approved',
+                            createdAt: new Date().toISOString()
+                        });
+                        await auth.signOut();
+                    } catch (e) { console.log('Admin setup skipped'); }
+                }
+            }
+        } else {
+            // Ensure existing dbrown is admin and approved
+            const doc = adminQuery.docs[0];
+            if (!doc.data().isAdmin || doc.data().status !== 'approved') {
+                await db.collection('userProfiles').doc(doc.id).update({
+                    isAdmin: true,
+                    status: 'approved'
+                });
+            }
+        }
+    } catch (err) {
+        console.log('Admin setup error:', err);
+    }
+};
+setupDefaultAdmin();
 </script>
 
 <script type="text/babel">
