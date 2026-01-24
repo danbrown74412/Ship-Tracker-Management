@@ -358,7 +358,6 @@
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
 <script>
 // Firebase Configuration
@@ -372,65 +371,47 @@ const firebaseConfig = {
     measurementId: "G-T7X4T0EGZK"
 };
 
-// Initialize Firebase
+// Initialize Firebase (Firestore only - no Auth needed)
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const auth = firebase.auth();
 
-// Default admin credentials
-const DEFAULT_ADMIN = {
-    email: 'dbrown@shiptracker.local',
-    password: 'admin123',
-    displayName: 'dbrown'
+// Secure password hashing using Web Crypto API
+const hashPassword = async (password, salt = null) => {
+    const encoder = new TextEncoder();
+    // Generate salt if not provided
+    if (!salt) {
+        const saltArray = crypto.getRandomValues(new Uint8Array(16));
+        salt = Array.from(saltArray).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    // Hash password with salt using SHA-256
+    const data = encoder.encode(salt + password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return { hash, salt };
+};
+
+const verifyPassword = async (password, storedHash, salt) => {
+    const { hash } = await hashPassword(password, salt);
+    return hash === storedHash;
 };
 
 // Setup default admin on first load
 const setupDefaultAdmin = async () => {
     try {
-        // Check if default admin exists in userProfiles
-        const adminQuery = await db.collection('userProfiles').where('email', '==', DEFAULT_ADMIN.email).get();
+        const adminQuery = await db.collection('users').where('username', '==', 'dbrown').get();
         if (adminQuery.empty) {
-            // Try to create the user in Firebase Auth
-            try {
-                const userCred = await auth.createUserWithEmailAndPassword(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password);
-                await userCred.user.updateProfile({ displayName: DEFAULT_ADMIN.displayName });
-                // Create approved admin profile
-                await db.collection('userProfiles').doc(userCred.user.uid).set({
-                    uid: userCred.user.uid,
-                    email: DEFAULT_ADMIN.email,
-                    displayName: DEFAULT_ADMIN.displayName,
-                    isAdmin: true,
-                    status: 'approved',
-                    createdAt: new Date().toISOString()
-                });
-                console.log('Default admin created: dbrown@shiptracker.local / admin123');
-                await auth.signOut();
-            } catch (authErr) {
-                if (authErr.code === 'auth/email-already-in-use') {
-                    // User exists in Auth but not in profiles, sign in to get uid
-                    try {
-                        const userCred = await auth.signInWithEmailAndPassword(DEFAULT_ADMIN.email, DEFAULT_ADMIN.password);
-                        await db.collection('userProfiles').doc(userCred.user.uid).set({
-                            uid: userCred.user.uid,
-                            email: DEFAULT_ADMIN.email,
-                            displayName: DEFAULT_ADMIN.displayName,
-                            isAdmin: true,
-                            status: 'approved',
-                            createdAt: new Date().toISOString()
-                        });
-                        await auth.signOut();
-                    } catch (e) { console.log('Admin setup skipped'); }
-                }
-            }
-        } else {
-            // Ensure existing dbrown is admin and approved
-            const doc = adminQuery.docs[0];
-            if (!doc.data().isAdmin || doc.data().status !== 'approved') {
-                await db.collection('userProfiles').doc(doc.id).update({
-                    isAdmin: true,
-                    status: 'approved'
-                });
-            }
+            const { hash, salt } = await hashPassword('admin123');
+            await db.collection('users').doc('dbrown').set({
+                username: 'dbrown',
+                displayName: 'dbrown',
+                passwordHash: hash,
+                salt: salt,
+                isAdmin: true,
+                status: 'approved',
+                createdAt: new Date().toISOString()
+            });
+            console.log('Default admin created: dbrown / admin123');
         }
     } catch (err) {
         console.log('Admin setup error:', err);
@@ -438,83 +419,117 @@ const setupDefaultAdmin = async () => {
 };
 setupDefaultAdmin();
 
-// Migrate legacy users from old auth system
-const migrateLegacyUsers = async () => {
+// Migrate existing users - preserve their accounts with secure hashing
+const migrateExistingUsers = async () => {
     try {
-        // Check for old users in localStorage (common storage locations)
-        const legacyKeys = ['users', 'shipTrackerUsers', 'fb_users', 'registeredUsers'];
-        let legacyUsers = [];
+        // Check userProfiles collection for existing users
+        const profiles = await db.collection('userProfiles').get();
+        for (const doc of profiles.docs) {
+            const data = doc.data();
+            const username = data.displayName || data.email?.split('@')[0] || doc.id;
 
+            // Check if already migrated to users collection
+            const existingUser = await db.collection('users').doc(username).get();
+            if (!existingUser.exists) {
+                // Migrate with a default password they'll need to keep using
+                // or their existing password if stored
+                const password = data.password || data.plainPassword || 'changeme123';
+                const { hash, salt } = await hashPassword(password);
+                await db.collection('users').doc(username).set({
+                    username: username,
+                    displayName: data.displayName || username,
+                    passwordHash: hash,
+                    salt: salt,
+                    isAdmin: data.isAdmin || false,
+                    status: data.status || 'approved',
+                    migratedFrom: 'userProfiles',
+                    originalId: doc.id,
+                    createdAt: data.createdAt || new Date().toISOString()
+                });
+                console.log('Migrated user:', username);
+            }
+        }
+
+        // Also check localStorage for legacy users
+        const legacyKeys = ['users', 'shipTrackerUsers', 'fb_users', 'registeredUsers'];
         for (const key of legacyKeys) {
             const stored = localStorage.getItem(key);
             if (stored) {
                 try {
                     const parsed = JSON.parse(stored);
                     if (Array.isArray(parsed)) {
-                        legacyUsers = [...legacyUsers, ...parsed];
+                        for (const user of parsed) {
+                            const username = user.username || user.displayName || user.email?.split('@')[0];
+                            if (!username) continue;
+
+                            const existingUser = await db.collection('users').doc(username).get();
+                            if (!existingUser.exists) {
+                                const password = user.plainPassword || user.password || 'changeme123';
+                                const { hash, salt } = await hashPassword(password);
+                                await db.collection('users').doc(username).set({
+                                    username: username,
+                                    displayName: user.displayName || username,
+                                    passwordHash: hash,
+                                    salt: salt,
+                                    isAdmin: user.isAdmin || user.role === 'admin' || false,
+                                    status: 'approved',
+                                    migratedFrom: 'localStorage',
+                                    createdAt: user.createdAt || new Date().toISOString()
+                                });
+                                console.log('Migrated localStorage user:', username);
+                            }
+                        }
                     }
                 } catch (e) {}
             }
         }
-
-        if (legacyUsers.length === 0) return;
-
-        console.log(`Found ${legacyUsers.length} legacy users to migrate`);
-
-        for (const user of legacyUsers) {
-            if (!user.email && user.username) {
-                // Convert username to email format if needed
-                user.email = user.username.includes('@') ? user.username : `${user.username}@shiptracker.local`;
-            }
-            if (!user.email) continue;
-
-            // Check if already migrated
-            const existingProfile = await db.collection('userProfiles').where('email', '==', user.email).get();
-            if (!existingProfile.empty) continue;
-
-            try {
-                // Try to create Firebase Auth account with their password
-                // If password was hashed, use a default and they'll need to reset
-                const password = user.plainPassword || user.password || 'changeme123';
-                const userCred = await auth.createUserWithEmailAndPassword(user.email, password.length >= 6 ? password : 'changeme123');
-
-                await userCred.user.updateProfile({
-                    displayName: user.displayName || user.username || user.email.split('@')[0]
-                });
-
-                // Create approved profile (keep their admin status if they had it)
-                await db.collection('userProfiles').doc(userCred.user.uid).set({
-                    uid: userCred.user.uid,
-                    email: user.email,
-                    displayName: user.displayName || user.username || user.email.split('@')[0],
-                    isAdmin: user.isAdmin || user.role === 'admin' || false,
-                    status: 'approved',
-                    migratedFrom: 'legacy',
-                    createdAt: user.createdAt || new Date().toISOString()
-                });
-
-                console.log(`Migrated user: ${user.email}`);
-                await auth.signOut();
-            } catch (authErr) {
-                if (authErr.code === 'auth/email-already-in-use') {
-                    // User exists in Auth, just ensure profile exists
-                    console.log(`User ${user.email} already in Firebase Auth`);
-                } else {
-                    console.log(`Could not migrate ${user.email}:`, authErr.message);
-                }
-            }
-        }
-
-        // Mark migration as complete
-        localStorage.setItem('legacyMigrationComplete', 'true');
-        console.log('Legacy user migration complete');
+        console.log('User migration complete');
     } catch (err) {
         console.log('Migration error:', err);
     }
 };
+migrateExistingUsers();
+</script>
 
-// Run migration if not already done
-if (!localStorage.getItem('legacyMigrationComplete')) {
+<script type="text/babel">
+const { useState, useEffect, useMemo, useCallback, useRef } = React;
+
+// Auth helper functions available globally
+const authHelpers = {
+    async login(username, password) {
+        const userDoc = await db.collection('users').doc(username).get();
+        if (!userDoc.exists) {
+            throw new Error('User not found');
+        }
+        const userData = userDoc.data();
+        if (userData.status !== 'approved') {
+            throw new Error('Account pending approval');
+        }
+        const isValid = await verifyPassword(password, userData.passwordHash, userData.salt);
+        if (!isValid) {
+            throw new Error('Incorrect password');
+        }
+        return { uid: username, ...userData };
+    },
+
+    async register(username, password, displayName) {
+        const existing = await db.collection('users').doc(username).get();
+        if (existing.exists) {
+            throw new Error('Username already taken');
+        }
+        const { hash, salt } = await hashPassword(password);
+        await db.collection('users').doc(username).set({
+            username,
+            displayName: displayName || username,
+            passwordHash: hash,
+            salt,
+            isAdmin: false,
+            status: 'pending',
+            createdAt: new Date().toISOString()
+        });
+        return { username, displayName };
+    }
+};
     migrateLegacyUsers();
 }
 </script>
@@ -594,125 +609,30 @@ const useStorage = (key, init) => {
 // ===== AUTHENTICATION WITH FIREBASE AUTH =====
 function LoginPage({ onLogin }) {
     const [mode, setMode] = useState('login');
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
 
-    // Check for legacy user in localStorage
-    const findLegacyUser = (emailOrUsername, password) => {
-        const legacyKeys = ['users', 'shipTrackerUsers', 'fb_users', 'registeredUsers'];
-        for (const key of legacyKeys) {
-            try {
-                const stored = localStorage.getItem(key);
-                if (stored) {
-                    const users = JSON.parse(stored);
-                    if (Array.isArray(users)) {
-                        const user = users.find(u =>
-                            (u.email === emailOrUsername || u.username === emailOrUsername) &&
-                            (u.password === password || u.plainPassword === password)
-                        );
-                        if (user) return user;
-                    }
-                }
-            } catch (e) {}
-        }
-        return null;
-    };
-
-    // Migrate legacy user to Firebase Auth
-    const migrateLegacyUser = async (legacyUser, password) => {
-        const userEmail = legacyUser.email || (legacyUser.username.includes('@') ? legacyUser.username : `${legacyUser.username}@shiptracker.local`);
-
-        try {
-            // Create Firebase Auth account
-            const userCred = await auth.createUserWithEmailAndPassword(userEmail, password);
-            await userCred.user.updateProfile({
-                displayName: legacyUser.displayName || legacyUser.username || userEmail.split('@')[0]
-            });
-
-            // Create approved profile
-            await db.collection('userProfiles').doc(userCred.user.uid).set({
-                uid: userCred.user.uid,
-                email: userEmail,
-                displayName: legacyUser.displayName || legacyUser.username || userEmail.split('@')[0],
-                isAdmin: legacyUser.isAdmin || legacyUser.role === 'admin' || false,
-                status: 'approved',
-                migratedFrom: 'legacy',
-                createdAt: legacyUser.createdAt || new Date().toISOString()
-            });
-
-            return { success: true, email: userEmail };
-        } catch (err) {
-            if (err.code === 'auth/email-already-in-use') {
-                // Try to sign in instead
-                return { success: true, email: userEmail, alreadyExists: true };
-            }
-            throw err;
-        }
-    };
-
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
         setLoading(true);
 
-        if (!email.trim() || !password.trim()) {
-            setError('Please enter email and password');
+        if (!username.trim() || !password.trim()) {
+            setError('Please enter username and password');
             setLoading(false);
             return;
         }
 
-        // Normalize email - add domain if just username
-        let loginEmail = email.trim();
-        if (!loginEmail.includes('@')) {
-            loginEmail = `${loginEmail}@shiptracker.local`;
-        }
-
         try {
-            const userCredential = await auth.signInWithEmailAndPassword(loginEmail, password);
-            // User profile will be loaded by AuthWrapper's onAuthStateChanged
+            const user = await authHelpers.login(username.trim(), password);
+            localStorage.setItem('currentUser', JSON.stringify(user));
+            onLogin(user);
         } catch (err) {
-            console.error('Login error:', err);
-
-            // Check for legacy user if not found in Firebase
-            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
-                const legacyUser = findLegacyUser(email.trim(), password);
-                if (legacyUser) {
-                    try {
-                        setError('');
-                        const result = await migrateLegacyUser(legacyUser, password);
-                        // Now try to sign in with the migrated account
-                        await auth.signInWithEmailAndPassword(result.email, password);
-                        setLoading(false);
-                        return;
-                    } catch (migrateErr) {
-                        console.error('Migration error:', migrateErr);
-                        setError('Could not migrate your account. Please register again.');
-                        setLoading(false);
-                        return;
-                    }
-                }
-            }
-
-            switch (err.code) {
-                case 'auth/user-not-found':
-                    setError('No account found. Try with just your username (e.g., "dbrown").');
-                    break;
-                case 'auth/wrong-password':
-                    setError('Incorrect password.');
-                    break;
-                case 'auth/invalid-email':
-                    setError('Invalid email address.');
-                    break;
-                case 'auth/too-many-requests':
-                    setError('Too many failed attempts. Please try again later.');
-                    break;
-                default:
-                    setError(err.message);
-            }
+            setError(err.message);
         }
         setLoading(false);
     };
@@ -723,7 +643,7 @@ function LoginPage({ onLogin }) {
         setSuccess('');
         setLoading(true);
 
-        if (!email.trim() || !password.trim() || !displayName.trim()) {
+        if (!username.trim() || !password.trim() || !displayName.trim()) {
             setError('Please fill in all fields');
             setLoading(false);
             return;
@@ -735,62 +655,14 @@ function LoginPage({ onLogin }) {
         }
 
         try {
-            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-
-            // Update display name
-            await userCredential.user.updateProfile({
-                displayName: displayName.trim()
-            });
-
-            // Create user profile in Firestore
-            await db.collection('userProfiles').doc(userCredential.user.uid).set({
-                uid: userCredential.user.uid,
-                email: email,
-                displayName: displayName.trim(),
-                isAdmin: false,
-                status: 'pending',
-                createdAt: new Date().toISOString()
-            });
-
-            // Sign out - they need admin approval
-            await auth.signOut();
-
-            setSuccess('Account created! Please wait for admin approval before logging in.');
-            setEmail('');
+            await authHelpers.register(username.trim(), password, displayName.trim());
+            setSuccess('Account created! Please wait for admin approval.');
+            setUsername('');
             setPassword('');
             setDisplayName('');
             setMode('login');
         } catch (err) {
-            console.error('Registration error:', err);
-            switch (err.code) {
-                case 'auth/email-already-in-use':
-                    setError('An account with this email already exists.');
-                    break;
-                case 'auth/invalid-email':
-                    setError('Invalid email address.');
-                    break;
-                case 'auth/weak-password':
-                    setError('Password is too weak. Use at least 6 characters.');
-                    break;
-                default:
-                    setError(err.message);
-            }
-        }
-        setLoading(false);
-    };
-
-    const handlePasswordReset = async () => {
-        if (!email.trim()) {
-            setError('Enter your email address first');
-            return;
-        }
-        setLoading(true);
-        try {
-            await auth.sendPasswordResetEmail(email);
-            setSuccess('Password reset email sent! Check your inbox.');
-            setError('');
-        } catch (err) {
-            setError('Could not send reset email. Check your email address.');
+            setError(err.message);
         }
         setLoading(false);
     };
@@ -814,7 +686,7 @@ function LoginPage({ onLogin }) {
                         <form onSubmit={handleLogin}>
                             <div style={{marginBottom:'16px'}}>
                                 <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Username</label>
-                                <input type="text" value={email} onChange={e => setEmail(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Enter username" disabled={loading}/>
+                                <input type="text" value={username} onChange={e => setUsername(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Enter username" disabled={loading}/>
                             </div>
                             <div style={{marginBottom:'16px'}}>
                                 <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Password</label>
@@ -827,6 +699,10 @@ function LoginPage({ onLogin }) {
                         </form>
                     ) : (
                         <form onSubmit={handleRegister}>
+                            <div style={{marginBottom:'16px'}}>
+                                <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Username</label>
+                                <input type="text" value={username} onChange={e => setUsername(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Choose username" disabled={loading}/>
+                            </div>
                             <div style={{marginBottom:'16px'}}>
                                 <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Display Name</label>
                                 <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Your name" disabled={loading}/>
@@ -849,7 +725,7 @@ function LoginPage({ onLogin }) {
                 </div>
                 <div style={{marginTop:'16px',padding:'12px',background:'var(--green-glow)',border:'1px solid var(--green)',borderRadius:'8px',fontSize:'11px',color:'var(--green)'}}>
                     <strong>Secure Authentication</strong><br/>
-                    Passwords are securely hashed by Firebase Auth. Your credentials are never stored in plain text.
+                    Passwords are securely hashed using SHA-256. Your credentials are never stored in plain text.
                 </div>
             </div>
         </div>
@@ -861,7 +737,7 @@ function AdminPanel({ onClose }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = db.collection('userProfiles').onSnapshot((snapshot) => {
+        const unsubscribe = db.collection('users').onSnapshot((snapshot) => {
             const userList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setUsers(userList);
             setLoading(false);
@@ -874,28 +750,28 @@ function AdminPanel({ onClose }) {
     const denied = users.filter(u => u.status === 'denied');
 
     const approve = async (u) => {
-        await db.collection('userProfiles').doc(u.id).update({
+        await db.collection('users').doc(u.id).update({
             status: 'approved',
             approvedAt: new Date().toISOString()
         });
     };
 
     const deny = async (u) => {
-        await db.collection('userProfiles').doc(u.id).update({
+        await db.collection('users').doc(u.id).update({
             status: 'denied',
             deniedAt: new Date().toISOString()
         });
     };
 
     const toggleAdmin = async (u) => {
-        await db.collection('userProfiles').doc(u.id).update({
+        await db.collection('users').doc(u.id).update({
             isAdmin: !u.isAdmin
         });
     };
 
     const del = async (u) => {
         if (confirm(`Delete ${u.displayName || u.email}? This will remove their profile but not their Firebase Auth account.`)) {
-            await db.collection('userProfiles').doc(u.id).delete();
+            await db.collection('users').doc(u.id).delete();
         }
     };
 
@@ -983,76 +859,45 @@ function AdminPanel({ onClose }) {
 }
 
 function AuthWrapper() {
-    const [authState, setAuthState] = useState('loading'); // 'loading', 'unauthenticated', 'pending', 'authenticated'
+    const [authState, setAuthState] = useState('loading');
     const [currentUser, setCurrentUser] = useState(null);
-    const [userProfile, setUserProfile] = useState(null);
     const [showAdmin, setShowAdmin] = useState(false);
     const [pendingCount, setPendingCount] = useState(0);
 
     useEffect(() => {
-        // Listen for auth state changes
-        const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                // User is signed in, check their profile
-                const profileRef = db.collection('userProfiles').doc(user.uid);
-
-                const unsubscribeProfile = profileRef.onSnapshot((doc) => {
-                    if (doc.exists) {
-                        const profile = doc.data();
-                        setUserProfile(profile);
-
-                        if (profile.status === 'approved') {
-                            setCurrentUser({
-                                uid: user.uid,
-                                email: user.email,
-                                displayName: profile.displayName || user.displayName || user.email,
-                                isAdmin: profile.isAdmin || false
-                            });
-                            setAuthState('authenticated');
-                        } else if (profile.status === 'pending') {
-                            setAuthState('pending');
-                        } else if (profile.status === 'denied') {
-                            auth.signOut();
-                            setAuthState('unauthenticated');
-                        }
-                    } else {
-                        // No profile exists, create one (for existing Firebase Auth users)
-                        profileRef.set({
-                            uid: user.uid,
-                            email: user.email,
-                            displayName: user.displayName || user.email,
-                            isAdmin: false,
-                            status: 'pending',
-                            createdAt: new Date().toISOString()
-                        });
-                        setAuthState('pending');
-                    }
-                });
-
-                return () => unsubscribeProfile();
-            } else {
-                setCurrentUser(null);
-                setUserProfile(null);
+        // Check for saved session
+        const saved = localStorage.getItem('currentUser');
+        if (saved) {
+            try {
+                const user = JSON.parse(saved);
+                setCurrentUser(user);
+                setAuthState('authenticated');
+            } catch {
                 setAuthState('unauthenticated');
             }
-        });
+        } else {
+            setAuthState('unauthenticated');
+        }
 
-        // Listen for pending users count (for admin badge)
-        const unsubscribePending = db.collection('userProfiles')
+        // Listen for pending users count
+        const unsubscribePending = db.collection('users')
             .where('status', '==', 'pending')
             .onSnapshot((snapshot) => {
                 setPendingCount(snapshot.size);
             });
 
-        return () => {
-            unsubscribeAuth();
-            unsubscribePending();
-        };
+        return () => unsubscribePending();
     }, []);
 
-    const logout = async () => {
-        await auth.signOut();
-        localStorage.removeItem('shipTrackerUser');
+    const handleLogin = (user) => {
+        setCurrentUser(user);
+        setAuthState('authenticated');
+    };
+
+    const logout = () => {
+        localStorage.removeItem('currentUser');
+        setCurrentUser(null);
+        setAuthState('unauthenticated');
     };
 
     if (authState === 'loading') {
@@ -1061,19 +906,6 @@ function AuthWrapper() {
                 <div style={{textAlign:'center'}}>
                     <div className="spinner" style={{width:'40px',height:'40px',margin:'0 auto 16px'}}></div>
                     <div style={{color:'var(--text-muted)'}}>Loading...</div>
-                </div>
-            </div>
-        );
-    }
-
-    if (authState === 'pending') {
-        return (
-            <div style={{minHeight:'100vh',background:'var(--bg-deep)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
-                <div style={{textAlign:'center',maxWidth:'400px'}}>
-                    <div style={{fontSize:'48px',marginBottom:'16px'}}>⏳</div>
-                    <h2 style={{color:'var(--amber)',marginBottom:'16px'}}>Account Pending Approval</h2>
-                    <p style={{color:'var(--text-dim)',marginBottom:'24px'}}>Your account has been created but is waiting for admin approval. Please check back later.</p>
-                    <button onClick={logout} style={{padding:'12px 24px',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',cursor:'pointer'}}>Sign Out</button>
                 </div>
             </div>
         );
@@ -1094,7 +926,7 @@ function AuthWrapper() {
         );
     }
 
-    return <LoginPage onLogin={() => {}} />;
+    return <LoginPage onLogin={handleLogin} />;
 }
 
 
