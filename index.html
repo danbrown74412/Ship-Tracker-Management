@@ -296,7 +296,6 @@
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 
 <script>
 // Firebase Configuration
@@ -310,10 +309,76 @@ const firebaseConfig = {
     measurementId: "G-T7X4T0EGZK"
 };
 
-// Initialize Firebase
+// Initialize Firebase (Firestore only)
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
-const auth = firebase.auth();
+
+// Secure password hashing using Web Crypto API
+const hashPassword = async (password, salt = null) => {
+    const encoder = new TextEncoder();
+    if (!salt) {
+        const saltArray = crypto.getRandomValues(new Uint8Array(16));
+        salt = Array.from(saltArray).map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+    const data = encoder.encode(salt + password);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const hash = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    return { hash, salt };
+};
+
+const verifyPassword = async (password, storedHash, salt) => {
+    const { hash } = await hashPassword(password, salt);
+    return hash === storedHash;
+};
+
+// Setup default admin
+const setupDefaultAdmin = async () => {
+    try {
+        const adminDoc = await db.collection('users').doc('dbrown').get();
+        if (!adminDoc.exists) {
+            const { hash, salt } = await hashPassword('admin123');
+            await db.collection('users').doc('dbrown').set({
+                username: 'dbrown',
+                displayName: 'dbrown',
+                passwordHash: hash,
+                salt: salt,
+                isAdmin: true,
+                status: 'approved',
+                createdAt: new Date().toISOString()
+            });
+            console.log('Default admin created: dbrown / admin123');
+        }
+    } catch (err) {
+        console.log('Admin setup error:', err);
+    }
+};
+setupDefaultAdmin();
+
+// Auth helper functions
+const authHelpers = {
+    async login(username, password) {
+        const userDoc = await db.collection('users').doc(username).get();
+        if (!userDoc.exists) throw new Error('User not found');
+        const userData = userDoc.data();
+        if (userData.status !== 'approved') throw new Error('Account pending approval');
+        const isValid = await verifyPassword(password, userData.passwordHash, userData.salt);
+        if (!isValid) throw new Error('Incorrect password');
+        return { uid: username, ...userData };
+    },
+    async register(username, password, displayName) {
+        const existing = await db.collection('users').doc(username).get();
+        if (existing.exists) throw new Error('Username already taken');
+        const { hash, salt } = await hashPassword(password);
+        await db.collection('users').doc(username).set({
+            username, displayName: displayName || username,
+            passwordHash: hash, salt,
+            isAdmin: false, status: 'pending',
+            createdAt: new Date().toISOString()
+        });
+        return { username, displayName };
+    }
+};
 </script>
 
 <script type="text/babel">
@@ -391,7 +456,7 @@ const useStorage = (key, init) => {
 // ===== AUTHENTICATION WITH FIREBASE AUTH =====
 function LoginPage({ onLogin }) {
     const [mode, setMode] = useState('login');
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [displayName, setDisplayName] = useState('');
     const [error, setError] = useState('');
@@ -403,33 +468,18 @@ function LoginPage({ onLogin }) {
         setError('');
         setLoading(true);
 
-        if (!email.trim() || !password.trim()) {
-            setError('Please enter email and password');
+        if (!username.trim() || !password.trim()) {
+            setError('Please enter username and password');
             setLoading(false);
             return;
         }
 
         try {
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
-            // User profile will be loaded by AuthWrapper's onAuthStateChanged
+            const user = await authHelpers.login(username.trim(), password);
+            localStorage.setItem('shipTrackerUser', JSON.stringify({ uid: user.uid }));
+            window.location.reload();
         } catch (err) {
-            console.error('Login error:', err);
-            switch (err.code) {
-                case 'auth/user-not-found':
-                    setError('No account found with this email. Please register.');
-                    break;
-                case 'auth/wrong-password':
-                    setError('Incorrect password.');
-                    break;
-                case 'auth/invalid-email':
-                    setError('Invalid email address.');
-                    break;
-                case 'auth/too-many-requests':
-                    setError('Too many failed attempts. Please try again later.');
-                    break;
-                default:
-                    setError(err.message);
-            }
+            setError(err.message);
         }
         setLoading(false);
     };
@@ -440,7 +490,7 @@ function LoginPage({ onLogin }) {
         setSuccess('');
         setLoading(true);
 
-        if (!email.trim() || !password.trim() || !displayName.trim()) {
+        if (!username.trim() || !password.trim() || !displayName.trim()) {
             setError('Please fill in all fields');
             setLoading(false);
             return;
@@ -452,62 +502,14 @@ function LoginPage({ onLogin }) {
         }
 
         try {
-            const userCredential = await auth.createUserWithEmailAndPassword(email, password);
-
-            // Update display name
-            await userCredential.user.updateProfile({
-                displayName: displayName.trim()
-            });
-
-            // Create user profile in Firestore
-            await db.collection('userProfiles').doc(userCredential.user.uid).set({
-                uid: userCredential.user.uid,
-                email: email,
-                displayName: displayName.trim(),
-                isAdmin: false,
-                status: 'pending',
-                createdAt: new Date().toISOString()
-            });
-
-            // Sign out - they need admin approval
-            await auth.signOut();
-
-            setSuccess('Account created! Please wait for admin approval before logging in.');
-            setEmail('');
+            await authHelpers.register(username.trim(), password, displayName.trim());
+            setSuccess('Account created! Please wait for admin approval.');
+            setUsername('');
             setPassword('');
             setDisplayName('');
             setMode('login');
         } catch (err) {
-            console.error('Registration error:', err);
-            switch (err.code) {
-                case 'auth/email-already-in-use':
-                    setError('An account with this email already exists.');
-                    break;
-                case 'auth/invalid-email':
-                    setError('Invalid email address.');
-                    break;
-                case 'auth/weak-password':
-                    setError('Password is too weak. Use at least 6 characters.');
-                    break;
-                default:
-                    setError(err.message);
-            }
-        }
-        setLoading(false);
-    };
-
-    const handlePasswordReset = async () => {
-        if (!email.trim()) {
-            setError('Enter your email address first');
-            return;
-        }
-        setLoading(true);
-        try {
-            await auth.sendPasswordResetEmail(email);
-            setSuccess('Password reset email sent! Check your inbox.');
-            setError('');
-        } catch (err) {
-            setError('Could not send reset email. Check your email address.');
+            setError(err.message);
         }
         setLoading(false);
     };
@@ -530,14 +532,13 @@ function LoginPage({ onLogin }) {
                     {mode === 'login' ? (
                         <form onSubmit={handleLogin}>
                             <div style={{marginBottom:'16px'}}>
-                                <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Email</label>
-                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Enter email" disabled={loading}/>
+                                <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Username</label>
+                                <input type="text" value={username} onChange={e => setUsername(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Enter username" disabled={loading}/>
                             </div>
                             <div style={{marginBottom:'16px'}}>
                                 <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Password</label>
                                 <input type="password" value={password} onChange={e => setPassword(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Enter password" disabled={loading}/>
                             </div>
-                            <button type="button" onClick={handlePasswordReset} style={{background:'none',border:'none',color:'var(--primary)',fontSize:'12px',cursor:'pointer',marginBottom:'16px',padding:0}}>Forgot password?</button>
                             <button type="submit" disabled={loading} style={{width:'100%',padding:'14px',background:'var(--primary)',color:'#000',border:'none',borderRadius:'8px',fontSize:'14px',fontWeight:600,cursor:loading?'wait':'pointer',opacity:loading?0.7:1,display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}}>
                                 {loading && <span className="spinner"></span>}
                                 {loading ? 'Signing in...' : 'Login'}
@@ -546,12 +547,12 @@ function LoginPage({ onLogin }) {
                     ) : (
                         <form onSubmit={handleRegister}>
                             <div style={{marginBottom:'16px'}}>
-                                <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Display Name</label>
-                                <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Your name" disabled={loading}/>
+                                <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Username</label>
+                                <input type="text" value={username} onChange={e => setUsername(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Choose username" disabled={loading}/>
                             </div>
                             <div style={{marginBottom:'16px'}}>
-                                <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Email</label>
-                                <input type="email" value={email} onChange={e => setEmail(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Enter email" disabled={loading}/>
+                                <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Display Name</label>
+                                <input type="text" value={displayName} onChange={e => setDisplayName(e.target.value)} style={{width:'100%',padding:'12px',background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',color:'var(--text)',fontSize:'14px'}} placeholder="Your name" disabled={loading}/>
                             </div>
                             <div style={{marginBottom:'24px'}}>
                                 <label style={{display:'block',fontSize:'12px',color:'var(--text-dim)',marginBottom:'6px'}}>Password</label>
@@ -567,7 +568,7 @@ function LoginPage({ onLogin }) {
                 </div>
                 <div style={{marginTop:'16px',padding:'12px',background:'var(--green-glow)',border:'1px solid var(--green)',borderRadius:'8px',fontSize:'11px',color:'var(--green)'}}>
                     <strong>Secure Authentication</strong><br/>
-                    Passwords are securely hashed by Firebase Auth. Your credentials are never stored in plain text.
+                    Passwords are securely hashed. Your credentials are never stored in plain text.
                 </div>
             </div>
         </div>
@@ -579,7 +580,7 @@ function AdminPanel({ onClose }) {
     const [loading, setLoading] = useState(true);
 
     useEffect(() => {
-        const unsubscribe = db.collection('userProfiles').onSnapshot((snapshot) => {
+        const unsubscribe = db.collection('users').onSnapshot((snapshot) => {
             const userList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
             setUsers(userList);
             setLoading(false);
@@ -592,28 +593,28 @@ function AdminPanel({ onClose }) {
     const denied = users.filter(u => u.status === 'denied');
 
     const approve = async (u) => {
-        await db.collection('userProfiles').doc(u.id).update({
+        await db.collection('users').doc(u.id).update({
             status: 'approved',
             approvedAt: new Date().toISOString()
         });
     };
 
     const deny = async (u) => {
-        await db.collection('userProfiles').doc(u.id).update({
+        await db.collection('users').doc(u.id).update({
             status: 'denied',
             deniedAt: new Date().toISOString()
         });
     };
 
     const toggleAdmin = async (u) => {
-        await db.collection('userProfiles').doc(u.id).update({
+        await db.collection('users').doc(u.id).update({
             isAdmin: !u.isAdmin
         });
     };
 
     const del = async (u) => {
         if (confirm(`Delete ${u.displayName || u.email}? This will remove their profile but not their Firebase Auth account.`)) {
-            await db.collection('userProfiles').doc(u.id).delete();
+            await db.collection('users').doc(u.id).delete();
         }
     };
 
@@ -708,69 +709,62 @@ function AuthWrapper() {
     const [pendingCount, setPendingCount] = useState(0);
 
     useEffect(() => {
-        // Listen for auth state changes
-        const unsubscribeAuth = auth.onAuthStateChanged(async (user) => {
-            if (user) {
-                // User is signed in, check their profile
-                const profileRef = db.collection('userProfiles').doc(user.uid);
-
-                const unsubscribeProfile = profileRef.onSnapshot((doc) => {
-                    if (doc.exists) {
-                        const profile = doc.data();
-                        setUserProfile(profile);
-
+        // Check for saved session in localStorage
+        const checkSession = async () => {
+            const saved = localStorage.getItem('shipTrackerUser');
+            if (saved) {
+                try {
+                    const userData = JSON.parse(saved);
+                    // Verify user still exists and is approved in Firestore
+                    const userDoc = await db.collection('users').doc(userData.uid).get();
+                    if (userDoc.exists) {
+                        const profile = userDoc.data();
                         if (profile.status === 'approved') {
                             setCurrentUser({
-                                uid: user.uid,
-                                email: user.email,
-                                displayName: profile.displayName || user.displayName || user.email,
+                                uid: userData.uid,
+                                displayName: profile.displayName || userData.uid,
                                 isAdmin: profile.isAdmin || false
                             });
+                            setUserProfile(profile);
                             setAuthState('authenticated');
                         } else if (profile.status === 'pending') {
                             setAuthState('pending');
-                        } else if (profile.status === 'denied') {
-                            auth.signOut();
+                        } else {
+                            localStorage.removeItem('shipTrackerUser');
                             setAuthState('unauthenticated');
                         }
                     } else {
-                        // No profile exists, create one (for existing Firebase Auth users)
-                        profileRef.set({
-                            uid: user.uid,
-                            email: user.email,
-                            displayName: user.displayName || user.email,
-                            isAdmin: false,
-                            status: 'pending',
-                            createdAt: new Date().toISOString()
-                        });
-                        setAuthState('pending');
+                        localStorage.removeItem('shipTrackerUser');
+                        setAuthState('unauthenticated');
                     }
-                });
-
-                return () => unsubscribeProfile();
+                } catch (e) {
+                    localStorage.removeItem('shipTrackerUser');
+                    setAuthState('unauthenticated');
+                }
             } else {
-                setCurrentUser(null);
-                setUserProfile(null);
                 setAuthState('unauthenticated');
             }
-        });
+        };
+
+        checkSession();
 
         // Listen for pending users count (for admin badge)
-        const unsubscribePending = db.collection('userProfiles')
+        const unsubscribePending = db.collection('users')
             .where('status', '==', 'pending')
             .onSnapshot((snapshot) => {
                 setPendingCount(snapshot.size);
             });
 
         return () => {
-            unsubscribeAuth();
             unsubscribePending();
         };
     }, []);
 
     const logout = async () => {
-        await auth.signOut();
         localStorage.removeItem('shipTrackerUser');
+        setCurrentUser(null);
+        setUserProfile(null);
+        setAuthState('unauthenticated');
     };
 
     if (authState === 'loading') {
