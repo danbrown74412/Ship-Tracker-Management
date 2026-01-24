@@ -437,6 +437,86 @@ const setupDefaultAdmin = async () => {
     }
 };
 setupDefaultAdmin();
+
+// Migrate legacy users from old auth system
+const migrateLegacyUsers = async () => {
+    try {
+        // Check for old users in localStorage (common storage locations)
+        const legacyKeys = ['users', 'shipTrackerUsers', 'fb_users', 'registeredUsers'];
+        let legacyUsers = [];
+
+        for (const key of legacyKeys) {
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                try {
+                    const parsed = JSON.parse(stored);
+                    if (Array.isArray(parsed)) {
+                        legacyUsers = [...legacyUsers, ...parsed];
+                    }
+                } catch (e) {}
+            }
+        }
+
+        if (legacyUsers.length === 0) return;
+
+        console.log(`Found ${legacyUsers.length} legacy users to migrate`);
+
+        for (const user of legacyUsers) {
+            if (!user.email && user.username) {
+                // Convert username to email format if needed
+                user.email = user.username.includes('@') ? user.username : `${user.username}@shiptracker.local`;
+            }
+            if (!user.email) continue;
+
+            // Check if already migrated
+            const existingProfile = await db.collection('userProfiles').where('email', '==', user.email).get();
+            if (!existingProfile.empty) continue;
+
+            try {
+                // Try to create Firebase Auth account with their password
+                // If password was hashed, use a default and they'll need to reset
+                const password = user.plainPassword || user.password || 'changeme123';
+                const userCred = await auth.createUserWithEmailAndPassword(user.email, password.length >= 6 ? password : 'changeme123');
+
+                await userCred.user.updateProfile({
+                    displayName: user.displayName || user.username || user.email.split('@')[0]
+                });
+
+                // Create approved profile (keep their admin status if they had it)
+                await db.collection('userProfiles').doc(userCred.user.uid).set({
+                    uid: userCred.user.uid,
+                    email: user.email,
+                    displayName: user.displayName || user.username || user.email.split('@')[0],
+                    isAdmin: user.isAdmin || user.role === 'admin' || false,
+                    status: 'approved',
+                    migratedFrom: 'legacy',
+                    createdAt: user.createdAt || new Date().toISOString()
+                });
+
+                console.log(`Migrated user: ${user.email}`);
+                await auth.signOut();
+            } catch (authErr) {
+                if (authErr.code === 'auth/email-already-in-use') {
+                    // User exists in Auth, just ensure profile exists
+                    console.log(`User ${user.email} already in Firebase Auth`);
+                } else {
+                    console.log(`Could not migrate ${user.email}:`, authErr.message);
+                }
+            }
+        }
+
+        // Mark migration as complete
+        localStorage.setItem('legacyMigrationComplete', 'true');
+        console.log('Legacy user migration complete');
+    } catch (err) {
+        console.log('Migration error:', err);
+    }
+};
+
+// Run migration if not already done
+if (!localStorage.getItem('legacyMigrationComplete')) {
+    migrateLegacyUsers();
+}
 </script>
 
 <script type="text/babel">
@@ -521,6 +601,59 @@ function LoginPage({ onLogin }) {
     const [success, setSuccess] = useState('');
     const [loading, setLoading] = useState(false);
 
+    // Check for legacy user in localStorage
+    const findLegacyUser = (emailOrUsername, password) => {
+        const legacyKeys = ['users', 'shipTrackerUsers', 'fb_users', 'registeredUsers'];
+        for (const key of legacyKeys) {
+            try {
+                const stored = localStorage.getItem(key);
+                if (stored) {
+                    const users = JSON.parse(stored);
+                    if (Array.isArray(users)) {
+                        const user = users.find(u =>
+                            (u.email === emailOrUsername || u.username === emailOrUsername) &&
+                            (u.password === password || u.plainPassword === password)
+                        );
+                        if (user) return user;
+                    }
+                }
+            } catch (e) {}
+        }
+        return null;
+    };
+
+    // Migrate legacy user to Firebase Auth
+    const migrateLegacyUser = async (legacyUser, password) => {
+        const userEmail = legacyUser.email || (legacyUser.username.includes('@') ? legacyUser.username : `${legacyUser.username}@shiptracker.local`);
+
+        try {
+            // Create Firebase Auth account
+            const userCred = await auth.createUserWithEmailAndPassword(userEmail, password);
+            await userCred.user.updateProfile({
+                displayName: legacyUser.displayName || legacyUser.username || userEmail.split('@')[0]
+            });
+
+            // Create approved profile
+            await db.collection('userProfiles').doc(userCred.user.uid).set({
+                uid: userCred.user.uid,
+                email: userEmail,
+                displayName: legacyUser.displayName || legacyUser.username || userEmail.split('@')[0],
+                isAdmin: legacyUser.isAdmin || legacyUser.role === 'admin' || false,
+                status: 'approved',
+                migratedFrom: 'legacy',
+                createdAt: legacyUser.createdAt || new Date().toISOString()
+            });
+
+            return { success: true, email: userEmail };
+        } catch (err) {
+            if (err.code === 'auth/email-already-in-use') {
+                // Try to sign in instead
+                return { success: true, email: userEmail, alreadyExists: true };
+            }
+            throw err;
+        }
+    };
+
     const handleLogin = async (e) => {
         e.preventDefault();
         setError('');
@@ -532,14 +665,41 @@ function LoginPage({ onLogin }) {
             return;
         }
 
+        // Normalize email - add domain if just username
+        let loginEmail = email.trim();
+        if (!loginEmail.includes('@')) {
+            loginEmail = `${loginEmail}@shiptracker.local`;
+        }
+
         try {
-            const userCredential = await auth.signInWithEmailAndPassword(email, password);
+            const userCredential = await auth.signInWithEmailAndPassword(loginEmail, password);
             // User profile will be loaded by AuthWrapper's onAuthStateChanged
         } catch (err) {
             console.error('Login error:', err);
+
+            // Check for legacy user if not found in Firebase
+            if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password') {
+                const legacyUser = findLegacyUser(email.trim(), password);
+                if (legacyUser) {
+                    try {
+                        setError('');
+                        const result = await migrateLegacyUser(legacyUser, password);
+                        // Now try to sign in with the migrated account
+                        await auth.signInWithEmailAndPassword(result.email, password);
+                        setLoading(false);
+                        return;
+                    } catch (migrateErr) {
+                        console.error('Migration error:', migrateErr);
+                        setError('Could not migrate your account. Please register again.');
+                        setLoading(false);
+                        return;
+                    }
+                }
+            }
+
             switch (err.code) {
                 case 'auth/user-not-found':
-                    setError('No account found with this email. Please register.');
+                    setError('No account found. Try with just your username (e.g., "dbrown").');
                     break;
                 case 'auth/wrong-password':
                     setError('Incorrect password.');
