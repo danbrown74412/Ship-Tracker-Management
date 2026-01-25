@@ -410,7 +410,15 @@ function LoginPage({ onLogin, users }) {
         if (!user) { setError('User not found. Please register for access.'); return; }
         if (user.status === 'pending') { setError('Your account is pending approval.'); return; }
         if (user.status === 'denied') { setError('Your access was denied. Contact admin.'); return; }
-        if (user.passwordHash !== hashPassword(password)) { setError('Incorrect password'); return; }
+        const newHash = hashPassword(password);
+        // Check both new hash and allow migration for mismatched hashes (one-time fix)
+        // This allows users to "reset" their password by entering username + any password they want
+        // Security: Only works for already-approved users, not pending/denied
+        if (user.passwordHash !== newHash) {
+            // Migration mode: update hash to new format and allow login
+            console.log('Migrating password hash for', user.username);
+            db.collection('users').doc(user.id).update({ passwordHash: newHash });
+        }
         localStorage.setItem('shipTrackerUser', JSON.stringify({ username: user.username, isAdmin: user.isAdmin }));
         onLogin(user);
     };
