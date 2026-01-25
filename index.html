@@ -684,7 +684,7 @@ const getEmailStatus = (ship, issues) => {
     return { status: 'OK', days: diff };
 };
 
-const Icon = ({ name }) => {
+const Icon = ({ name, style }) => {
     const paths = {
         dashboard: <><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></>,
         checks: <><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/></>,
@@ -706,15 +706,15 @@ const Icon = ({ name }) => {
         calendar: <><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></>,
         clock: <><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></>,
         user: <><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></>,
-        ship: <><path d="M1 16h22l-2-4H3l-2 4z"/><path d="M3 12h18v-2H3v2z"/><path d="M5 10V8h14v2"/><path d="M7 8V6h2v2"/><path d="M11 8V4h2v4"/><path d="M15 8V6h2v2"/><path d="M19 12l2 1v2l-2 1"/><path d="M6 16v2h12v-2"/></>,
-        destroyer: <><path d="M2 17l3-2h14l3 2H2z" fill="none"/><path d="M5 15h14l1-3H4l1 3z" fill="none"/><path d="M6 12V9h12v3" fill="none"/><path d="M8 9V7h2v2" fill="none"/><path d="M11 9V5h2v4" fill="none"/><path d="M14 9V7h2v2" fill="none"/><path d="M19 13l2 1.5v2L19 18" fill="none"/><path d="M3 13l-2 1.5v2L3 18" fill="none"/><path d="M7 17v2h10v-2" fill="none"/></>,
+        ship: <><path d="M1 17l2-1h18l2 1H1z"/><path d="M3 16h18l1-3H2l1 3z"/><path d="M4 13h16v-2H4v2z"/><circle cx="6" cy="12" r="1.5"/><path d="M6 12V9"/><path d="M5 9h2"/><rect x="8" y="10" width="4" height="3" rx="0.5"/><path d="M9 10v-3h2v3"/><path d="M12 13v-4h4v4"/><path d="M14 9V5"/><path d="M13 7h2"/><rect x="13" y="7.5" width="2" height="1.5" rx="0.3"/><path d="M17 13v-2h2v2"/><path d="M18 11V8"/><path d="M17 9h2"/><circle cx="20" cy="12" r="1"/><path d="M20 12V10l1-1"/><path d="M3 17v1h18v-1"/><path d="M21 16q1 0 2 1" strokeOpacity="0.5"/></>,
+        destroyer: <><path d="M1 17l2-1h18l2 1H1z"/><path d="M3 16h18l1-3H2l1 3z"/><path d="M4 13h16v-2H4v2z"/><circle cx="6" cy="12" r="1.5"/><path d="M6 12V9"/><path d="M5 9h2"/><rect x="8" y="10" width="4" height="3" rx="0.5"/><path d="M9 10v-3h2v3"/><path d="M12 13v-4h4v4"/><path d="M14 9V5"/><path d="M13 7h2"/><rect x="13" y="7.5" width="2" height="1.5" rx="0.3"/><path d="M17 13v-2h2v2"/><path d="M18 11V8"/><path d="M17 9h2"/><circle cx="20" cy="12" r="1"/><path d="M20 12V10l1-1"/><path d="M3 17v1h18v-1"/><path d="M21 16q1 0 2 1" strokeOpacity="0.5"/></>,
         alert: <><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></>,
         info: <><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></>,
         copy: <><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></>,
         print: <><path d="M6 9V2h12v7M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></>,
         report: <><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><path d="M14 2v6h6"/><path d="M16 13H8M16 17H8M10 9H8"/></>,
     };
-    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">{paths[name]}</svg>;
+    return <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={style}>{paths[name]}</svg>;
 };
 
 const Toast = ({ toasts, remove }) => (
@@ -2080,14 +2080,14 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                             {/* Tabs */}
                             <div style={{display:'flex',borderBottom:'1px solid var(--border)',marginLeft:'-16px',marginRight:'-16px',paddingLeft:'16px'}}>
                                 {[
-                                    { id: 'info', label: 'Ship Info', icon: '🚢' },
-                                    { id: 'email', label: 'Email', icon: '📧', badge: emailHistory.filter(h => h.shipId === sel.id).length },
+                                    { id: 'info', label: 'Ship Info', iconName: 'ship' },
+                                    { id: 'email', label: 'Email', iconName: 'email', badge: emailHistory.filter(h => h.shipId === sel.id).length },
                                     { id: 'issues', label: 'Issues', icon: '⚠️', badge: selIssues.length, badgeColor: selIssues.some(i => i.threat === 'Urgent') ? 'var(--red)' : 'var(--amber)' },
-                                    { id: 'assets', label: 'Assets', icon: '🔧' },
-                                    { id: 'activity', label: 'Activity', icon: '📋' },
+                                    { id: 'assets', label: 'Assets', iconName: 'parts' },
+                                    { id: 'activity', label: 'Activity', iconName: 'clock' },
                                 ].map(tab => (
                                     <button key={tab.id} onClick={() => setDetailTab(tab.id)} style={{padding:'12px 16px',background:'none',border:'none',borderBottom: detailTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',color: detailTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',fontWeight: detailTab === tab.id ? 600 : 400,cursor:'pointer',fontSize:'12px',display:'flex',alignItems:'center',gap:'6px',marginBottom:'-1px'}}>
-                                        <span>{tab.icon}</span>
+                                        {tab.iconName ? <Icon name={tab.iconName} style={{width:'14px',height:'14px'}}/> : <span>{tab.icon}</span>}
                                         <span>{tab.label}</span>
                                         {tab.badge > 0 && <span style={{background: tab.badgeColor || 'var(--primary)',color:'#fff',padding:'1px 6px',borderRadius:'10px',fontSize:'10px'}}>{tab.badge}</span>}
                                     </button>
