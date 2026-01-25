@@ -1079,6 +1079,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const [emailHistoryModal, setEmailHistoryModal] = useState(false);
     const [viewingHistoryItem, setViewingHistoryItem] = useState(null);
     const [manualLogModal, setManualLogModal] = useState(false);
+    const [directManualModal, setDirectManualModal] = useState(false);
     const [manualLogForm, setManualLogForm] = useState({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false });
     const today = toDateString(new Date());
     
@@ -2131,45 +2132,101 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                             {/* EMAIL TAB */}
                             {detailTab === 'email' && (
                                 <div>
-                                    {/* Quick Actions */}
-                                    <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
-                                        <button className="btn btn-success" onClick={openContactModal}>✉️ Mark Emailed</button>
-                                        <button className="btn" style={{background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',color:'#fff'}} onClick={() => { setAiEmailText(''); setAiResult(null); setAiEmailModal(true); }}>📧 Smart Parse Email</button>
-                                        <button className="btn btn-secondary" onClick={() => { try { setEmailHistory(JSON.parse(localStorage.getItem('emailParseHistory') || '[]')); } catch {} setEmailHistoryModal(true); }}>📋 View Email Log ({emailHistory.filter(h => h.shipId === sel.id).length})</button>
+                                    {/* Quick Actions Bar */}
+                                    <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap',padding:'12px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}>
+                                        <button className="btn btn-success btn-sm" onClick={openContactModal}>✉️ Log New Email</button>
+                                        <button className="btn btn-sm" style={{background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',color:'#fff'}} onClick={() => { setAiEmailText(''); setAiResult(null); setAiEmailModal(true); }}>📧 Smart Parse</button>
+                                        <button className="btn btn-secondary btn-sm" onClick={() => { setManualLogForm({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false }); setDirectManualModal(true); }}>📝 Manual Entry</button>
+                                        {sel.waitingReply && <button className="btn btn-info btn-sm" onClick={() => { setClearWaitingForm({ reply: '', resolution: 'received' }); setClearWaitingModal(true); }}>✓ Got Reply</button>}
                                     </div>
 
-                                    {/* Contact Status */}
-                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'16px'}}>
-                                        <div style={{padding:'16px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}>
-                                            <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'8px',letterSpacing:'0.5px'}}>CONTACT STATUS</div>
-                                            <div style={{fontSize:'13px',marginBottom:'6px'}}><strong>Last Contact:</strong> {sel.lastContact ? fmtDate(sel.lastContact) : <span style={{color:'var(--text-muted)'}}>Never</span>}</div>
-                                            <div style={{fontSize:'13px',marginBottom:'6px'}}><strong>Contacted By:</strong> {sel.contactedBy || <span style={{color:'var(--text-muted)'}}>—</span>}</div>
-                                            <div style={{fontSize:'13px'}}><strong>Email Status:</strong> {getEmailStatus(sel, issues).status === 'IN PORT' ? <span className="badge badge-info">⚓ IN PORT</span> : <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`}>{getEmailStatus(sel, issues).status}</span>}</div>
+                                    {/* Status Header */}
+                                    <div style={{display:'flex',gap:'12px',marginBottom:'16px',flexWrap:'wrap',alignItems:'center'}}>
+                                        <div style={{padding:'8px 12px',background:'var(--bg-card)',borderRadius:'6px',border:'1px solid var(--border)',fontSize:'12px'}}>
+                                            <span style={{color:'var(--text-muted)'}}>Last Contact:</span> <strong>{sel.lastContact ? fmtDate(sel.lastContact) : 'Never'}</strong>
                                         </div>
-                                        <div style={{padding:'16px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}>
-                                            <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'8px',letterSpacing:'0.5px'}}>POC INFO</div>
-                                            <div style={{fontSize:'13px',marginBottom:'6px'}}><strong>Name:</strong> {sel.poc || <span style={{color:'var(--text-muted)'}}>Not set</span>}</div>
-                                            <div style={{fontSize:'13px'}}><strong>Email:</strong> {sel.email || <span style={{color:'var(--text-muted)'}}>Not set</span>}</div>
+                                        <div style={{padding:'8px 12px',background:'var(--bg-card)',borderRadius:'6px',border:'1px solid var(--border)',fontSize:'12px'}}>
+                                            <span style={{color:'var(--text-muted)'}}>POC:</span> <strong>{sel.poc || '—'}</strong> {sel.email && <span style={{color:'var(--text-muted)'}}>({sel.email})</span>}
                                         </div>
+                                        <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`}>{getEmailStatus(sel, issues).status === 'IN PORT' ? '⚓ IN PORT' : getEmailStatus(sel, issues).status}</span>
+                                        {sel.waitingReply && <span className="badge badge-info">⏳ Waiting Reply</span>}
                                     </div>
 
-                                    {/* Waiting Reply */}
-                                    {sel.waitingReply && (
-                                        <div style={{padding:'12px',background:'var(--blue-glow)',borderRadius:'8px',border:'1px solid var(--blue)',marginBottom:'16px'}}>
-                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                                <div><span style={{color:'var(--blue)',fontWeight:600}}>⏳ Waiting on Reply</span><div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>Sent email, awaiting response</div></div>
-                                                <button className="btn btn-sm btn-secondary" onClick={() => { setClearWaitingForm({ reply: '', resolution: 'received' }); setClearWaitingModal(true); }}>Clear / Got Reply</button>
+                                    {/* Email Conversation Log */}
+                                    <div style={{marginBottom:'16px'}}>
+                                        <div style={{fontSize:'12px',fontWeight:600,color:'var(--text-muted)',marginBottom:'12px',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                            <span>📧 EMAIL CONVERSATION LOG ({emailHistory.filter(h => h.shipId === sel.id).length} entries)</span>
+                                        </div>
+
+                                        {emailHistory.filter(h => h.shipId === sel.id).length === 0 ? (
+                                            <div style={{padding:'40px',textAlign:'center',color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:'8px',border:'1px dashed var(--border)'}}>
+                                                <div style={{fontSize:'24px',marginBottom:'8px'}}>📭</div>
+                                                <div>No emails logged yet</div>
+                                                <div style={{fontSize:'11px',marginTop:'4px'}}>Use "Smart Parse" to analyze an email or "Log New Email" to record contact</div>
                                             </div>
-                                        </div>
-                                    )}
+                                        ) : (
+                                            <div style={{display:'flex',flexDirection:'column',gap:'12px',maxHeight:'500px',overflow:'auto'}}>
+                                                {emailHistory.filter(h => h.shipId === sel.id).map((h, idx) => (
+                                                    <div key={h.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: h.result?.issue?.hasIssue ? `3px solid ${h.result.issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)'}` : '3px solid var(--border)'}}>
+                                                        {/* Email Header */}
+                                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'12px'}}>
+                                                            <div>
+                                                                <div style={{fontWeight:600,fontSize:'13px',display:'flex',alignItems:'center',gap:'8px'}}>
+                                                                    {new Date(h.timestamp).toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric', year: 'numeric' })}
+                                                                    <span style={{fontSize:'11px',color:'var(--text-muted)',fontWeight:400}}>{new Date(h.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                                                                </div>
+                                                                <div style={{display:'flex',gap:'6px',marginTop:'6px',flexWrap:'wrap'}}>
+                                                                    <span className="badge" style={{background: h.type === 'manual' ? 'var(--text-muted)' : 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',color:'#fff',fontSize:'9px'}}>{h.type === 'manual' ? 'Manual' : 'Parsed'}</span>
+                                                                    {h.result?.inPort && <span className="badge" style={{background:'var(--blue)',color:'#fff',fontSize:'9px'}}>⚓ In Port</span>}
+                                                                    {h.result?.issue?.hasIssue && <span className={`badge badge-${(h.result.issue.threat || 'mild').toLowerCase()}`} style={{fontSize:'9px'}}>{h.result.issue.threat || 'Issue'}</span>}
+                                                                    {h.result?.waitingReply && <span className="badge badge-info" style={{fontSize:'9px'}}>Waiting</span>}
+                                                                    {h.result?.sender?.name && <span style={{fontSize:'10px',color:'var(--text-dim)'}}>From: {h.result.sender.name}</span>}
+                                                                </div>
+                                                            </div>
+                                                            <button className="btn btn-sm" style={{padding:'2px 6px',fontSize:'10px',background:'transparent',color:'var(--text-muted)'}} onClick={() => { if(confirm('Delete this entry?')) { const filtered = emailHistory.filter(x => x.id !== h.id); setEmailHistory(filtered); localStorage.setItem('emailParseHistory', JSON.stringify(filtered)); toast('Entry deleted', 'info'); } }}>✕</button>
+                                                        </div>
 
-                                    {/* Last Email Summary */}
-                                    <div>
+                                                        {/* Issue Alert */}
+                                                        {h.result?.issue?.hasIssue && h.result.issue.details && (
+                                                            <div style={{padding:'10px',marginBottom:'12px',borderRadius:'6px',background: h.result.issue.threat === 'Urgent' ? 'var(--red-glow)' : 'var(--amber-glow)',border: `1px solid ${h.result.issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)'}`,fontSize:'12px'}}>
+                                                                <strong style={{color: h.result.issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)'}}>⚠️ Issue:</strong> {h.result.issue.details}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Parsed Summary */}
+                                                        {h.result?.emailSummary && (
+                                                            <div style={{padding:'10px',marginBottom:'12px',borderRadius:'6px',background:'var(--primary-glow)',border:'1px solid var(--primary)',fontSize:'12px'}}>
+                                                                <strong style={{color:'var(--primary)'}}>📋 Summary:</strong> {h.result.emailSummary}
+                                                            </div>
+                                                        )}
+
+                                                        {/* Full Email Content */}
+                                                        {h.emailText && (
+                                                            <div>
+                                                                <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'6px',fontWeight:600}}>FULL EMAIL:</div>
+                                                                <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'6px',fontSize:'11px',fontFamily:'JetBrains Mono',whiteSpace:'pre-wrap',maxHeight:'200px',overflow:'auto',border:'1px solid var(--border)',lineHeight:'1.5'}}>{h.emailText}</div>
+                                                            </div>
+                                                        )}
+
+                                                        {/* Changes Applied */}
+                                                        {h.changes?.length > 0 && (
+                                                            <div style={{marginTop:'10px',fontSize:'10px',color:'var(--green)',display:'flex',gap:'4px',flexWrap:'wrap'}}>
+                                                                <span>✓ Applied:</span> {h.changes.join(' • ')}
+                                                            </div>
+                                                        )}
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    {/* Current Notes (editable) */}
+                                    <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}>
                                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
-                                            <div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'0.5px'}}>LAST EMAIL SUMMARY</div>
+                                            <div style={{fontSize:'10px',color:'var(--text-muted)',fontWeight:600}}>CURRENT STATUS NOTES</div>
                                             <button className="btn btn-sm btn-secondary" onClick={() => setModal(true)}>✏️ Edit</button>
                                         </div>
-                                        <div style={{padding:'12px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',fontSize:'12px',minHeight:'80px',whiteSpace:'pre-wrap',color: sel.lastSaid ? 'var(--text)' : 'var(--text-muted)'}}>{sel.lastSaid || 'No email content recorded. Use "Smart Parse Email" to analyze an email automatically.'}</div>
+                                        <div style={{fontSize:'12px',color: sel.lastSaid ? 'var(--text)' : 'var(--text-muted)',whiteSpace:'pre-wrap'}}>{sel.lastSaid || 'No notes. Click Edit to add current status notes.'}</div>
                                     </div>
                                 </div>
                             )}
@@ -2992,6 +3049,120 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 <div style={{padding:'12px',background: viewingHistoryItem.result.issue.threat === 'Urgent' ? 'var(--red-glow)' : 'var(--amber-glow)',borderRadius:'8px',border: `1px solid ${viewingHistoryItem.result.issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)'}`,fontSize:'12px'}}>{viewingHistoryItem.result.issue.details}</div>
                             </div>
                         )}
+                    </div>
+                )}
+            </Modal>
+
+            {/* Direct Manual Email Entry Modal */}
+            <Modal open={directManualModal} onClose={() => setDirectManualModal(false)} title={`📝 Log Email - ${sel?.name || 'Ship'}`}>
+                {sel && (
+                    <div>
+                        <p style={{marginBottom:'16px',color:'var(--text-dim)'}}>Log email info for <strong style={{color:'var(--primary)'}}>{sel.name}</strong></p>
+
+                        <div className="form-group">
+                            <label className="form-label">Full Email Content *</label>
+                            <textarea className="form-textarea" style={{minHeight:'150px',fontFamily:'JetBrains Mono',fontSize:'11px'}} placeholder="Paste the full email content here..." value={manualLogForm.notes} onChange={e => setManualLogForm({...manualLogForm, notes: e.target.value})}/>
+                        </div>
+
+                        <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',marginBottom:'16px'}}>
+                            <label className="checkbox" style={{marginBottom:'12px'}}>
+                                <input type="checkbox" checked={manualLogForm.inPort} onChange={e => setManualLogForm({...manualLogForm, inPort: e.target.checked})}/>
+                                ⚓ Ship going In Port / Maintenance
+                            </label>
+                            {manualLogForm.inPort && (
+                                <div className="form-group" style={{marginLeft:'24px',marginTop:'8px'}}>
+                                    <label className="form-label">Expected Return Date</label>
+                                    <input type="date" className="form-input" value={manualLogForm.inPortUntil} onChange={e => setManualLogForm({...manualLogForm, inPortUntil: e.target.value})} min={today}/>
+                                </div>
+                            )}
+                        </div>
+
+                        <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',marginBottom:'16px'}}>
+                            <label className="checkbox" style={{marginBottom:'12px'}}>
+                                <input type="checkbox" checked={manualLogForm.hasIssue} onChange={e => setManualLogForm({...manualLogForm, hasIssue: e.target.checked})}/>
+                                ⚠️ Issue Reported
+                            </label>
+                            {manualLogForm.hasIssue && (
+                                <div style={{marginLeft:'24px',marginTop:'8px'}}>
+                                    <div className="form-group">
+                                        <label className="form-label">Threat Level</label>
+                                        <div className="radio-group">
+                                            <label className="radio urgent"><input type="radio" checked={manualLogForm.issueThreat==='Urgent'} onChange={() => setManualLogForm({...manualLogForm, issueThreat:'Urgent'})}/>Urgent</label>
+                                            <label className="radio mild"><input type="radio" checked={manualLogForm.issueThreat==='Mild'} onChange={() => setManualLogForm({...manualLogForm, issueThreat:'Mild'})}/>Mild</label>
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
+                                        <label className="form-label">Issue Details</label>
+                                        <input className="form-input" placeholder="Brief description..." value={manualLogForm.issueDetails} onChange={e => setManualLogForm({...manualLogForm, issueDetails: e.target.value})}/>
+                                    </div>
+                                </div>
+                            )}
+                        </div>
+
+                        <label className="checkbox" style={{marginBottom:'16px'}}>
+                            <input type="checkbox" checked={manualLogForm.waitingReply} onChange={e => setManualLogForm({...manualLogForm, waitingReply: e.target.checked})}/>
+                            ⏳ Waiting on reply from ship
+                        </label>
+
+                        <div className="btn-group">
+                            <button className="btn btn-primary" onClick={() => {
+                                if (!sel) { toast('Select a ship first', 'error'); return; }
+                                if (!manualLogForm.notes.trim()) { toast('Please enter email content', 'error'); return; }
+
+                                let updated = {...sel};
+                                const changes = [];
+
+                                updated.lastSaid = manualLogForm.notes;
+                                updated.lastContact = toDateString(new Date());
+                                changes.push('Logged email');
+
+                                if (manualLogForm.inPort && manualLogForm.inPortUntil) {
+                                    updated.inPort = true;
+                                    updated.inPortUntil = manualLogForm.inPortUntil;
+                                    changes.push(`In port until ${fmtDate(manualLogForm.inPortUntil)}`);
+                                }
+
+                                if (manualLogForm.hasIssue && manualLogForm.issueDetails) {
+                                    const newIssue = { id: genId('I'), shipId: sel.id, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails, created: toDateString(new Date()), resolved: false };
+                                    setIssues(p => [...p, newIssue]);
+                                    changes.push(`Added ${manualLogForm.issueThreat} issue`);
+                                }
+
+                                if (manualLogForm.waitingReply) {
+                                    updated.waitingReply = true;
+                                    changes.push('Waiting on reply');
+                                }
+
+                                setSel(updated);
+                                setShips(p => p.map(s => s.id === updated.id ? updated : s));
+
+                                const historyEntry = {
+                                    id: genId('EH'),
+                                    shipId: sel.id,
+                                    shipName: sel.name,
+                                    timestamp: new Date().toISOString(),
+                                    type: 'manual',
+                                    emailText: manualLogForm.notes,
+                                    result: {
+                                        emailSummary: manualLogForm.notes.substring(0, 200) + (manualLogForm.notes.length > 200 ? '...' : ''),
+                                        inPort: manualLogForm.inPort,
+                                        inPortUntil: manualLogForm.inPortUntil,
+                                        issue: manualLogForm.hasIssue ? { hasIssue: true, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails } : { hasIssue: false },
+                                        waitingReply: manualLogForm.waitingReply
+                                    },
+                                    changes: changes
+                                };
+                                const newHistory = [historyEntry, ...emailHistory].slice(0, 100);
+                                setEmailHistory(newHistory);
+                                localStorage.setItem('emailParseHistory', JSON.stringify(newHistory));
+
+                                logActivity(`Logged email for ${sel.name}`, { ship: sel.name, changes });
+                                toast('Email logged successfully', 'success');
+                                setManualLogForm({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false });
+                                setDirectManualModal(false);
+                            }}>Save Email Log</button>
+                            <button className="btn btn-secondary" onClick={() => setDirectManualModal(false)}>Cancel</button>
+                        </div>
                     </div>
                 )}
             </Modal>
