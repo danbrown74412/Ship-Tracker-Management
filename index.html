@@ -1012,6 +1012,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
 
 function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, installs, toast, setPage, setEditingShip, globalSearch, setGlobalSearch, searchRef, logActivity, activityLog }) {
     const [sel, setSel] = useState(null);
+    const [detailTab, setDetailTab] = useState('info');
     const [modal, setModal] = useState(false);
     const [quickIssueModal, setQuickIssueModal] = useState(false);
     const [quickIssue, setQuickIssue] = useState({ threat: 'Mild', details: '' });
@@ -2007,78 +2008,227 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 </div>
                 <div>
                     {sel ? (<>
-                        <div className="detail-section">
-                            <div className="flex-between mb-md"><span className="section-title"><Icon name="ship"/> {sel.name}</span><div className="btn-group"><button className="btn btn-sm btn-primary" onClick={save}>Save</button><button className="btn btn-sm btn-secondary" onClick={edit}>Edit</button><button className="btn btn-sm btn-danger" onClick={del}>Delete</button></div></div>
-                            <div className="form-row"><div className="form-group"><label className="form-label">Hull Number</label><input className="form-input" value={sel.name} onChange={e => setSel({...sel, name: e.target.value})}/></div><div className="form-group"><label className="form-label">Ship Type</label><select className="form-select" value={sel.type} onChange={e => setSel({...sel, type: e.target.value})}><option>Full REAP</option><option>Mini REAP</option></select></div><div className="form-group"><label className="form-label">Homeport</label><select className="form-select" value={sel.location || ''} onChange={e => setSel({...sel, location: e.target.value})}><option value="">Select...</option><option>San Diego, CA</option><option>Norfolk, VA</option><option>Mayport, FL</option><option>Pearl Harbor, HI</option><option>Yokosuka, Japan</option><option>Rota, Spain</option><option>Everett, WA</option><option>Deployed</option><option>In Port</option><option>Other</option></select></div></div>
-                            <div className="form-row"><div className="form-group"><label className="form-label">Email</label><input className="form-input" value={sel.email} onChange={e => setSel({...sel, email: e.target.value})}/></div><div className="form-group"><label className="form-label">Notes</label><input className="form-input" value={sel.notes || ''} placeholder="Additional notes..." onChange={e => setSel({...sel, notes: e.target.value})}/></div></div>
-                            <div className="form-row"><div className="form-group" style={{display:'flex',alignItems:'flex-end',gap:'12px'}}><div><label className="form-label">Status</label><div className={`status status-${selIssues.some(i => i.threat === 'Urgent') ? 'urgent' : selIssues.some(i => i.threat === 'Mild') ? 'mild' : 'ok'}`}>{selIssues.some(i => i.threat === 'Urgent') ? 'URGENT' : selIssues.some(i => i.threat === 'Mild') ? 'MILD ISSUE' : 'NO ISSUES'}</div></div><div className="btn-group"><button className="btn btn-sm btn-warning" onClick={() => setQuickIssueModal(true)}>+ Quick Issue</button><button className="btn btn-sm" style={{background:'var(--blue)',color:'#fff'}} onClick={() => { setInPortDate(''); setInPortModal(true); }}>⚓ In Port</button></div></div><div className="form-group"><label className="form-label">Next Check-in</label><input type="date" className="form-input" value={fmtDateInput(sel.nextCheck)} onChange={e => setSel({...sel, nextCheck: e.target.value})}/></div></div>
-                            {selIssues.length > 0 && <div style={{marginTop:'12px',padding:'12px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}><div className="flex-between mb-sm"><span style={{fontWeight:600,fontSize:'12px'}}>Open Issues</span><span className={`badge ${selIssues.some(i => i.threat === 'Urgent') ? 'badge-urgent' : 'badge-mild'}`}>{selIssues.length}</span></div><table className="table" style={{marginBottom:0}}><thead><tr><th>Details</th><th>Threat</th><th>Action</th></tr></thead><tbody>{selIssues.map(i => <tr key={i.id}><td>{i.details}</td><td><span className={`badge badge-${i.threat.toLowerCase()}`}>{i.threat}</span></td><td><button className="btn btn-sm btn-success" onClick={() => { setResolveIssueModal(i); setResolveNotes(''); }}>Resolve</button></td></tr>)}</tbody></table></div>}
-                            {sel.inPort && parseLocalDate(sel.inPortUntil) >= new Date(new Date().setHours(0,0,0,0)) && (
-                                <div style={{padding:'12px',background:'var(--blue-glow)',borderRadius:'8px',border:'1px solid var(--blue)',marginTop:'12px'}}>
-                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                        <div>
-                                            <span style={{color:'var(--blue)',fontWeight:600}}>⚓ IN PORT - Expected Offline</span>
-                                            <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>Back online: {fmtDate(sel.inPortUntil)}</div>
+                        {/* Ship Header */}
+                        <div className="detail-section" style={{paddingBottom:'0'}}>
+                            <div className="flex-between mb-md">
+                                <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                                    <div style={{width:'48px',height:'48px',borderRadius:'8px',background:'var(--primary-glow)',border:'2px solid var(--primary)',display:'flex',alignItems:'center',justifyContent:'center'}}><Icon name="ship" style={{width:'24px',height:'24px',color:'var(--primary)'}}/></div>
+                                    <div>
+                                        <div style={{fontSize:'20px',fontWeight:700}}>{sel.name}</div>
+                                        <div style={{fontSize:'12px',color:'var(--text-muted)',display:'flex',alignItems:'center',gap:'8px'}}>
+                                            <span>{sel.type}</span>
+                                            <span>•</span>
+                                            <span>{sel.location || 'No location'}</span>
+                                            {sel.inPort && parseLocalDate(sel.inPortUntil) >= new Date(new Date().setHours(0,0,0,0)) && <span className="badge" style={{background:'var(--blue)',color:'#fff',fontSize:'9px'}}>⚓ IN PORT</span>}
                                         </div>
-                                        <button className="btn btn-sm btn-secondary" onClick={() => { const updated = {...sel, inPort: false, inPortUntil: null}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Cleared In Port status for ${sel.name}`); toast('In Port status cleared', 'info'); }}>Clear</button>
+                                    </div>
+                                </div>
+                                <div className="btn-group">
+                                    <button className="btn btn-sm btn-primary" onClick={save}>💾 Save</button>
+                                    <button className="btn btn-sm btn-danger" onClick={del}>Delete</button>
+                                </div>
+                            </div>
+
+                            {/* Status Badges Row */}
+                            <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
+                                <div className={`status status-${selIssues.some(i => i.threat === 'Urgent') ? 'urgent' : selIssues.some(i => i.threat === 'Mild') ? 'mild' : 'ok'}`} style={{fontSize:'11px'}}>{selIssues.some(i => i.threat === 'Urgent') ? `🚨 ${selIssues.length} URGENT` : selIssues.some(i => i.threat === 'Mild') ? `⚠️ ${selIssues.length} ISSUE${selIssues.length > 1 ? 'S' : ''}` : '✓ NO ISSUES'}</div>
+                                {getEmailStatus(sel, issues).status !== 'OK' && <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`} style={{padding:'4px 10px'}}>{getEmailStatus(sel, issues).status === 'IN PORT' ? '⚓ IN PORT' : getEmailStatus(sel, issues).status}</span>}
+                                {sel.waitingReply && <span className="badge" style={{background:'var(--blue)',color:'#fff',padding:'4px 10px'}}>⏳ Waiting Reply</span>}
+                            </div>
+
+                            {/* Tabs */}
+                            <div style={{display:'flex',borderBottom:'1px solid var(--border)',marginLeft:'-16px',marginRight:'-16px',paddingLeft:'16px'}}>
+                                {[
+                                    { id: 'info', label: 'Ship Info', icon: '🚢' },
+                                    { id: 'email', label: 'Email', icon: '📧', badge: emailHistory.filter(h => h.shipId === sel.id).length },
+                                    { id: 'issues', label: 'Issues', icon: '⚠️', badge: selIssues.length, badgeColor: selIssues.some(i => i.threat === 'Urgent') ? 'var(--red)' : 'var(--amber)' },
+                                    { id: 'assets', label: 'Assets', icon: '🔧' },
+                                    { id: 'activity', label: 'Activity', icon: '📋' },
+                                ].map(tab => (
+                                    <button key={tab.id} onClick={() => setDetailTab(tab.id)} style={{padding:'12px 16px',background:'none',border:'none',borderBottom: detailTab === tab.id ? '2px solid var(--primary)' : '2px solid transparent',color: detailTab === tab.id ? 'var(--primary)' : 'var(--text-muted)',fontWeight: detailTab === tab.id ? 600 : 400,cursor:'pointer',fontSize:'12px',display:'flex',alignItems:'center',gap:'6px',marginBottom:'-1px'}}>
+                                        <span>{tab.icon}</span>
+                                        <span>{tab.label}</span>
+                                        {tab.badge > 0 && <span style={{background: tab.badgeColor || 'var(--primary)',color:'#fff',padding:'1px 6px',borderRadius:'10px',fontSize:'10px'}}>{tab.badge}</span>}
+                                    </button>
+                                ))}
+                            </div>
+                        </div>
+
+                        {/* Tab Content */}
+                        <div className="detail-section" style={{paddingTop:'16px'}}>
+                            {/* INFO TAB */}
+                            {detailTab === 'info' && (
+                                <div>
+                                    <div className="form-row">
+                                        <div className="form-group"><label className="form-label">Hull Number</label><input className="form-input" value={sel.name} onChange={e => setSel({...sel, name: e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">Ship Type</label><select className="form-select" value={sel.type} onChange={e => setSel({...sel, type: e.target.value})}><option>Full REAP</option><option>Mini REAP</option></select></div>
+                                        <div className="form-group"><label className="form-label">Homeport</label><select className="form-select" value={sel.location || ''} onChange={e => setSel({...sel, location: e.target.value})}><option value="">Select...</option><option>San Diego, CA</option><option>Norfolk, VA</option><option>Mayport, FL</option><option>Pearl Harbor, HI</option><option>Yokosuka, Japan</option><option>Rota, Spain</option><option>Everett, WA</option><option>Deployed</option><option>In Port</option><option>Other</option></select></div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group"><label className="form-label">POC Name</label><input className="form-input" placeholder="Point of contact..." value={sel.poc || ''} onChange={e => setSel({...sel, poc: e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">Email</label><input className="form-input" placeholder="ship@navy.mil" value={sel.email || ''} onChange={e => setSel({...sel, email: e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">Next Check-in</label><input type="date" className="form-input" value={fmtDateInput(sel.nextCheck)} onChange={e => setSel({...sel, nextCheck: e.target.value})}/></div>
+                                    </div>
+                                    <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" style={{minHeight:'60px'}} placeholder="Additional notes about this ship..." value={sel.notes || ''} onChange={e => setSel({...sel, notes: e.target.value})}/></div>
+
+                                    {/* In Port Status */}
+                                    {sel.inPort && parseLocalDate(sel.inPortUntil) >= new Date(new Date().setHours(0,0,0,0)) && (
+                                        <div style={{padding:'12px',background:'var(--blue-glow)',borderRadius:'8px',border:'1px solid var(--blue)',marginTop:'12px'}}>
+                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                                <div><span style={{color:'var(--blue)',fontWeight:600}}>⚓ IN PORT - Expected Offline</span><div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>Back online: {fmtDate(sel.inPortUntil)}</div></div>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => { const updated = {...sel, inPort: false, inPortUntil: null}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Cleared In Port status for ${sel.name}`); toast('In Port status cleared', 'info'); }}>Clear Status</button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="btn-group mt-md">
+                                        <button className="btn btn-sm" style={{background:'var(--blue)',color:'#fff'}} onClick={() => { setInPortDate(''); setInPortModal(true); }}>⚓ Set In Port</button>
                                     </div>
                                 </div>
                             )}
-                            <div className="quick-actions" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                <div className="btn-group">
-                                    <button className="btn btn-sm btn-success" onClick={openContactModal}>✉️ Mark Emailed</button>
-                                    <button className="btn btn-sm" style={{background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',color:'#fff'}} onClick={() => { setAiEmailText(''); setAiResult(null); setAiEmailModal(true); }}>📧 Parse Email</button>
-                                    <button className="btn btn-sm btn-secondary" onClick={() => { try { setEmailHistory(JSON.parse(localStorage.getItem('emailParseHistory') || '[]')); } catch {} setEmailHistoryModal(true); }} title="Email Log">📋 Email Log{emailHistory.filter(h => h.shipId === sel.id).length > 0 && ` (${emailHistory.filter(h => h.shipId === sel.id).length})`}</button>
-                                </div>
-                                <button className="btn btn-sm btn-secondary" onClick={() => setModal(true)}>✏️ Edit Email</button>
-                            </div>
-                        </div>
-                        
-                        <div className="detail-section">
-                            <span className="section-title">Contact Info</span>
-                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginTop:'12px'}}>
+
+                            {/* EMAIL TAB */}
+                            {detailTab === 'email' && (
                                 <div>
-                                    <p style={{fontSize:'12px',marginBottom:'8px'}}><strong>Last Contact:</strong> {sel.lastContact ? fmtDate(sel.lastContact) : 'Never'}</p>
-                                    <p style={{fontSize:'12px',marginBottom:'8px'}}><strong>Contacted By:</strong> {sel.contactedBy || '—'}</p>
-                                    <p style={{fontSize:'12px',marginBottom:'8px'}}><strong>Email Status:</strong> {getEmailStatus(sel, issues).status === 'IN PORT' ? <span className="badge badge-info">⚓ IN PORT</span> : <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`}>{getEmailStatus(sel, issues).status}</span>}</p>
-                                    {sel.waitingReply && <div style={{padding:'8px',background:'var(--blue-glow)',borderRadius:'6px',border:'1px solid var(--blue)',color:'var(--blue)',marginTop:'8px'}}><strong>⏳ Waiting on Reply</strong> <button className="btn btn-sm btn-secondary" style={{marginLeft:'8px',padding:'2px 8px'}} onClick={() => { setClearWaitingForm({ reply: '', resolution: 'received' }); setClearWaitingModal(true); }}>Clear</button></div>}
+                                    {/* Quick Actions */}
+                                    <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
+                                        <button className="btn btn-success" onClick={openContactModal}>✉️ Mark Emailed</button>
+                                        <button className="btn" style={{background:'linear-gradient(135deg, #667eea 0%, #764ba2 100%)',color:'#fff'}} onClick={() => { setAiEmailText(''); setAiResult(null); setAiEmailModal(true); }}>📧 Smart Parse Email</button>
+                                        <button className="btn btn-secondary" onClick={() => { try { setEmailHistory(JSON.parse(localStorage.getItem('emailParseHistory') || '[]')); } catch {} setEmailHistoryModal(true); }}>📋 View Email Log ({emailHistory.filter(h => h.shipId === sel.id).length})</button>
+                                    </div>
+
+                                    {/* Contact Status */}
+                                    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'16px'}}>
+                                        <div style={{padding:'16px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}>
+                                            <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'8px',letterSpacing:'0.5px'}}>CONTACT STATUS</div>
+                                            <div style={{fontSize:'13px',marginBottom:'6px'}}><strong>Last Contact:</strong> {sel.lastContact ? fmtDate(sel.lastContact) : <span style={{color:'var(--text-muted)'}}>Never</span>}</div>
+                                            <div style={{fontSize:'13px',marginBottom:'6px'}}><strong>Contacted By:</strong> {sel.contactedBy || <span style={{color:'var(--text-muted)'}}>—</span>}</div>
+                                            <div style={{fontSize:'13px'}}><strong>Email Status:</strong> {getEmailStatus(sel, issues).status === 'IN PORT' ? <span className="badge badge-info">⚓ IN PORT</span> : <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`}>{getEmailStatus(sel, issues).status}</span>}</div>
+                                        </div>
+                                        <div style={{padding:'16px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}>
+                                            <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'8px',letterSpacing:'0.5px'}}>POC INFO</div>
+                                            <div style={{fontSize:'13px',marginBottom:'6px'}}><strong>Name:</strong> {sel.poc || <span style={{color:'var(--text-muted)'}}>Not set</span>}</div>
+                                            <div style={{fontSize:'13px'}}><strong>Email:</strong> {sel.email || <span style={{color:'var(--text-muted)'}}>Not set</span>}</div>
+                                        </div>
+                                    </div>
+
+                                    {/* Waiting Reply */}
+                                    {sel.waitingReply && (
+                                        <div style={{padding:'12px',background:'var(--blue-glow)',borderRadius:'8px',border:'1px solid var(--blue)',marginBottom:'16px'}}>
+                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                                <div><span style={{color:'var(--blue)',fontWeight:600}}>⏳ Waiting on Reply</span><div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>Sent email, awaiting response</div></div>
+                                                <button className="btn btn-sm btn-secondary" onClick={() => { setClearWaitingForm({ reply: '', resolution: 'received' }); setClearWaitingModal(true); }}>Clear / Got Reply</button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Last Email Summary */}
+                                    <div>
+                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                                            <div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'0.5px'}}>LAST EMAIL SUMMARY</div>
+                                            <button className="btn btn-sm btn-secondary" onClick={() => setModal(true)}>✏️ Edit</button>
+                                        </div>
+                                        <div style={{padding:'12px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',fontSize:'12px',minHeight:'80px',whiteSpace:'pre-wrap',color: sel.lastSaid ? 'var(--text)' : 'var(--text-muted)'}}>{sel.lastSaid || 'No email content recorded. Use "Smart Parse Email" to analyze an email automatically.'}</div>
+                                    </div>
                                 </div>
+                            )}
+
+                            {/* ISSUES TAB */}
+                            {detailTab === 'issues' && (
                                 <div>
-                                    <div style={{fontSize:'11px',fontWeight:600,color:'var(--text-muted)',marginBottom:'6px'}}>Last Email Response</div>
-                                    <div style={{padding:'10px',background:'var(--bg-input)',borderRadius:'6px',border:'1px solid var(--border)',fontSize:'12px',minHeight:'80px',whiteSpace:'pre-wrap',color: sel.lastSaid ? 'var(--text)' : 'var(--text-muted)'}}>{sel.lastSaid || 'No email content recorded'}</div>
+                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+                                        <div style={{fontSize:'14px',fontWeight:600}}>Open Issues ({selIssues.length})</div>
+                                        <button className="btn btn-warning" onClick={() => setQuickIssueModal(true)}>+ Add Issue</button>
+                                    </div>
+
+                                    {selIssues.length === 0 ? (
+                                        <div style={{padding:'40px',textAlign:'center',color:'var(--text-muted)',background:'var(--bg-input)',borderRadius:'8px'}}>
+                                            <div style={{fontSize:'32px',marginBottom:'8px'}}>✓</div>
+                                            <div>No open issues for this ship</div>
+                                        </div>
+                                    ) : (
+                                        <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                                            {selIssues.map(issue => (
+                                                <div key={issue.id} style={{padding:'12px',background: issue.threat === 'Urgent' ? 'var(--red-glow)' : 'var(--amber-glow)',borderRadius:'8px',border: `1px solid ${issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)'}`}}>
+                                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                                                        <div style={{flex:1}}>
+                                                            <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}}>
+                                                                <span className={`badge badge-${issue.threat.toLowerCase()}`}>{issue.threat}</span>
+                                                                {issue.category && <span style={{fontSize:'10px',color:'var(--text-muted)'}}>{issue.category}</span>}
+                                                                <span style={{fontSize:'10px',color:'var(--text-muted)'}}>• {fmtDate(issue.created)}</span>
+                                                            </div>
+                                                            <div style={{fontSize:'13px'}}>{issue.title || issue.details}</div>
+                                                            {issue.title && issue.details && issue.title !== issue.details && <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>{issue.details}</div>}
+                                                        </div>
+                                                        <button className="btn btn-sm btn-success" onClick={() => { setResolveIssueModal(issue); setResolveNotes(''); }}>✓ Resolve</button>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
                                 </div>
-                            </div>
+                            )}
+
+                            {/* ASSETS TAB */}
+                            {detailTab === 'assets' && (
+                                <div>
+                                    <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'16px',letterSpacing:'0.5px'}}>ASSET SERIAL NUMBERS & IDENTIFIERS</div>
+                                    <div className="form-row">
+                                        <div className="form-group"><label className="form-label">Cisco Router</label><input className="form-input" placeholder="Serial number..." value={sel.ciscoRouter || ''} onChange={e => setSel({...sel, ciscoRouter: e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">HDD</label><input className="form-input" placeholder="Serial number..." value={sel.hdd || ''} onChange={e => setSel({...sel, hdd: e.target.value})}/></div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group"><label className="form-label">Star CRNA</label><input className="form-input" placeholder="Serial number..." value={sel.crna1 || ''} onChange={e => setSel({...sel, crna1: e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">Data CRNA</label><input className="form-input" placeholder="Serial number..." value={sel.crna2 || ''} onChange={e => setSel({...sel, crna2: e.target.value})}/></div>
+                                    </div>
+
+                                    {/* Asset Summary */}
+                                    <div style={{marginTop:'16px',padding:'12px',background:'var(--bg-input)',borderRadius:'8px'}}>
+                                        <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'8px'}}>Asset Completion</div>
+                                        <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                                            {[
+                                                { label: 'Router', value: sel.ciscoRouter },
+                                                { label: 'HDD', value: sel.hdd },
+                                                { label: 'Star CRNA', value: sel.crna1 },
+                                                { label: 'Data CRNA', value: sel.crna2 },
+                                            ].map(asset => (
+                                                <span key={asset.label} style={{padding:'4px 10px',borderRadius:'4px',fontSize:'11px',background: asset.value ? 'var(--green-glow)' : 'var(--bg-card)',border: `1px solid ${asset.value ? 'var(--green)' : 'var(--border)'}`,color: asset.value ? 'var(--green)' : 'var(--text-muted)'}}>{asset.value ? '✓' : '○'} {asset.label}</span>
+                                            ))}
+                                        </div>
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* ACTIVITY TAB */}
+                            {detailTab === 'activity' && (
+                                <div>
+                                    <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'16px',letterSpacing:'0.5px'}}>RECENT ACTIVITY FOR {sel.name}</div>
+                                    <div className="activity-log">
+                                        {activityLog.filter(a => a.text.includes(sel.name)).slice(0, 10).map(a => (
+                                            <div key={a.id} className="activity-item" style={{flexDirection:'column',gap:'4px'}}>
+                                                <div style={{display:'flex',gap:'12px'}}>
+                                                    <span className="activity-time">{fmtTime(a.time)}</span>
+                                                    <span className="activity-text">{a.text}</span>
+                                                </div>
+                                                {a.details && (
+                                                    <div style={{marginLeft:'70px',padding:'8px',background:'var(--bg-input)',borderRadius:'6px',fontSize:'11px',color:'var(--text-dim)'}}>
+                                                        {a.details.resolution && <div style={{marginBottom:'4px'}}>↳ <strong>Resolution:</strong> {a.details.resolution}</div>}
+                                                        {a.details.reply && <div style={{marginBottom:'4px'}}>↳ <strong>Their Reply:</strong> "{a.details.reply}"</div>}
+                                                        {a.details.details && <div style={{marginBottom:'4px'}}>↳ <strong>Issue:</strong> {a.details.details}</div>}
+                                                        {a.details.threat && <div style={{marginBottom:'4px'}}>↳ <strong>Threat:</strong> <span className={`badge badge-${a.details.threat.toLowerCase()}`}>{a.details.threat}</span></div>}
+                                                        {a.details.notes && <div style={{marginBottom:'4px'}}>↳ <strong>Notes:</strong> {a.details.notes}</div>}
+                                                        {a.details.contactedBy && <div style={{marginBottom:'4px'}}>↳ <strong>By:</strong> {a.details.contactedBy}</div>}
+                                                        {a.details.waitingReply && <div style={{marginBottom:'4px'}}>↳ <strong>Status:</strong> Waiting on reply</div>}
+                                                        {a.details.inPortUntil && <div>↳ <strong>Back online:</strong> {fmtDate(a.details.inPortUntil)}</div>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        ))}
+                                        {activityLog.filter(a => a.text.includes(sel.name)).length === 0 && <div className="empty">No recent activity for this ship</div>}
+                                    </div>
+                                </div>
+                            )}
                         </div>
-                        
-                        <div className="detail-section">
-                            <span className="section-title">Asset Identifiers</span>
-                            <div className="form-row mt-md">
-                                <div className="form-group">
-                                    <label className="form-label">Cisco Router</label>
-                                    <input className="form-input" placeholder="Serial number..." value={sel.ciscoRouter || ''} onChange={e => setSel({...sel, ciscoRouter: e.target.value})}/>
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">HDD</label>
-                                    <input className="form-input" placeholder="Serial number..." value={sel.hdd || ''} onChange={e => setSel({...sel, hdd: e.target.value})}/>
-                                </div>
-                            </div>
-                            <div className="form-row">
-                                <div className="form-group">
-                                    <label className="form-label">Star CRNA</label>
-                                    <input className="form-input" placeholder="Serial number..." value={sel.crna1 || ''} onChange={e => setSel({...sel, crna1: e.target.value})}/>
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Data CRNA</label>
-                                    <input className="form-input" placeholder="Serial number..." value={sel.crna2 || ''} onChange={e => setSel({...sel, crna2: e.target.value})}/>
-                                </div>
-                            </div>
-                            <div className="btn-group mt-md">
-                                <button className="btn btn-primary btn-sm" onClick={save}>💾 Save Ship</button>
-                                <button className="btn btn-secondary btn-sm" onClick={() => setSel({...ships.find(s => s.id === sel.id)})}>Clear Form</button>
-                            </div>
-                        </div>
-                        
-                        <div className="detail-section"><span className="section-title">Recent Activity</span><div className="activity-log">{activityLog.filter(a => a.text.includes(sel.name)).slice(0, 5).map(a => <div key={a.id} className="activity-item" style={{flexDirection:'column',gap:'4px'}}><div style={{display:'flex',gap:'12px'}}><span className="activity-time">{fmtTime(a.time)}</span><span className="activity-text">{a.text}</span></div>{a.details && <div style={{marginLeft:'70px',padding:'8px',background:'var(--bg-input)',borderRadius:'6px',fontSize:'11px',color:'var(--text-dim)'}}>{a.details.resolution && <div style={{marginBottom:'4px'}}>↳ <strong>Resolution:</strong> {a.details.resolution}</div>}{a.details.reply && <div style={{marginBottom:'4px'}}>↳ <strong>Their Reply:</strong> "{a.details.reply}"</div>}{a.details.details && <div style={{marginBottom:'4px'}}>↳ <strong>Issue:</strong> {a.details.details}</div>}{a.details.threat && <div style={{marginBottom:'4px'}}>↳ <strong>Threat:</strong> <span className={`badge badge-${a.details.threat.toLowerCase()}`}>{a.details.threat}</span></div>}{a.details.notes && <div style={{marginBottom:'4px'}}>↳ <strong>Notes:</strong> {a.details.notes}</div>}{a.details.contactedBy && <div style={{marginBottom:'4px'}}>↳ <strong>By:</strong> {a.details.contactedBy}</div>}{a.details.waitingReply && <div style={{marginBottom:'4px'}}>↳ <strong>Status:</strong> Waiting on reply</div>}{a.details.inPortUntil && <div>↳ <strong>Back online:</strong> {fmtDate(a.details.inPortUntil)}</div>}</div>}</div>)}{activityLog.filter(a => a.text.includes(sel.name)).length === 0 && <div className="empty">No recent activity</div>}</div></div>
                     </>) : <div className="detail-section"><div className="empty" style={{padding:'60px 20px'}}><svg width="120" height="60" viewBox="0 0 120 60" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:0.4}}><path d="M10 40l8-5h84l8 5H10z"/><path d="M18 35h84l4-10H14l4 10z"/><path d="M22 25V18h76v7"/><path d="M30 18v-5h8v5"/><path d="M50 18V8h10v10"/><path d="M72 18v-5h8v5"/><path d="M102 27l8 4v6l-8 4"/><path d="M18 27l-8 4v6l8 4"/><path d="M35 40v8h50v-8"/><path d="M55 25h10v10H55z" strokeDasharray="2 2"/></svg><p className="mt-md">Select a ship to view details</p></div></div>}
                 </div>
             </div>
