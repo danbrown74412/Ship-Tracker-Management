@@ -3190,7 +3190,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
     const [bulkPasteModal, setBulkPasteModal] = useState(false);
     const [bulkPasteText, setBulkPasteText] = useState('');
     const [bulkPasteType, setBulkPasteType] = useState('am');
-    const [showHistory, setShowHistory] = useState(null);
     const [viewMode, setViewMode] = useState('table'); // 'table' or 'cards'
     const inputRefs = useRef({});
 
@@ -3210,19 +3209,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
     const getYesterdayCheck = (id) => {
         const yesterday = parseLocalDate(date); yesterday.setDate(yesterday.getDate() - 1);
         return checks.find(c => c.shipId === id && c.date === toDateString(yesterday));
-    };
-
-    // Get 7-day history for a ship
-    const get7DayHistory = (id) => {
-        const history = [];
-        for (let i = 6; i >= 0; i--) {
-            const d = parseLocalDate(date);
-            d.setDate(d.getDate() - i);
-            const dateStr = toDateString(d);
-            const check = checks.find(c => c.shipId === id && c.date === dateStr);
-            history.push({ date: dateStr, check, dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }) });
-        }
-        return history;
     };
 
     const update = (id, field, val) => {
@@ -3520,7 +3506,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                         <span className="check-header">HD Space</span>
                         <span className="check-header">Primary</span>
                         <span className="check-header">Alternate</span>
-                        <span className="check-header" style={{width:'60px'}}>History</span>
                     </div>
                     <div>{sorted.map((s, idx) => {
                         const c = getCheck(s.id);
@@ -3570,7 +3555,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                                 </div>
                                 <label className="checkbox"><input type="checkbox" checked={c.statusAM} onChange={e => update(s.id, 'statusAM', e.target.checked)}/>Online</label>
                                 <label className="checkbox"><input type="checkbox" checked={c.statusPM} onChange={e => update(s.id, 'statusPM', e.target.checked)}/>Online</label>
-                                <button className="btn btn-sm btn-secondary" style={{padding:'2px 6px',fontSize:'10px'}} onClick={() => setShowHistory(showHistory === s.id ? null : s.id)}>7d</button>
                             </div>
                         );
                     })}</div>
@@ -3583,8 +3567,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                     {sorted.map(s => {
                         const c = getCheck(s.id);
                         const status = getRowStatus(s, c);
-                        const history = get7DayHistory(s.id);
-                        const pingHistory = history.map(h => h.check?.pingAM || '').filter(Boolean);
 
                         return (
                             <div key={s.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: `4px solid ${status === 'online' ? 'var(--green)' : status === 'offline' ? 'var(--red)' : status === 'partial' ? 'var(--amber)' : 'var(--blue)'}`}}>
@@ -3611,53 +3593,13 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                                     </div>
                                 </div>
 
-                                <div style={{display:'flex',gap:'12px',marginBottom:'12px'}}>
+                                <div style={{display:'flex',gap:'12px'}}>
                                     <label className="checkbox" style={{fontSize:'11px'}}><input type="checkbox" checked={c.statusAM} onChange={e => update(s.id, 'statusAM', e.target.checked)}/>AM</label>
                                     <label className="checkbox" style={{fontSize:'11px'}}><input type="checkbox" checked={c.statusPM} onChange={e => update(s.id, 'statusPM', e.target.checked)}/>PM</label>
-                                </div>
-
-                                {/* Mini 7-day history */}
-                                <div style={{display:'flex',gap:'2px',marginBottom:'8px'}}>
-                                    {history.map(h => (
-                                        <div key={h.date} style={{flex:1,height:'20px',background: !h.check ? 'var(--bg-input)' : h.check.statusAM && h.check.statusPM ? 'var(--green)' : !h.check.statusAM && !h.check.statusPM ? 'var(--red)' : 'var(--amber)',borderRadius:'2px',opacity: h.date === date ? 1 : 0.6}} title={`${h.dayLabel}: ${h.check ? (h.check.statusAM && h.check.statusPM ? 'Online' : 'Issues') : 'No data'}`}/>
-                                    ))}
-                                </div>
-                                <div style={{display:'flex',justifyContent:'space-between',fontSize:'9px',color:'var(--text-muted)'}}>
-                                    {history.map(h => <span key={h.date}>{h.dayLabel}</span>)}
                                 </div>
                             </div>
                         );
                     })}
-                </div>
-            )}
-
-            {/* 7-Day History Modal */}
-            {showHistory && (
-                <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={() => setShowHistory(null)}>
-                    <div style={{background:'var(--bg-card)',borderRadius:'12px',padding:'24px',maxWidth:'600px',width:'90%',maxHeight:'80vh',overflow:'auto'}} onClick={e => e.stopPropagation()}>
-                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
-                            <h3 style={{margin:0}}>7-Day History: {ships.find(s => s.id === showHistory)?.name}</h3>
-                            <button className="btn btn-sm btn-secondary" onClick={() => setShowHistory(null)}>✕</button>
-                        </div>
-                        <div style={{display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gap:'8px'}}>
-                            {get7DayHistory(showHistory).map(h => (
-                                <div key={h.date} style={{padding:'12px',background: h.date === date ? 'var(--primary-glow)' : 'var(--bg-input)',borderRadius:'8px',textAlign:'center',border: h.date === date ? '2px solid var(--primary)' : '1px solid var(--border)'}}>
-                                    <div style={{fontSize:'11px',fontWeight:600,marginBottom:'8px'}}>{h.dayLabel}</div>
-                                    <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'8px'}}>{h.date.slice(5)}</div>
-                                    {h.check ? (
-                                        <>
-                                            <div style={{width:'20px',height:'20px',borderRadius:'50%',margin:'0 auto 8px',background: h.check.statusAM && h.check.statusPM ? 'var(--green)' : !h.check.statusAM && !h.check.statusPM ? 'var(--red)' : 'var(--amber)'}}/>
-                                            <div style={{fontSize:'10px'}}>AM: {h.check.pingAM || '—'}</div>
-                                            <div style={{fontSize:'10px'}}>PM: {h.check.pingPM || '—'}</div>
-                                            <div style={{fontSize:'10px'}}>HD: {h.check.hdSpace || '—'}</div>
-                                        </>
-                                    ) : (
-                                        <div style={{fontSize:'10px',color:'var(--text-muted)',padding:'20px 0'}}>No data</div>
-                                    )}
-                                </div>
-                            ))}
-                        </div>
-                    </div>
                 </div>
             )}
 
