@@ -3520,7 +3520,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                         <span className="check-header">HD Space</span>
                         <span className="check-header">Primary</span>
                         <span className="check-header">Alternate</span>
-                        <span className="check-header" style={{width:'80px'}}>Notes</span>
                         <span className="check-header" style={{width:'60px'}}>History</span>
                     </div>
                     <div>{sorted.map((s, idx) => {
@@ -3571,7 +3570,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                                 </div>
                                 <label className="checkbox"><input type="checkbox" checked={c.statusAM} onChange={e => update(s.id, 'statusAM', e.target.checked)}/>Online</label>
                                 <label className="checkbox"><input type="checkbox" checked={c.statusPM} onChange={e => update(s.id, 'statusPM', e.target.checked)}/>Online</label>
-                                <input className="form-input" style={{width:'80px',fontSize:'10px'}} placeholder="Note..." value={c.notes || ''} onChange={e => update(s.id, 'notes', e.target.value)}/>
                                 <button className="btn btn-sm btn-secondary" style={{padding:'2px 6px',fontSize:'10px'}} onClick={() => setShowHistory(showHistory === s.id ? null : s.id)}>7d</button>
                             </div>
                         );
@@ -3627,8 +3625,6 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                                 <div style={{display:'flex',justifyContent:'space-between',fontSize:'9px',color:'var(--text-muted)'}}>
                                     {history.map(h => <span key={h.date}>{h.dayLabel}</span>)}
                                 </div>
-
-                                <input className="form-input mt-sm" style={{fontSize:'10px'}} placeholder="Notes..." value={c.notes || ''} onChange={e => update(s.id, 'notes', e.target.value)}/>
                             </div>
                         );
                     })}
