@@ -3187,6 +3187,13 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
 
 function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
     const [date, setDate] = useState(toDateString(new Date()));
+    const [bulkPasteModal, setBulkPasteModal] = useState(false);
+    const [bulkPasteText, setBulkPasteText] = useState('');
+    const [bulkPasteType, setBulkPasteType] = useState('am');
+    const [showHistory, setShowHistory] = useState(null);
+    const [viewMode, setViewMode] = useState('table'); // 'table' or 'cards'
+    const inputRefs = useRef({});
+
     const customOrder = [67, 70, 54, 56, 62, 63, 55, 57, 72, 77, 96, 98, 101, 103, 109, 111];
     const sorted = useMemo(() => [...ships].sort((a, b) => {
         const aNum = hullNum(a.name), bNum = hullNum(b.name);
@@ -3196,26 +3203,89 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
         if (bIdx !== -1) return 1;
         return aNum - bNum;
     }), [ships]);
-    
-    const getCheck = (id) => checks.find(c => c.shipId === id && c.date === date) || { id: genId('DC'), shipId: id, date, pingAM: '', pingPM: '', hdSpace: '', statusAM: true, statusPM: true };
-    
+
+    const getCheck = (id, d = date) => checks.find(c => c.shipId === id && c.date === d) || { id: genId('DC'), shipId: id, date: d, pingAM: '', pingPM: '', hdSpace: '', statusAM: true, statusPM: true, notes: '' };
+
+    // Get yesterday's check for comparison
+    const getYesterdayCheck = (id) => {
+        const yesterday = parseLocalDate(date); yesterday.setDate(yesterday.getDate() - 1);
+        return checks.find(c => c.shipId === id && c.date === toDateString(yesterday));
+    };
+
+    // Get 7-day history for a ship
+    const get7DayHistory = (id) => {
+        const history = [];
+        for (let i = 6; i >= 0; i--) {
+            const d = parseLocalDate(date);
+            d.setDate(d.getDate() - i);
+            const dateStr = toDateString(d);
+            const check = checks.find(c => c.shipId === id && c.date === dateStr);
+            history.push({ date: dateStr, check, dayLabel: d.toLocaleDateString('en-US', { weekday: 'short' }) });
+        }
+        return history;
+    };
+
     const update = (id, field, val) => {
         const ship = ships.find(s => s.id === id);
         const shipName = ship?.name || 'Unknown';
-        
-        // Log status changes
+
         if (field === 'statusAM' || field === 'statusPM') {
             const period = field === 'statusAM' ? 'Primary' : 'Alternate';
             logActivity(`${shipName} ${period} marked ${val ? 'Online' : 'Offline'}`, { ship: shipName, date, field, value: val });
         }
-        
-        setChecks(p => { 
-            const ex = p.find(c => c.shipId === id && c.date === date); 
-            if (ex) return p.map(c => (c.shipId === id && c.date === date) ? {...c, [field]: val} : c); 
-            return [...p, { id: genId('DC'), shipId: id, date, pingAM: '', pingPM: '', hdSpace: '', statusAM: true, statusPM: true, [field]: val }]; 
+
+        setChecks(p => {
+            const ex = p.find(c => c.shipId === id && c.date === date);
+            if (ex) return p.map(c => (c.shipId === id && c.date === date) ? {...c, [field]: val} : c);
+            return [...p, { id: genId('DC'), shipId: id, date, pingAM: '', pingPM: '', hdSpace: '', statusAM: true, statusPM: true, notes: '', [field]: val }];
         });
     };
-    
+
+    // Bulk mark all online/offline
+    const bulkMark = (field, value) => {
+        sorted.forEach(s => update(s.id, field, value));
+        const period = field === 'statusAM' ? 'AM' : 'PM';
+        logActivity(`Bulk marked all ships ${period} ${value ? 'Online' : 'Offline'}`);
+        toast(`All ships marked ${value ? 'Online' : 'Offline'} for ${period}`, 'success');
+    };
+
+    // Parse bulk paste input
+    const parseBulkPaste = () => {
+        const lines = bulkPasteText.trim().split('\n');
+        let matched = 0;
+
+        lines.forEach(line => {
+            // Try to match patterns like "DDG67: 245ms" or "67 - 245" or just "245"
+            const pingMatch = line.match(/(\d+)\s*(?:ms)?/);
+            const hullMatch = line.match(/(?:DDG|CG)?(\d{2,3})/i);
+
+            if (pingMatch) {
+                const pingVal = pingMatch[1];
+                let shipId = null;
+
+                if (hullMatch) {
+                    const ship = ships.find(s => s.name.includes(hullMatch[1]));
+                    if (ship) shipId = ship.id;
+                } else {
+                    // If no hull found, assign to ships in order
+                    const idx = matched;
+                    if (sorted[idx]) shipId = sorted[idx].id;
+                }
+
+                if (shipId) {
+                    const field = bulkPasteType === 'am' ? 'pingAM' : bulkPasteType === 'pm' ? 'pingPM' : 'hdSpace';
+                    update(shipId, field, pingVal);
+                    matched++;
+                }
+            }
+        });
+
+        logActivity(`Bulk pasted ${matched} ${bulkPasteType.toUpperCase()} values`);
+        toast(`Updated ${matched} ships`, 'success');
+        setBulkPasteModal(false);
+        setBulkPasteText('');
+    };
+
     const copyYesterday = () => {
         const yesterday = parseLocalDate(date); yesterday.setDate(yesterday.getDate() - 1);
         const ydStr = toDateString(yesterday);
@@ -3232,49 +3302,33 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
         logActivity(`Copied ${copied} checks from ${ydStr}`);
         toast(`Copied ${copied} entries from yesterday`, 'success');
     };
-    
-    const exportStatus = () => { 
-        let r = `REAP Status Report - ${parseLocalDate(date).toLocaleDateString('en-US', {weekday:'short',month:'short',day:'numeric',year:'numeric'})}\n${'─'.repeat(40)}\n\n`; 
-        sorted.forEach(s => { const c = getCheck(s.id); let st = 'Up'; if (!c.statusAM && !c.statusPM) st = 'Down'; else if (c.statusAM && !c.statusPM) st = 'Up / Down'; else if (!c.statusAM && c.statusPM) st = 'Down / Up'; r += `${s.name} - ${st}\n`; }); 
-        navigator.clipboard.writeText(r); 
+
+    const exportStatus = () => {
+        let r = `REAP Status Report - ${parseLocalDate(date).toLocaleDateString('en-US', {weekday:'short',month:'short',day:'numeric',year:'numeric'})}\n${'─'.repeat(40)}\n\n`;
+        sorted.forEach(s => { const c = getCheck(s.id); let st = 'Up'; if (!c.statusAM && !c.statusPM) st = 'Down'; else if (c.statusAM && !c.statusPM) st = 'Up / Down'; else if (!c.statusAM && c.statusPM) st = 'Down / Up'; r += `${s.name} - ${st}\n`; });
+        navigator.clipboard.writeText(r);
         logActivity(`Exported daily status report for ${date}`);
-        toast('Status report copied!', 'success'); 
+        toast('Status report copied!', 'success');
     };
-    
-    // Export for Excel paste - Full REAP + headers + Mini REAP in one paste
+
     const exportForExcel = () => {
         const fullReapOrder = [67, 70, 54, 56, 62, 63];
         const miniReapOrder = [55, 57, 72, 77, 96, 98, 101, 103, 109, 111];
-        
         const getRow = (hullNum) => {
             const ship = ships.find(s => s.name.includes(hullNum.toString()));
             if (!ship) return '0\t0\t0';
             const c = getCheck(ship.id);
             return `${c.pingAM || '0'}\t${c.pingPM || '0'}\t${c.hdSpace || '0'}`;
         };
-        
-        // Build Full REAP section (6 ships)
         let fullReap = fullReapOrder.map(h => getRow(h)).join('\n');
-        
-        // 3 header rows between sections to match Excel rows 7-9
-        // Row 7: empty row
-        // Row 8: Mini REAP header - "Average Ping Times (ms)" spans I-J, K has header text
-        // Row 9: Sub-headers "AM", "PM", "Daily"
-        const headerRow1 = '\t\t';
-        const headerRow2 = '\t\t';
-        const headerRow3 = 'AM\tPM\tDaily';
-        
-        // Build Mini REAP section (10 ships)
+        const headerRow1 = '\t\t', headerRow2 = '\t\t', headerRow3 = 'AM\tPM\tDaily';
         let miniReap = miniReapOrder.map(h => getRow(h)).join('\n');
-        
-        // Combine: 6 ships + 3 header rows + 10 ships = 19 rows
         const output = `${fullReap}\n${headerRow1}\n${headerRow2}\n${headerRow3}\n${miniReap}`;
-        
         navigator.clipboard.writeText(output);
         logActivity(`Exported daily checks for Excel on ${date}`);
         toast('Copied! Paste at CG67 AM column', 'success');
     };
-    
+
     const isAbnormal = (val, type) => {
         const num = parseInt(val);
         if (isNaN(num)) return '';
@@ -3284,24 +3338,367 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
         if (type === 'hd' && num < 200) return 'warning';
         return '';
     };
-    
-    // Calculate stats for today
-    const todayStats = useMemo(() => {
+
+    // Get trend indicator compared to yesterday
+    const getTrend = (current, yesterday, type) => {
+        const curr = parseInt(current), yest = parseInt(yesterday);
+        if (isNaN(curr) || isNaN(yest)) return null;
+        const diff = curr - yest;
+        if (type === 'ping') {
+            if (diff > 50) return { dir: 'up', bad: true, diff };
+            if (diff < -50) return { dir: 'down', bad: false, diff };
+        } else {
+            if (diff < -20) return { dir: 'down', bad: true, diff };
+            if (diff > 20) return { dir: 'up', bad: false, diff };
+        }
+        return null;
+    };
+
+    // Mini sparkline component
+    const Sparkline = ({ data, type }) => {
+        const values = data.map(d => parseInt(d) || 0).filter(v => v > 0);
+        if (values.length < 2) return null;
+        const max = Math.max(...values), min = Math.min(...values);
+        const range = max - min || 1;
+        const width = 50, height = 16;
+        const points = values.map((v, i) => `${(i / (values.length - 1)) * width},${height - ((v - min) / range) * height}`).join(' ');
+        const color = type === 'ping' ? (values[values.length-1] > 300 ? 'var(--red)' : 'var(--green)') : (values[values.length-1] < 200 ? 'var(--amber)' : 'var(--green)');
+        return <svg width={width} height={height} style={{marginLeft:'4px'}}><polyline points={points} fill="none" stroke={color} strokeWidth="1.5"/></svg>;
+    };
+
+    // Calculate stats
+    const stats = useMemo(() => {
         const todayChecks = checks.filter(c => c.date === date);
         const online = todayChecks.filter(c => c.statusAM && c.statusPM).length;
-        const offline = todayChecks.filter(c => !c.statusAM || !c.statusPM).length;
+        const partial = todayChecks.filter(c => (c.statusAM && !c.statusPM) || (!c.statusAM && c.statusPM)).length;
+        const offline = todayChecks.filter(c => !c.statusAM && !c.statusPM).length;
         const noData = ships.length - todayChecks.length;
-        return { online, offline, noData, total: todayChecks.length };
+        const inPort = ships.filter(s => s.inPort && parseLocalDate(s.inPortUntil) >= new Date(new Date().setHours(0,0,0,0))).length;
+
+        const pingsAM = todayChecks.map(c => parseInt(c.pingAM)).filter(n => !isNaN(n) && n > 0);
+        const pingsPM = todayChecks.map(c => parseInt(c.pingPM)).filter(n => !isNaN(n) && n > 0);
+        const avgPingAM = pingsAM.length ? Math.round(pingsAM.reduce((a,b) => a+b, 0) / pingsAM.length) : 0;
+        const avgPingPM = pingsPM.length ? Math.round(pingsPM.reduce((a,b) => a+b, 0) / pingsPM.length) : 0;
+
+        const highPing = todayChecks.filter(c => parseInt(c.pingAM) > 300 || parseInt(c.pingPM) > 300).length;
+        const lowDisk = todayChecks.filter(c => parseInt(c.hdSpace) < 200).length;
+
+        return { online, partial, offline, noData, inPort, avgPingAM, avgPingPM, highPing, lowDisk, total: todayChecks.length };
     }, [checks, date, ships]);
+
+    // Get row status for coloring
+    const getRowStatus = (ship, check) => {
+        const isInPort = ship.inPort && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
+        if (isInPort) return 'inport';
+        if (!check.statusAM && !check.statusPM) return 'offline';
+        if (!check.statusAM || !check.statusPM) return 'partial';
+        if (parseInt(check.pingAM) > 500 || parseInt(check.pingPM) > 500 || parseInt(check.hdSpace) < 100) return 'alert';
+        return 'online';
+    };
+
+    // Keyboard navigation
+    const handleKeyDown = (e, shipId, field, shipIndex) => {
+        if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            const fields = ['pingAM', 'pingPM', 'hdSpace'];
+            const fieldIndex = fields.indexOf(field);
+            let nextShipIndex = shipIndex;
+            let nextFieldIndex = fieldIndex + 1;
+
+            if (nextFieldIndex >= fields.length) {
+                nextFieldIndex = 0;
+                nextShipIndex = shipIndex + 1;
+            }
+
+            if (nextShipIndex < sorted.length) {
+                const nextShip = sorted[nextShipIndex];
+                const nextField = fields[nextFieldIndex];
+                const refKey = `${nextShip.id}-${nextField}`;
+                if (inputRefs.current[refKey]) {
+                    inputRefs.current[refKey].focus();
+                    inputRefs.current[refKey].select();
+                }
+            }
+        }
+    };
 
     return (
         <div className="page active">
-            <div className="page-header"><div className="page-header-left"><h1 className="page-title">Daily Checks</h1><p className="page-sub">Morning and EOD ping times • {todayStats.online} online, {todayStats.offline} offline, {todayStats.noData} no data</p></div><button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print"/> Print</button></div>
-            <div className="card"><div className="flex-between"><div className="flex gap-md"><span style={{fontWeight:600,color:'var(--primary)',fontSize:'12px'}}>DATE:</span><input type="date" className="form-input" style={{width:'auto'}} value={date} onChange={e => setDate(e.target.value)}/><button className="btn btn-sm btn-secondary" onClick={() => { const d = parseLocalDate(date); d.setDate(d.getDate()-1); setDate(toDateString(d)); }}>← Prev</button><button className="btn btn-sm btn-secondary" onClick={() => { const d = parseLocalDate(date); d.setDate(d.getDate()+1); setDate(toDateString(d)); }}>Next →</button><button className="btn btn-sm btn-primary" onClick={() => setDate(toDateString(new Date()))}>Today</button></div><div className="btn-group"><button className="btn btn-warning" onClick={copyYesterday}>📋 Copy Yesterday</button><button className="btn btn-primary" onClick={() => { logActivity(`Saved daily checks for ${date}`); toast(`Saved ${sorted.length} checks`, 'success'); }}>Save All</button><button className="btn btn-success" onClick={exportForExcel}>📊 Export for Excel</button><button className="btn btn-secondary" onClick={exportStatus}>Status Report</button></div></div></div>
-            <div className="card mt-md">
-                <div className="check-row" style={{background:'var(--bg-input)',fontWeight:600}}><span className="check-header">Hull #</span><span className="check-header">Port</span><span className="check-header">AM Ping</span><span className="check-header">PM Ping</span><span className="check-header">HD Space</span><span className="check-header">Primary</span><span className="check-header">Alternate</span></div>
-                <div>{sorted.map(s => { const c = getCheck(s.id); const isInPort = s.inPort && parseLocalDate(s.inPortUntil) >= new Date(new Date().setHours(0,0,0,0)); return (<div key={s.id} className="check-row" style={{background: isInPort ? 'var(--blue-glow)' : 'transparent'}}><span style={{fontWeight:600,fontFamily:'JetBrains Mono',fontSize:'12px'}}>{s.name}</span><span style={{fontSize:'11px',color: isInPort ? 'var(--blue)' : 'var(--text-dim)'}}>{isInPort ? '⚓ In Port' : (s.location || '—')}</span><input className={`form-input ${isAbnormal(c.pingAM, 'ping')}`} placeholder="ms" value={c.pingAM} onChange={e => update(s.id, 'pingAM', e.target.value)}/><input className={`form-input ${isAbnormal(c.pingPM, 'ping')}`} placeholder="ms" value={c.pingPM} onChange={e => update(s.id, 'pingPM', e.target.value)}/><input className={`form-input ${isAbnormal(c.hdSpace, 'hd')}`} placeholder="GB" value={c.hdSpace} onChange={e => update(s.id, 'hdSpace', e.target.value)}/><label className="checkbox"><input type="checkbox" checked={c.statusAM} onChange={e => update(s.id, 'statusAM', e.target.checked)}/>Online</label><label className="checkbox"><input type="checkbox" checked={c.statusPM} onChange={e => update(s.id, 'statusPM', e.target.checked)}/>Online</label></div>); })}</div>
+            <div className="page-header">
+                <div className="page-header-left">
+                    <h1 className="page-title">Daily Checks</h1>
+                    <p className="page-sub">Fleet status monitoring • {parseLocalDate(date).toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
+                </div>
+                <div className="btn-group">
+                    <button className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('table')}>Table</button>
+                    <button className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('cards')}>Cards</button>
+                    <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print"/></button>
+                </div>
             </div>
+
+            {/* Status Dashboard Cards */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit, minmax(140px, 1fr))',gap:'12px',marginBottom:'16px'}}>
+                <div style={{padding:'16px',background:'var(--green-glow)',borderRadius:'8px',border:'1px solid var(--green)',textAlign:'center'}}>
+                    <div style={{fontSize:'28px',fontWeight:700,color:'var(--green)'}}>{stats.online}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>ONLINE</div>
+                </div>
+                <div style={{padding:'16px',background: stats.partial > 0 ? 'var(--amber-glow)' : 'var(--bg-card)',borderRadius:'8px',border:`1px solid ${stats.partial > 0 ? 'var(--amber)' : 'var(--border)'}`,textAlign:'center'}}>
+                    <div style={{fontSize:'28px',fontWeight:700,color: stats.partial > 0 ? 'var(--amber)' : 'var(--text-muted)'}}>{stats.partial}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>PARTIAL</div>
+                </div>
+                <div style={{padding:'16px',background: stats.offline > 0 ? 'var(--red-glow)' : 'var(--bg-card)',borderRadius:'8px',border:`1px solid ${stats.offline > 0 ? 'var(--red)' : 'var(--border)'}`,textAlign:'center'}}>
+                    <div style={{fontSize:'28px',fontWeight:700,color: stats.offline > 0 ? 'var(--red)' : 'var(--text-muted)'}}>{stats.offline}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>OFFLINE</div>
+                </div>
+                <div style={{padding:'16px',background:'var(--blue-glow)',borderRadius:'8px',border:'1px solid var(--blue)',textAlign:'center'}}>
+                    <div style={{fontSize:'28px',fontWeight:700,color:'var(--blue)'}}>{stats.inPort}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>IN PORT</div>
+                </div>
+                <div style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',textAlign:'center'}}>
+                    <div style={{fontSize:'20px',fontWeight:700,color:'var(--text)'}}>{stats.avgPingAM}<span style={{fontSize:'11px',color:'var(--text-muted)'}}> / </span>{stats.avgPingPM}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>AVG PING (AM/PM)</div>
+                </div>
+                <div style={{padding:'16px',background: stats.highPing > 0 || stats.lowDisk > 0 ? 'var(--amber-glow)' : 'var(--bg-card)',borderRadius:'8px',border:`1px solid ${stats.highPing > 0 || stats.lowDisk > 0 ? 'var(--amber)' : 'var(--border)'}`,textAlign:'center'}}>
+                    <div style={{fontSize:'20px',fontWeight:700,color: stats.highPing > 0 || stats.lowDisk > 0 ? 'var(--amber)' : 'var(--text-muted)'}}>{stats.highPing + stats.lowDisk}</div>
+                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>ALERTS</div>
+                </div>
+            </div>
+
+            {/* Alerts Panel */}
+            {(stats.highPing > 0 || stats.lowDisk > 0) && (
+                <div style={{padding:'12px',background:'var(--amber-glow)',borderRadius:'8px',border:'1px solid var(--amber)',marginBottom:'16px'}}>
+                    <div style={{fontWeight:600,color:'var(--amber)',marginBottom:'8px'}}>⚠️ Alerts</div>
+                    <div style={{display:'flex',gap:'16px',flexWrap:'wrap',fontSize:'12px'}}>
+                        {sorted.filter(s => { const c = getCheck(s.id); return parseInt(c.pingAM) > 300 || parseInt(c.pingPM) > 300; }).map(s => {
+                            const c = getCheck(s.id);
+                            return <span key={s.id} style={{color:'var(--text)'}}><strong>{s.name}</strong>: High ping ({c.pingAM || c.pingPM}ms)</span>;
+                        })}
+                        {sorted.filter(s => { const c = getCheck(s.id); return parseInt(c.hdSpace) < 200 && parseInt(c.hdSpace) > 0; }).map(s => {
+                            const c = getCheck(s.id);
+                            return <span key={s.id} style={{color:'var(--text)'}}><strong>{s.name}</strong>: Low disk ({c.hdSpace}GB)</span>;
+                        })}
+                    </div>
+                </div>
+            )}
+
+            {/* Controls */}
+            <div className="card">
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',flexWrap:'wrap',gap:'12px'}}>
+                    <div style={{display:'flex',gap:'8px',alignItems:'center',flexWrap:'wrap'}}>
+                        <span style={{fontWeight:600,color:'var(--primary)',fontSize:'12px'}}>DATE:</span>
+                        <input type="date" className="form-input" style={{width:'auto'}} value={date} onChange={e => setDate(e.target.value)}/>
+                        <button className="btn btn-sm btn-secondary" onClick={() => { const d = parseLocalDate(date); d.setDate(d.getDate()-1); setDate(toDateString(d)); }}>←</button>
+                        <button className="btn btn-sm btn-secondary" onClick={() => { const d = parseLocalDate(date); d.setDate(d.getDate()+1); setDate(toDateString(d)); }}>→</button>
+                        <button className="btn btn-sm btn-primary" onClick={() => setDate(toDateString(new Date()))}>Today</button>
+                    </div>
+                    <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
+                        <button className="btn btn-sm btn-secondary" onClick={() => setBulkPasteModal(true)}>📋 Bulk Paste</button>
+                        <button className="btn btn-sm btn-warning" onClick={copyYesterday}>Copy Yesterday</button>
+                        <button className="btn btn-sm btn-success" onClick={exportForExcel}>📊 Excel</button>
+                        <button className="btn btn-sm btn-secondary" onClick={exportStatus}>Report</button>
+                    </div>
+                </div>
+
+                {/* Quick Mark Buttons */}
+                <div style={{display:'flex',gap:'8px',marginTop:'12px',paddingTop:'12px',borderTop:'1px solid var(--border)',flexWrap:'wrap'}}>
+                    <span style={{fontSize:'11px',color:'var(--text-muted)',alignSelf:'center'}}>Quick Mark:</span>
+                    <button className="btn btn-sm" style={{background:'var(--green)',color:'#fff'}} onClick={() => bulkMark('statusAM', true)}>All AM Online</button>
+                    <button className="btn btn-sm" style={{background:'var(--red)',color:'#fff'}} onClick={() => bulkMark('statusAM', false)}>All AM Offline</button>
+                    <button className="btn btn-sm" style={{background:'var(--green)',color:'#fff'}} onClick={() => bulkMark('statusPM', true)}>All PM Online</button>
+                    <button className="btn btn-sm" style={{background:'var(--red)',color:'#fff'}} onClick={() => bulkMark('statusPM', false)}>All PM Offline</button>
+                </div>
+            </div>
+
+            {/* Table View */}
+            {viewMode === 'table' && (
+                <div className="card mt-md">
+                    <div className="check-row" style={{background:'var(--bg-input)',fontWeight:600}}>
+                        <span className="check-header">Hull #</span>
+                        <span className="check-header">Port</span>
+                        <span className="check-header">AM Ping</span>
+                        <span className="check-header">PM Ping</span>
+                        <span className="check-header">HD Space</span>
+                        <span className="check-header">Primary</span>
+                        <span className="check-header">Alternate</span>
+                        <span className="check-header" style={{width:'80px'}}>Notes</span>
+                        <span className="check-header" style={{width:'60px'}}>History</span>
+                    </div>
+                    <div>{sorted.map((s, idx) => {
+                        const c = getCheck(s.id);
+                        const yc = getYesterdayCheck(s.id);
+                        const status = getRowStatus(s, c);
+                        const rowBg = status === 'inport' ? 'var(--blue-glow)' : status === 'offline' ? 'var(--red-glow)' : status === 'partial' ? 'var(--amber-glow)' : status === 'alert' ? 'rgba(251, 191, 36, 0.1)' : 'transparent';
+                        const trendAM = yc ? getTrend(c.pingAM, yc.pingAM, 'ping') : null;
+                        const trendPM = yc ? getTrend(c.pingPM, yc.pingPM, 'ping') : null;
+                        const trendHD = yc ? getTrend(c.hdSpace, yc.hdSpace, 'hd') : null;
+
+                        return (
+                            <div key={s.id} className="check-row" style={{background: rowBg, borderLeft: status === 'offline' ? '3px solid var(--red)' : status === 'partial' ? '3px solid var(--amber)' : status === 'inport' ? '3px solid var(--blue)' : '3px solid transparent'}}>
+                                <span style={{fontWeight:600,fontFamily:'JetBrains Mono',fontSize:'12px'}}>{s.name}</span>
+                                <span style={{fontSize:'11px',color: status === 'inport' ? 'var(--blue)' : 'var(--text-dim)'}}>{status === 'inport' ? '⚓' : ''} {s.location || '—'}</span>
+                                <div style={{display:'flex',alignItems:'center'}}>
+                                    <input
+                                        ref={el => inputRefs.current[`${s.id}-pingAM`] = el}
+                                        className={`form-input ${isAbnormal(c.pingAM, 'ping')}`}
+                                        placeholder="ms"
+                                        value={c.pingAM}
+                                        onChange={e => update(s.id, 'pingAM', e.target.value)}
+                                        onKeyDown={e => handleKeyDown(e, s.id, 'pingAM', idx)}
+                                    />
+                                    {trendAM && <span style={{marginLeft:'4px',color: trendAM.bad ? 'var(--red)' : 'var(--green)',fontSize:'10px'}}>{trendAM.dir === 'up' ? '↑' : '↓'}</span>}
+                                </div>
+                                <div style={{display:'flex',alignItems:'center'}}>
+                                    <input
+                                        ref={el => inputRefs.current[`${s.id}-pingPM`] = el}
+                                        className={`form-input ${isAbnormal(c.pingPM, 'ping')}`}
+                                        placeholder="ms"
+                                        value={c.pingPM}
+                                        onChange={e => update(s.id, 'pingPM', e.target.value)}
+                                        onKeyDown={e => handleKeyDown(e, s.id, 'pingPM', idx)}
+                                    />
+                                    {trendPM && <span style={{marginLeft:'4px',color: trendPM.bad ? 'var(--red)' : 'var(--green)',fontSize:'10px'}}>{trendPM.dir === 'up' ? '↑' : '↓'}</span>}
+                                </div>
+                                <div style={{display:'flex',alignItems:'center'}}>
+                                    <input
+                                        ref={el => inputRefs.current[`${s.id}-hdSpace`] = el}
+                                        className={`form-input ${isAbnormal(c.hdSpace, 'hd')}`}
+                                        placeholder="GB"
+                                        value={c.hdSpace}
+                                        onChange={e => update(s.id, 'hdSpace', e.target.value)}
+                                        onKeyDown={e => handleKeyDown(e, s.id, 'hdSpace', idx)}
+                                    />
+                                    {trendHD && <span style={{marginLeft:'4px',color: trendHD.bad ? 'var(--red)' : 'var(--green)',fontSize:'10px'}}>{trendHD.dir === 'up' ? '↑' : '↓'}</span>}
+                                </div>
+                                <label className="checkbox"><input type="checkbox" checked={c.statusAM} onChange={e => update(s.id, 'statusAM', e.target.checked)}/>Online</label>
+                                <label className="checkbox"><input type="checkbox" checked={c.statusPM} onChange={e => update(s.id, 'statusPM', e.target.checked)}/>Online</label>
+                                <input className="form-input" style={{width:'80px',fontSize:'10px'}} placeholder="Note..." value={c.notes || ''} onChange={e => update(s.id, 'notes', e.target.value)}/>
+                                <button className="btn btn-sm btn-secondary" style={{padding:'2px 6px',fontSize:'10px'}} onClick={() => setShowHistory(showHistory === s.id ? null : s.id)}>7d</button>
+                            </div>
+                        );
+                    })}</div>
+                </div>
+            )}
+
+            {/* Cards View */}
+            {viewMode === 'cards' && (
+                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',gap:'12px',marginTop:'16px'}}>
+                    {sorted.map(s => {
+                        const c = getCheck(s.id);
+                        const status = getRowStatus(s, c);
+                        const history = get7DayHistory(s.id);
+                        const pingHistory = history.map(h => h.check?.pingAM || '').filter(Boolean);
+
+                        return (
+                            <div key={s.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: `4px solid ${status === 'online' ? 'var(--green)' : status === 'offline' ? 'var(--red)' : status === 'partial' ? 'var(--amber)' : 'var(--blue)'}`}}>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                                    <div style={{fontWeight:700,fontSize:'16px',fontFamily:'JetBrains Mono'}}>{s.name}</div>
+                                    <span className={`badge badge-${status === 'online' ? 'ok' : status === 'offline' ? 'urgent' : status === 'partial' ? 'mild' : 'info'}`}>
+                                        {status === 'online' ? '✓ Online' : status === 'offline' ? '✕ Offline' : status === 'partial' ? '⚠ Partial' : '⚓ In Port'}
+                                    </span>
+                                </div>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'12px'}}>{s.location || 'No location'}</div>
+
+                                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'12px'}}>
+                                    <div>
+                                        <div style={{fontSize:'9px',color:'var(--text-muted)'}}>AM PING</div>
+                                        <input className={`form-input ${isAbnormal(c.pingAM, 'ping')}`} style={{fontSize:'12px'}} placeholder="ms" value={c.pingAM} onChange={e => update(s.id, 'pingAM', e.target.value)}/>
+                                    </div>
+                                    <div>
+                                        <div style={{fontSize:'9px',color:'var(--text-muted)'}}>PM PING</div>
+                                        <input className={`form-input ${isAbnormal(c.pingPM, 'ping')}`} style={{fontSize:'12px'}} placeholder="ms" value={c.pingPM} onChange={e => update(s.id, 'pingPM', e.target.value)}/>
+                                    </div>
+                                    <div>
+                                        <div style={{fontSize:'9px',color:'var(--text-muted)'}}>HD SPACE</div>
+                                        <input className={`form-input ${isAbnormal(c.hdSpace, 'hd')}`} style={{fontSize:'12px'}} placeholder="GB" value={c.hdSpace} onChange={e => update(s.id, 'hdSpace', e.target.value)}/>
+                                    </div>
+                                </div>
+
+                                <div style={{display:'flex',gap:'12px',marginBottom:'12px'}}>
+                                    <label className="checkbox" style={{fontSize:'11px'}}><input type="checkbox" checked={c.statusAM} onChange={e => update(s.id, 'statusAM', e.target.checked)}/>AM</label>
+                                    <label className="checkbox" style={{fontSize:'11px'}}><input type="checkbox" checked={c.statusPM} onChange={e => update(s.id, 'statusPM', e.target.checked)}/>PM</label>
+                                </div>
+
+                                {/* Mini 7-day history */}
+                                <div style={{display:'flex',gap:'2px',marginBottom:'8px'}}>
+                                    {history.map(h => (
+                                        <div key={h.date} style={{flex:1,height:'20px',background: !h.check ? 'var(--bg-input)' : h.check.statusAM && h.check.statusPM ? 'var(--green)' : !h.check.statusAM && !h.check.statusPM ? 'var(--red)' : 'var(--amber)',borderRadius:'2px',opacity: h.date === date ? 1 : 0.6}} title={`${h.dayLabel}: ${h.check ? (h.check.statusAM && h.check.statusPM ? 'Online' : 'Issues') : 'No data'}`}/>
+                                    ))}
+                                </div>
+                                <div style={{display:'flex',justifyContent:'space-between',fontSize:'9px',color:'var(--text-muted)'}}>
+                                    {history.map(h => <span key={h.date}>{h.dayLabel}</span>)}
+                                </div>
+
+                                <input className="form-input mt-sm" style={{fontSize:'10px'}} placeholder="Notes..." value={c.notes || ''} onChange={e => update(s.id, 'notes', e.target.value)}/>
+                            </div>
+                        );
+                    })}
+                </div>
+            )}
+
+            {/* 7-Day History Modal */}
+            {showHistory && (
+                <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={() => setShowHistory(null)}>
+                    <div style={{background:'var(--bg-card)',borderRadius:'12px',padding:'24px',maxWidth:'600px',width:'90%',maxHeight:'80vh',overflow:'auto'}} onClick={e => e.stopPropagation()}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+                            <h3 style={{margin:0}}>7-Day History: {ships.find(s => s.id === showHistory)?.name}</h3>
+                            <button className="btn btn-sm btn-secondary" onClick={() => setShowHistory(null)}>✕</button>
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(7, 1fr)',gap:'8px'}}>
+                            {get7DayHistory(showHistory).map(h => (
+                                <div key={h.date} style={{padding:'12px',background: h.date === date ? 'var(--primary-glow)' : 'var(--bg-input)',borderRadius:'8px',textAlign:'center',border: h.date === date ? '2px solid var(--primary)' : '1px solid var(--border)'}}>
+                                    <div style={{fontSize:'11px',fontWeight:600,marginBottom:'8px'}}>{h.dayLabel}</div>
+                                    <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'8px'}}>{h.date.slice(5)}</div>
+                                    {h.check ? (
+                                        <>
+                                            <div style={{width:'20px',height:'20px',borderRadius:'50%',margin:'0 auto 8px',background: h.check.statusAM && h.check.statusPM ? 'var(--green)' : !h.check.statusAM && !h.check.statusPM ? 'var(--red)' : 'var(--amber)'}}/>
+                                            <div style={{fontSize:'10px'}}>AM: {h.check.pingAM || '—'}</div>
+                                            <div style={{fontSize:'10px'}}>PM: {h.check.pingPM || '—'}</div>
+                                            <div style={{fontSize:'10px'}}>HD: {h.check.hdSpace || '—'}</div>
+                                        </>
+                                    ) : (
+                                        <div style={{fontSize:'10px',color:'var(--text-muted)',padding:'20px 0'}}>No data</div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Bulk Paste Modal */}
+            {bulkPasteModal && (
+                <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.7)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={() => setBulkPasteModal(false)}>
+                    <div style={{background:'var(--bg-card)',borderRadius:'12px',padding:'24px',maxWidth:'500px',width:'90%'}} onClick={e => e.stopPropagation()}>
+                        <h3 style={{marginTop:0}}>📋 Bulk Paste Values</h3>
+                        <p style={{fontSize:'12px',color:'var(--text-muted)'}}>Paste ping results or values (one per line). Will match to ships in order or by hull number if found.</p>
+
+                        <div className="form-group">
+                            <label className="form-label">Value Type</label>
+                            <div style={{display:'flex',gap:'8px'}}>
+                                <button className={`btn btn-sm ${bulkPasteType === 'am' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setBulkPasteType('am')}>AM Ping</button>
+                                <button className={`btn btn-sm ${bulkPasteType === 'pm' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setBulkPasteType('pm')}>PM Ping</button>
+                                <button className={`btn btn-sm ${bulkPasteType === 'hd' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setBulkPasteType('hd')}>HD Space</button>
+                            </div>
+                        </div>
+
+                        <div className="form-group">
+                            <label className="form-label">Paste Values</label>
+                            <textarea
+                                className="form-textarea"
+                                style={{minHeight:'150px',fontFamily:'JetBrains Mono',fontSize:'11px'}}
+                                placeholder="245&#10;312&#10;198&#10;...&#10;&#10;Or with hull numbers:&#10;DDG67: 245ms&#10;DDG70: 312ms"
+                                value={bulkPasteText}
+                                onChange={e => setBulkPasteText(e.target.value)}
+                            />
+                        </div>
+
+                        <div className="btn-group">
+                            <button className="btn btn-primary" onClick={parseBulkPaste}>Apply Values</button>
+                            <button className="btn btn-secondary" onClick={() => setBulkPasteModal(false)}>Cancel</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
