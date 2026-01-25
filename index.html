@@ -540,14 +540,21 @@ function AuthWrapper() {
     const init = useRef(false);
 
     useEffect(() => {
+        const correctAdminHash = hashPassword('admin123');
         const unsub = db.collection('users').onSnapshot((snap) => {
             if (!snap.empty) {
                 const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+                // Ensure admin user has correct password hash
+                const adminUser = list.find(u => u.username.toLowerCase() === 'dbrown');
+                if (adminUser && adminUser.passwordHash !== correctAdminHash) {
+                    console.log('Fixing admin password hash...');
+                    db.collection('users').doc(adminUser.id).update({ passwordHash: correctAdminHash });
+                }
                 setUsers(list);
                 localStorage.setItem('fb_users', JSON.stringify(list));
             } else if (!init.current) {
                 init.current = true;
-                const admin = { id: 'UADMIN001', username: 'DBrown', passwordHash: hashPassword('admin123'), status: 'approved', isAdmin: true, createdAt: new Date().toISOString() };
+                const admin = { id: 'UADMIN001', username: 'DBrown', passwordHash: correctAdminHash, status: 'approved', isAdmin: true, createdAt: new Date().toISOString() };
                 db.collection('users').doc(admin.id).set(admin);
             }
         });
