@@ -432,7 +432,48 @@ function LoginPage({ onLogin, users }) {
         <div style={{minHeight:'100vh',background:'var(--bg-deep)',display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}}>
             <div style={{width:'100%',maxWidth:'400px'}}>
                 <div style={{textAlign:'center',marginBottom:'32px'}}>
-                    <svg width="80" height="40" viewBox="0 0 120 60" fill="none" stroke="var(--primary)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{marginBottom:'16px'}}><path d="M10 40l8-5h84l8 5H10z"/><path d="M18 35h84l4-10H14l4 10z"/><path d="M22 25V18h76v7"/><path d="M30 18v-5h8v5"/><path d="M50 18V8h10v10"/><path d="M72 18v-5h8v5"/><path d="M35 40v8h50v-8"/></svg>
+                    <svg width="80" height="40" viewBox="0 0 120 60" fill="none" stroke="var(--primary)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{marginBottom:'16px'}}>
+                        {/* Hull - sleek destroyer shape */}
+                        <path d="M5 42 L15 38 L105 38 L115 42 L108 45 L12 45 Z" fill="var(--primary)" fillOpacity="0.1"/>
+                        <path d="M5 42 L15 38 L105 38 L115 42"/>
+                        {/* Bow - pointed */}
+                        <path d="M15 38 L8 35 L5 42"/>
+                        {/* Stern */}
+                        <path d="M105 38 L112 35 L115 42"/>
+                        {/* Main deck */}
+                        <path d="M18 38 L18 35 L102 35 L102 38"/>
+                        {/* Forward gun turret (5 inch) */}
+                        <circle cx="28" cy="33" r="4" fill="var(--primary)" fillOpacity="0.2"/>
+                        <path d="M28 33 L28 25"/>
+                        <path d="M26 25 L30 25"/>
+                        {/* VLS cells forward */}
+                        <rect x="36" y="31" width="12" height="6" rx="1" fill="var(--primary)" fillOpacity="0.15"/>
+                        <path d="M39 31 L39 37 M42 31 L42 37 M45 31 L45 37"/>
+                        {/* Bridge/superstructure */}
+                        <path d="M52 35 L52 22 L72 22 L72 35" fill="var(--primary)" fillOpacity="0.2"/>
+                        <path d="M54 22 L54 18 L70 18 L70 22"/>
+                        {/* Bridge windows */}
+                        <path d="M56 20 L68 20"/>
+                        {/* Radar mast with SPY panels */}
+                        <path d="M62 18 L62 8"/>
+                        <path d="M58 12 L66 12"/>
+                        <rect x="59" y="13" width="6" height="4" fill="var(--primary)" fillOpacity="0.3"/>
+                        {/* Aft superstructure */}
+                        <path d="M76 35 L76 26 L88 26 L88 35" fill="var(--primary)" fillOpacity="0.15"/>
+                        {/* Aft mast */}
+                        <path d="M82 26 L82 16"/>
+                        <path d="M79 19 L85 19"/>
+                        {/* CIWS mount */}
+                        <circle cx="94" cy="33" r="3" fill="var(--primary)" fillOpacity="0.2"/>
+                        <path d="M94 33 L94 29 L96 27"/>
+                        {/* Helo deck markings */}
+                        <circle cx="98" cy="37" r="2" strokeDasharray="1 1"/>
+                        {/* Waterline */}
+                        <path d="M12 45 L108 45" strokeOpacity="0.5"/>
+                        {/* Wake */}
+                        <path d="M108 43 Q112 43 116 44" strokeOpacity="0.3"/>
+                        <path d="M108 44 Q113 44 118 46" strokeOpacity="0.2"/>
+                    </svg>
                     <div style={{fontFamily:'JetBrains Mono',fontSize:'18px',fontWeight:700,color:'var(--primary)',letterSpacing:'2px'}}>SHIP TRACKER PRO</div>
                     <div style={{fontSize:'12px',color:'var(--text-muted)',marginTop:'4px'}}>Pro Edition</div>
                 </div>
@@ -902,7 +943,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
     return (
         <div className="app">
             <nav className="sidebar">
-                <div className="sidebar-header"><div className="logo" style={{display:'flex',alignItems:'center',gap:'8px'}}><svg width="24" height="14" viewBox="0 0 120 60" fill="none" stroke="currentColor" strokeWidth="4" strokeLinecap="round" strokeLinejoin="round"><path d="M10 40l8-5h84l8 5H10z"/><path d="M18 35h84l4-10H14l4 10z"/><path d="M22 25V18h76v7"/><path d="M50 18V8h10v10"/><path d="M35 40v8h50v-8"/></svg>SHIP TRACKER</div><div className="logo-sub">Pro Edition</div></div>
+                <div className="sidebar-header"><div className="logo" style={{display:'flex',alignItems:'center',gap:'8px'}}><svg width="28" height="16" viewBox="0 0 120 60" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 42 L15 38 L105 38 L115 42 L108 45 L12 45 Z" fill="currentColor" fillOpacity="0.15"/><path d="M5 42 L15 38 L105 38 L115 42"/><path d="M15 38 L8 35 L5 42"/><path d="M105 38 L112 35 L115 42"/><path d="M18 38 L18 35 L102 35 L102 38"/><circle cx="28" cy="33" r="4"/><path d="M28 33 L28 26"/><path d="M52 35 L52 22 L72 22 L72 35"/><path d="M62 22 L62 10"/><path d="M76 35 L76 26 L88 26 L88 35"/><path d="M82 26 L82 18"/></svg>SHIP TRACKER</div><div className="logo-sub">Pro Edition</div></div>
                 <div style={{padding:'16px 12px',borderBottom:'1px solid var(--border)'}}>
                     <div style={{display:'block',width:'100%',padding:'12px',background:'var(--bg-input)',border:'2px solid var(--border)',borderRadius:'8px',color:'var(--text-muted)',fontSize:'13px',fontWeight:700,cursor:'default',textAlign:'center',textDecoration:'none'}}>
                         📊 BI Dashboard <span style={{fontSize:'10px',fontWeight:500}}>(Coming Soon)</span>
@@ -2229,7 +2270,33 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 </div>
                             )}
                         </div>
-                    </>) : <div className="detail-section"><div className="empty" style={{padding:'60px 20px'}}><svg width="120" height="60" viewBox="0 0 120 60" fill="none" stroke="var(--text-muted)" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" style={{opacity:0.4}}><path d="M10 40l8-5h84l8 5H10z"/><path d="M18 35h84l4-10H14l4 10z"/><path d="M22 25V18h76v7"/><path d="M30 18v-5h8v5"/><path d="M50 18V8h10v10"/><path d="M72 18v-5h8v5"/><path d="M102 27l8 4v6l-8 4"/><path d="M18 27l-8 4v6l8 4"/><path d="M35 40v8h50v-8"/><path d="M55 25h10v10H55z" strokeDasharray="2 2"/></svg><p className="mt-md">Select a ship to view details</p></div></div>}
+                    </>) : <div className="detail-section"><div className="empty" style={{padding:'60px 20px'}}><svg width="140" height="70" viewBox="0 0 120 60" fill="none" stroke="var(--text-muted)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round" style={{opacity:0.5}}>
+                            <path d="M5 42 L15 38 L105 38 L115 42 L108 45 L12 45 Z" fill="var(--text-muted)" fillOpacity="0.05"/>
+                            <path d="M5 42 L15 38 L105 38 L115 42"/>
+                            <path d="M15 38 L8 35 L5 42"/>
+                            <path d="M105 38 L112 35 L115 42"/>
+                            <path d="M18 38 L18 35 L102 35 L102 38"/>
+                            <circle cx="28" cy="33" r="4" fill="var(--text-muted)" fillOpacity="0.1"/>
+                            <path d="M28 33 L28 25"/>
+                            <path d="M26 25 L30 25"/>
+                            <rect x="36" y="31" width="12" height="6" rx="1" fill="var(--text-muted)" fillOpacity="0.08"/>
+                            <path d="M39 31 L39 37 M42 31 L42 37 M45 31 L45 37"/>
+                            <path d="M52 35 L52 22 L72 22 L72 35" fill="var(--text-muted)" fillOpacity="0.1"/>
+                            <path d="M54 22 L54 18 L70 18 L70 22"/>
+                            <path d="M56 20 L68 20"/>
+                            <path d="M62 18 L62 8"/>
+                            <path d="M58 12 L66 12"/>
+                            <rect x="59" y="13" width="6" height="4" fill="var(--text-muted)" fillOpacity="0.15"/>
+                            <path d="M76 35 L76 26 L88 26 L88 35" fill="var(--text-muted)" fillOpacity="0.08"/>
+                            <path d="M82 26 L82 16"/>
+                            <path d="M79 19 L85 19"/>
+                            <circle cx="94" cy="33" r="3" fill="var(--text-muted)" fillOpacity="0.1"/>
+                            <path d="M94 33 L94 29 L96 27"/>
+                            <circle cx="98" cy="37" r="2" strokeDasharray="1 1"/>
+                            <path d="M12 45 L108 45" strokeOpacity="0.4"/>
+                            <path d="M108 43 Q112 43 116 44" strokeOpacity="0.2"/>
+                            <path d="M108 44 Q113 44 118 46" strokeOpacity="0.15"/>
+                        </svg><p className="mt-md">Select a ship to view details</p></div></div>}
                 </div>
             </div>
             
