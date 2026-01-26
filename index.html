@@ -338,12 +338,19 @@ const useFirestore = (collectionName, initialData = []) => {
     });
     const [loading, setLoading] = useState(false);
     const initialized = useRef(false);
+    const dataRef = useRef(data);
+    
+    // Keep ref in sync with state
+    useEffect(() => {
+        dataRef.current = data;
+    }, [data]);
 
     useEffect(() => {
         const unsubscribe = db.collection(collectionName).onSnapshot((snapshot) => {
             if (!snapshot.empty) {
                 const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 setData(items);
+                dataRef.current = items;
                 localStorage.setItem('fb_' + collectionName, JSON.stringify(items));
             } else if (initialData.length > 0 && !initialized.current) {
                 initialized.current = true;
@@ -363,8 +370,12 @@ const useFirestore = (collectionName, initialData = []) => {
     }, [collectionName]);
 
     const setDataWithSync = useCallback((newDataOrFn) => {
-        const newData = typeof newDataOrFn === 'function' ? newDataOrFn(data) : newDataOrFn;
+        // Use ref to get fresh data for functional updates
+        const currentData = dataRef.current;
+        const newData = typeof newDataOrFn === 'function' ? newDataOrFn(currentData) : newDataOrFn;
+        
         setData(newData);
+        dataRef.current = newData;
         localStorage.setItem('fb_' + collectionName, JSON.stringify(newData));
         
         const batch = db.batch();
@@ -375,14 +386,14 @@ const useFirestore = (collectionName, initialData = []) => {
             }
         });
         const newIds = new Set(newData.map(item => item.id));
-        data.forEach(item => {
+        currentData.forEach(item => {
             if (item && item.id && !newIds.has(item.id)) {
                 const ref = db.collection(collectionName).doc(item.id);
                 batch.delete(ref);
             }
         });
         batch.commit().catch(err => console.error('Batch write error:', err));
-    }, [collectionName, data]);
+    }, [collectionName]);
 
     return [data, setDataWithSync, loading];
 };
@@ -394,7 +405,7 @@ const useStorage = (key, init) => {
 };
 
 // ===== AUTHENTICATION =====
-function LoginPage({ onLogin, users }) {
+function LoginPage({ onLogin, users, loginAttempts, setLoginAttempts }) {
     const [mode, setMode] = useState('login');
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
@@ -406,21 +417,61 @@ function LoginPage({ onLogin, users }) {
         e.preventDefault();
         setError('');
         if (!username.trim() || !password.trim()) { setError('Please enter username and password'); return; }
+        
+        // Check for lockout
+        const attemptKey = username.toLowerCase();
+        const attempts = loginAttempts[attemptKey] || { count: 0, lockedUntil: null };
+        if (attempts.lockedUntil && new Date() < new Date(attempts.lockedUntil)) {
+            const mins = Math.ceil((new Date(attempts.lockedUntil) - new Date()) / 60000);
+            setError(`Account locked. Try again in ${mins} minute${mins > 1 ? 's' : ''}.`);
+            return;
+        }
+        
         const user = users.find(u => u.username.toLowerCase() === username.toLowerCase());
-        if (!user) { setError('User not found. Please register for access.'); return; }
+        if (!user) { 
+            // Track failed attempt
+            const newAttempts = { ...loginAttempts, [attemptKey]: { count: (attempts.count || 0) + 1, lockedUntil: null } };
+            if (newAttempts[attemptKey].count >= 5) {
+                newAttempts[attemptKey].lockedUntil = new Date(Date.now() + 15 * 60000).toISOString(); // 15 min lockout
+                setError('Too many failed attempts. Account locked for 15 minutes.');
+            } else {
+                setError(`User not found. ${5 - newAttempts[attemptKey].count} attempts remaining.`);
+            }
+            setLoginAttempts(newAttempts);
+            localStorage.setItem('loginAttempts', JSON.stringify(newAttempts));
+            return; 
+        }
         if (user.status === 'pending') { setError('Your account is pending approval.'); return; }
         if (user.status === 'denied') { setError('Your access was denied. Contact admin.'); return; }
+        
         const newHash = hashPassword(password);
-        // Check both new hash and allow migration for mismatched hashes (one-time fix)
-        // This allows users to "reset" their password by entering username + any password they want
-        // Security: Only works for already-approved users, not pending/denied
         if (user.passwordHash !== newHash) {
-            // Migration mode: update hash to new format and allow login
-            console.log('Migrating password hash for', user.username);
-            db.collection('users').doc(user.id).update({ passwordHash: newHash });
+            // Track failed attempt
+            const newAttempts = { ...loginAttempts, [attemptKey]: { count: (attempts.count || 0) + 1, lockedUntil: null } };
+            if (newAttempts[attemptKey].count >= 5) {
+                newAttempts[attemptKey].lockedUntil = new Date(Date.now() + 15 * 60000).toISOString();
+                setError('Too many failed attempts. Account locked for 15 minutes.');
+            } else {
+                setError(`Invalid password. ${5 - newAttempts[attemptKey].count} attempts remaining.`);
+            }
+            setLoginAttempts(newAttempts);
+            localStorage.setItem('loginAttempts', JSON.stringify(newAttempts));
+            return;
         }
-        localStorage.setItem('shipTrackerUser', JSON.stringify({ username: user.username, isAdmin: user.isAdmin }));
-        onLogin(user);
+        
+        // Successful login - clear attempts and record login
+        const newAttempts = { ...loginAttempts };
+        delete newAttempts[attemptKey];
+        setLoginAttempts(newAttempts);
+        localStorage.setItem('loginAttempts', JSON.stringify(newAttempts));
+        
+        // Record last login
+        const lastLogin = user.lastLogin || null;
+        const loginRecord = { timestamp: new Date().toISOString(), sessionStart: Date.now() };
+        db.collection('users').doc(user.id).update({ lastLogin: loginRecord });
+        
+        localStorage.setItem('shipTrackerUser', JSON.stringify({ username: user.username, isAdmin: user.isAdmin, lastLogin, sessionStart: loginRecord.sessionStart }));
+        onLogin(user, lastLogin);
     };
 
     const handleRegister = (e) => {
@@ -528,7 +579,7 @@ function AdminPanel({ users, onClose }) {
                 <div style={{padding:'20px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:'18px',fontWeight:600}}>👑 Admin Panel</h2><button onClick={onClose} style={{background:'none',border:'none',color:'var(--text-muted)',fontSize:'24px',cursor:'pointer'}}>×</button></div>
                 <div style={{padding:'20px'}}>
                     {pending.length > 0 && <div style={{marginBottom:'24px'}}><h3 style={{fontSize:'14px',color:'var(--amber)',marginBottom:'12px'}}><span style={{background:'var(--amber)',color:'#000',padding:'2px 8px',borderRadius:'10px',fontSize:'12px',marginRight:'8px'}}>{pending.length}</span>Pending</h3>{pending.map(u => <div key={u.id} style={{background:'var(--amber-glow)',border:'1px solid var(--amber)',borderRadius:'8px',padding:'12px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center'}}><div><div style={{fontWeight:600}}>{u.username}</div><div style={{fontSize:'11px',color:'var(--text-muted)'}}>{new Date(u.requestedAt).toLocaleString()}</div></div><div style={{display:'flex',gap:'8px'}}><button onClick={() => approve(u)} style={{padding:'6px 12px',background:'var(--green)',color:'#000',border:'none',borderRadius:'6px',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>✓</button><button onClick={() => deny(u)} style={{padding:'6px 12px',background:'var(--red)',color:'#fff',border:'none',borderRadius:'6px',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>✕</button></div></div>)}</div>}
-                    <div style={{marginBottom:'24px'}}><h3 style={{fontSize:'14px',color:'var(--green)',marginBottom:'12px'}}>✓ Approved ({approved.length})</h3>{approved.map(u => <div key={u.id} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',padding:'12px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center'}}><div style={{fontWeight:600,display:'flex',alignItems:'center',gap:'8px'}}>{u.username}{u.isAdmin && <span style={{background:'var(--primary)',color:'#000',padding:'2px 6px',borderRadius:'4px',fontSize:'10px'}}>ADMIN</span>}</div>{!u.isAdmin && <div style={{display:'flex',gap:'8px'}}><button onClick={() => resetPw(u)} style={{padding:'6px 12px',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'6px',fontSize:'11px',cursor:'pointer'}}>Reset PW</button><button onClick={() => del(u)} style={{padding:'6px 12px',background:'var(--red-glow)',color:'var(--red)',border:'1px solid var(--red)',borderRadius:'6px',fontSize:'11px',cursor:'pointer'}}>Delete</button></div>}</div>)}</div>
+                    <div style={{marginBottom:'24px'}}><h3 style={{fontSize:'14px',color:'var(--green)',marginBottom:'12px'}}>✓ Approved ({approved.length})</h3>{approved.map(u => <div key={u.id} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',padding:'12px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center'}}><div><div style={{fontWeight:600,display:'flex',alignItems:'center',gap:'8px'}}>{u.username}{u.isAdmin && <span style={{background:'var(--primary)',color:'#000',padding:'2px 6px',borderRadius:'4px',fontSize:'10px'}}>ADMIN</span>}</div>{u.lastLogin?.timestamp && <div style={{fontSize:'10px',color:'var(--text-muted)',marginTop:'4px'}}>Last login: {new Date(u.lastLogin.timestamp).toLocaleDateString()} {new Date(u.lastLogin.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}</div>}</div>{!u.isAdmin && <div style={{display:'flex',gap:'8px'}}><button onClick={() => resetPw(u)} style={{padding:'6px 12px',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'6px',fontSize:'11px',cursor:'pointer'}}>Reset PW</button><button onClick={() => del(u)} style={{padding:'6px 12px',background:'var(--red-glow)',color:'var(--red)',border:'1px solid var(--red)',borderRadius:'6px',fontSize:'11px',cursor:'pointer'}}>Delete</button></div>}</div>)}</div>
                     {denied.length > 0 && <div><h3 style={{fontSize:'14px',color:'var(--red)',marginBottom:'12px'}}>✕ Denied ({denied.length})</h3>{denied.map(u => <div key={u.id} style={{background:'var(--bg-input)',border:'1px solid var(--border)',borderRadius:'8px',padding:'12px',marginBottom:'8px',display:'flex',justifyContent:'space-between',alignItems:'center',opacity:0.7}}><div style={{fontWeight:600}}>{u.username}</div><div style={{display:'flex',gap:'8px'}}><button onClick={() => approve(u)} style={{padding:'6px 12px',background:'var(--green-glow)',color:'var(--green)',border:'1px solid var(--green)',borderRadius:'6px',fontSize:'11px',cursor:'pointer'}}>Approve</button><button onClick={() => del(u)} style={{padding:'6px 12px',background:'var(--red-glow)',color:'var(--red)',border:'1px solid var(--red)',borderRadius:'6px',fontSize:'11px',cursor:'pointer'}}>Delete</button></div></div>)}</div>}
                 </div>
             </div>
@@ -545,7 +596,53 @@ function AuthWrapper() {
         return [admin];
     });
     const [showAdmin, setShowAdmin] = useState(false);
+    const [loginAttempts, setLoginAttempts] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('loginAttempts') || '{}'); } catch { return {}; }
+    });
+    const [sessionWarning, setSessionWarning] = useState(false);
     const init = useRef(false);
+    const lastActivity = useRef(Date.now());
+    
+    // Session timeout: 8 hours
+    const SESSION_TIMEOUT = 8 * 60 * 60 * 1000;
+    const WARNING_BEFORE = 5 * 60 * 1000; // 5 min warning
+    
+    // Track user activity
+    useEffect(() => {
+        if (!currentUser) return;
+        const updateActivity = () => { lastActivity.current = Date.now(); setSessionWarning(false); };
+        window.addEventListener('mousemove', updateActivity);
+        window.addEventListener('keypress', updateActivity);
+        window.addEventListener('click', updateActivity);
+        return () => {
+            window.removeEventListener('mousemove', updateActivity);
+            window.removeEventListener('keypress', updateActivity);
+            window.removeEventListener('click', updateActivity);
+        };
+    }, [currentUser]);
+    
+    // Check session timeout
+    useEffect(() => {
+        if (!currentUser) return;
+        const checkSession = () => {
+            const sessionStart = currentUser.sessionStart || Date.now();
+            const elapsed = Date.now() - sessionStart;
+            const inactive = Date.now() - lastActivity.current;
+            
+            // Auto-logout after 8 hours total session OR 2 hours inactivity
+            if (elapsed > SESSION_TIMEOUT || inactive > 2 * 60 * 60 * 1000) {
+                logout('Session expired');
+                return;
+            }
+            
+            // Show warning 5 min before timeout
+            if (elapsed > SESSION_TIMEOUT - WARNING_BEFORE || inactive > 2 * 60 * 60 * 1000 - WARNING_BEFORE) {
+                setSessionWarning(true);
+            }
+        };
+        const interval = setInterval(checkSession, 30000); // Check every 30 sec
+        return () => clearInterval(interval);
+    }, [currentUser]);
 
     useEffect(() => {
         const correctAdminHash = hashPassword('admin123');
@@ -569,11 +666,28 @@ function AuthWrapper() {
         return () => unsub();
     }, []);
 
-    const logout = () => { localStorage.removeItem('shipTrackerUser'); setCurrentUser(null); };
+    const logout = (reason) => { 
+        localStorage.removeItem('shipTrackerUser'); 
+        setCurrentUser(null); 
+        setSessionWarning(false);
+        if (reason) console.log('Logout:', reason);
+    };
     const pending = users.filter(u => u.status === 'pending').length;
 
-    if (currentUser) return (<><App currentUser={currentUser} onLogout={logout} isAdmin={currentUser.isAdmin} pendingCount={pending} onOpenAdminPanel={() => setShowAdmin(true)}/>{showAdmin && currentUser.isAdmin && <AdminPanel users={users} onClose={() => setShowAdmin(false)}/>}</>);
-    return <LoginPage onLogin={(u) => setCurrentUser({ username: u.username, isAdmin: u.isAdmin })} users={users}/>;
+    if (currentUser) return (
+        <>
+            <App currentUser={currentUser} onLogout={() => logout('User logout')} isAdmin={currentUser.isAdmin} pendingCount={pending} onOpenAdminPanel={() => setShowAdmin(true)}/>
+            {showAdmin && currentUser.isAdmin && <AdminPanel users={users} onClose={() => setShowAdmin(false)}/>}
+            {sessionWarning && (
+                <div style={{position:'fixed',bottom:'20px',right:'20px',padding:'16px 20px',background:'var(--amber-glow)',border:'2px solid var(--amber)',borderRadius:'12px',zIndex:10000,boxShadow:'0 4px 20px rgba(0,0,0,0.3)'}}>
+                    <div style={{fontWeight:600,color:'var(--amber)',marginBottom:'8px'}}>⚠️ Session Expiring Soon</div>
+                    <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'12px'}}>Your session will expire due to inactivity.</div>
+                    <button onClick={() => { lastActivity.current = Date.now(); setSessionWarning(false); }} style={{padding:'8px 16px',background:'var(--amber)',color:'#000',border:'none',borderRadius:'6px',fontWeight:600,cursor:'pointer'}}>Stay Logged In</button>
+                </div>
+            )}
+        </>
+    );
+    return <LoginPage onLogin={(u, lastLogin) => setCurrentUser({ username: u.username, isAdmin: u.isAdmin, lastLogin, sessionStart: Date.now() })} users={users} loginAttempts={loginAttempts} setLoginAttempts={setLoginAttempts}/>;
 }
 
 
@@ -972,6 +1086,11 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
                             {currentUser?.username}
                             {isAdmin && <span style={{background:'var(--primary)',color:'#000',padding:'1px 4px',borderRadius:'3px',fontSize:'8px',fontWeight:700}}>ADMIN</span>}
                         </div>
+                        {currentUser?.lastLogin?.timestamp && (
+                            <div style={{fontSize:'9px',color:'var(--text-muted)',marginTop:'4px'}}>
+                                Last login: {new Date(currentUser.lastLogin.timestamp).toLocaleDateString()} {new Date(currentUser.lastLogin.timestamp).toLocaleTimeString([], {hour:'2-digit',minute:'2-digit'})}
+                            </div>
+                        )}
                     </div>
                     {isAdmin && (
                         <button onClick={onOpenAdminPanel} style={{width:'100%',padding:'8px',marginBottom:'8px',background: pendingCount > 0 ? 'var(--amber-glow)' : 'var(--bg-input)',border: pendingCount > 0 ? '1px solid var(--amber)' : '1px solid var(--border)',borderRadius:'6px',color: pendingCount > 0 ? 'var(--amber)' : 'var(--text-dim)',fontSize:'11px',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'6px'}}>
@@ -999,7 +1118,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
                         <div className="theme-toggle" style={{flex:1}}><button className={darkMode ? 'active' : ''} onClick={() => setDarkMode(true)}>🌙</button><button className={!darkMode ? 'active' : ''} onClick={() => setDarkMode(false)}>☀️</button></div>
                         <button onClick={onLogout} style={{padding:'6px 10px',background:'var(--red-glow)',border:'1px solid var(--red)',borderRadius:'6px',color:'var(--red)',fontSize:'10px',cursor:'pointer'}}>Logout</button>
                     </div>
-                    <div className="version">v3.2.0 Firebase</div>
+                    <div className="version">v3.3.0 Firebase</div>
                 </div>
             </nav>
             
