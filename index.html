@@ -339,6 +339,8 @@ const useFirestore = (collectionName, initialData = []) => {
     const [loading, setLoading] = useState(false);
     const initialized = useRef(false);
     const dataRef = useRef(data);
+    const pendingWrite = useRef(false);
+    const pendingData = useRef(null);
     
     // Keep ref in sync with state
     useEffect(() => {
@@ -347,8 +349,15 @@ const useFirestore = (collectionName, initialData = []) => {
 
     useEffect(() => {
         const unsubscribe = db.collection(collectionName).onSnapshot((snapshot) => {
+            // If we have a pending write, don't overwrite with stale Firebase data
+            if (pendingWrite.current) {
+                console.log(`[${collectionName}] onSnapshot SKIPPED (pending write)`);
+                return;
+            }
+            
             if (!snapshot.empty) {
                 const items = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                console.log(`[${collectionName}] onSnapshot: ${items.length} items from Firebase`);
                 setData(items);
                 dataRef.current = items;
                 localStorage.setItem('fb_' + collectionName, JSON.stringify(items));
@@ -374,6 +383,12 @@ const useFirestore = (collectionName, initialData = []) => {
         const currentData = dataRef.current;
         const newData = typeof newDataOrFn === 'function' ? newDataOrFn(currentData) : newDataOrFn;
         
+        console.log(`[${collectionName}] setDataWithSync: currentData length=${currentData.length}, newData length=${newData.length}`);
+        
+        // Set pending flag to prevent snapshot from overwriting
+        pendingWrite.current = true;
+        pendingData.current = newData;
+        
         setData(newData);
         dataRef.current = newData;
         localStorage.setItem('fb_' + collectionName, JSON.stringify(newData));
@@ -392,7 +407,20 @@ const useFirestore = (collectionName, initialData = []) => {
                 batch.delete(ref);
             }
         });
-        batch.commit().catch(err => console.error('Batch write error:', err));
+        batch.commit()
+            .then(() => {
+                console.log(`[${collectionName}] batch commit success`);
+                // Clear pending flag after write completes
+                setTimeout(() => {
+                    pendingWrite.current = false;
+                    pendingData.current = null;
+                }, 500); // Small delay to let snapshot settle
+            })
+            .catch(err => {
+                console.error('Batch write error:', err);
+                pendingWrite.current = false;
+                pendingData.current = null;
+            });
     }, [collectionName]);
 
     return [data, setDataWithSync, loading];
@@ -1008,7 +1036,16 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
     }, [onlineUsers]);
 
     const toast = (msg, type = 'info') => { const id = Date.now(); setToasts(t => [...t, { id, message: msg, type }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000); };
-    const logActivity = (text, details = null) => { setActivityLog(prev => [{ id: genId('A'), text, details, user: currentUser?.username || 'Unknown', time: new Date().toISOString() }, ...prev.slice(0, 199)]); };
+    const logActivity = (text, details = null) => { 
+        const newEntry = { id: genId('A'), text, details, user: currentUser?.username || 'Unknown', time: new Date().toISOString() };
+        console.log('logActivity called:', text, 'Current log length:', activityLog.length);
+        setActivityLog(prev => {
+            console.log('setActivityLog prev length:', prev.length);
+            const newLog = [newEntry, ...prev.slice(0, 199)];
+            console.log('setActivityLog new length:', newLog.length);
+            return newLog;
+        }); 
+    };
     
     const submitFeedback = () => {
         if (!feedbackText.trim()) { toast('Please enter your suggestion', 'error'); return; }
