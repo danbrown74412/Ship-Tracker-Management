@@ -1237,7 +1237,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const [emailHistoryModal, setEmailHistoryModal] = useState(false);
     const [viewingHistoryItem, setViewingHistoryItem] = useState(null);
     const [clearEmailWaitingModal, setClearEmailWaitingModal] = useState(null);
-    const [clearEmailWaitingForm, setClearEmailWaitingForm] = useState({ resolution: 'received', notes: '' });
+    const [clearEmailWaitingForm, setClearEmailWaitingForm] = useState({ resolution: 'received', notes: '', name: '', followupEmail: '' });
     const [manualLogModal, setManualLogModal] = useState(false);
     const [directManualModal, setDirectManualModal] = useState(false);
     const [manualLogForm, setManualLogForm] = useState({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false });
@@ -2830,12 +2830,31 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 <textarea className="form-textarea" style={{minHeight:'80px'}} placeholder="Summary of their reply..." value={clearEmailWaitingForm.notes} onChange={e => setClearEmailWaitingForm({...clearEmailWaitingForm, notes: e.target.value})}/>
                             </div>
                         )}
+                        {clearEmailWaitingForm.resolution === 'second_email' && (
+                            <>
+                                <div className="form-group">
+                                    <label className="form-label">Your Name *</label>
+                                    <input className="form-input" placeholder="Enter your name" value={clearEmailWaitingForm.name} onChange={e => setClearEmailWaitingForm({...clearEmailWaitingForm, name: e.target.value})}/>
+                                </div>
+                                <div className="form-group">
+                                    <label className="form-label">Follow-up Email Sent *</label>
+                                    <textarea className="form-textarea" style={{minHeight:'100px'}} placeholder="Paste or summarize the follow-up email you sent..." value={clearEmailWaitingForm.followupEmail} onChange={e => setClearEmailWaitingForm({...clearEmailWaitingForm, followupEmail: e.target.value})}/>
+                                </div>
+                            </>
+                        )}
                         <div className="btn-group mt-md">
                             <button className="btn btn-primary" onClick={() => {
                                 const item = clearEmailWaitingModal;
+                                
+                                // Validate follow-up email requires name and email content
+                                if (clearEmailWaitingForm.resolution === 'second_email') {
+                                    if (!clearEmailWaitingForm.name.trim()) { toast('Please enter your name', 'error'); return; }
+                                    if (!clearEmailWaitingForm.followupEmail.trim()) { toast('Please enter the follow-up email content', 'error'); return; }
+                                }
+                                
                                 const resText = clearEmailWaitingForm.resolution === 'received' ? 'Reply received' 
                                     : clearEmailWaitingForm.resolution === 'waiting_ours' ? 'Waiting on our reply'
-                                    : 'Sent follow-up email';
+                                    : `Follow-up sent by ${clearEmailWaitingForm.name}`;
                                 
                                 // Create new log entry for the resolution
                                 const historyEntry = {
@@ -2844,10 +2863,13 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                     shipName: item.shipName,
                                     timestamp: new Date().toISOString(),
                                     type: 'manual',
-                                    emailText: '',
+                                    emailText: clearEmailWaitingForm.resolution === 'second_email' ? clearEmailWaitingForm.followupEmail : '',
                                     result: {
-                                        emailSummary: `Status update: ${resText}${clearEmailWaitingForm.notes ? ' - ' + clearEmailWaitingForm.notes : ''}`,
-                                        waitingReply: clearEmailWaitingForm.resolution === 'second_email'
+                                        emailSummary: clearEmailWaitingForm.resolution === 'second_email' 
+                                            ? `Follow-up email sent by ${clearEmailWaitingForm.name}`
+                                            : `Status update: ${resText}${clearEmailWaitingForm.notes ? ' - ' + clearEmailWaitingForm.notes : ''}`,
+                                        waitingReply: clearEmailWaitingForm.resolution === 'second_email',
+                                        sender: clearEmailWaitingForm.resolution === 'second_email' ? { name: clearEmailWaitingForm.name } : null
                                     },
                                     changes: [resText]
                                 };
@@ -2862,18 +2884,31 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 setEmailHistory(newHistory);
                                 localStorage.setItem('emailParseHistory', JSON.stringify(newHistory));
                                 
-                                // Update ship if it's the current selection
-                                if (item.shipId && sel && sel.id === item.shipId) {
+                                // Update ship
+                                if (item.shipId) {
                                     const shouldStillWait = clearEmailWaitingForm.resolution === 'second_email';
-                                    const updated = { ...sel, waitingReply: shouldStillWait, lastContact: new Date().toISOString() };
-                                    setSel(updated);
-                                    setShips(p => p.map(s => s.id === sel.id ? updated : s));
+                                    const shipUpdate = { 
+                                        waitingReply: shouldStillWait, 
+                                        lastContact: new Date().toISOString(),
+                                        ...(clearEmailWaitingForm.resolution === 'second_email' ? { 
+                                            contactedBy: clearEmailWaitingForm.name,
+                                            lastSaid: `Follow-up sent: ${clearEmailWaitingForm.followupEmail.substring(0, 200)}${clearEmailWaitingForm.followupEmail.length > 200 ? '...' : ''}`
+                                        } : {})
+                                    };
+                                    
+                                    // Update in ships list
+                                    setShips(p => p.map(s => s.id === item.shipId ? { ...s, ...shipUpdate } : s));
+                                    
+                                    // Update selected ship if it's the same one
+                                    if (sel && sel.id === item.shipId) {
+                                        setSel(prev => ({ ...prev, ...shipUpdate }));
+                                    }
                                 }
                                 
-                                logActivity(`Cleared waiting for ${item.shipName}: ${resText}`, { ship: item.shipName, resolution: resText, notes: clearEmailWaitingForm.notes });
+                                logActivity(`Cleared waiting for ${item.shipName}: ${resText}`, { ship: item.shipName, resolution: resText, notes: clearEmailWaitingForm.notes, contactedBy: clearEmailWaitingForm.name || null });
                                 toast('Status updated', 'success');
                                 setClearEmailWaitingModal(null);
-                                setClearEmailWaitingForm({ resolution: 'received', notes: '' });
+                                setClearEmailWaitingForm({ resolution: 'received', notes: '', name: '', followupEmail: '' });
                             }}>Update Status</button>
                             <button className="btn btn-secondary" onClick={() => setClearEmailWaitingModal(null)}>Cancel</button>
                         </div>
