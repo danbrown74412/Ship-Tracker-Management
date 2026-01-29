@@ -1098,9 +1098,9 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
             <nav className="sidebar">
                 <div className="sidebar-header"><div className="logo" style={{display:'flex',alignItems:'center',gap:'8px'}}><svg width="28" height="16" viewBox="0 0 120 60" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><path d="M5 42 L15 38 L105 38 L115 42 L108 45 L12 45 Z" fill="currentColor" fillOpacity="0.15"/><path d="M5 42 L15 38 L105 38 L115 42"/><path d="M15 38 L8 35 L5 42"/><path d="M105 38 L112 35 L115 42"/><path d="M18 38 L18 35 L102 35 L102 38"/><circle cx="28" cy="33" r="4"/><path d="M28 33 L28 26"/><path d="M52 35 L52 22 L72 22 L72 35"/><path d="M62 22 L62 10"/><path d="M76 35 L76 26 L88 26 L88 35"/><path d="M82 26 L82 18"/></svg>SHIP TRACKER</div><div className="logo-sub">Pro Edition</div></div>
                 <div style={{padding:'16px 12px',borderBottom:'1px solid var(--border)'}}>
-                    <div style={{display:'block',width:'100%',padding:'12px',background:'var(--bg-input)',border:'2px solid var(--border)',borderRadius:'8px',color:'var(--text-muted)',fontSize:'13px',fontWeight:700,cursor:'default',textAlign:'center',textDecoration:'none'}}>
-                        📊 BI Dashboard <span style={{fontSize:'10px',fontWeight:500}}>(Coming Soon)</span>
-                    </div>
+                    <a href="https://app.mil.powerbigov.us/groups/723e47dd-9fb2-45ba-9c59-fb38242cbc66/reports/ef93b590-8da1-4e3c-a3ef-80a577f44e1c?ctid=e3333e00-c877-4b87-b6ad-45e942de1750&pbi_source=linkShare" target="_blank" rel="noopener noreferrer" style={{display:'block',width:'100%',padding:'12px',background:'var(--green)',border:'none',borderRadius:'8px',color:'#fff',fontSize:'13px',fontWeight:700,cursor:'pointer',textAlign:'center',textDecoration:'none'}}>
+                        📊 BI Dashboard
+                    </a>
                 </div>
                 {sections.map(s => (<div key={s.title} className="nav-section"><div className="nav-title">{s.title}</div>{s.items.map(id => { const item = navItems.find(n => n.id === id); return (<button key={id} className={`nav-btn ${page === id ? 'active' : ''}`} onClick={() => setPage(id)}><Icon name={item.icon}/><span>{item.label}</span>{item.badge > 0 && <span className="badge-count">{item.badge}</span>}</button>); })}</div>))}
                 <div className="sidebar-footer">
