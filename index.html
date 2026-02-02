@@ -1237,7 +1237,9 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const [emailHistoryModal, setEmailHistoryModal] = useState(false);
     const [viewingHistoryItem, setViewingHistoryItem] = useState(null);
     const [clearEmailWaitingModal, setClearEmailWaitingModal] = useState(null);
-    const [clearEmailWaitingForm, setClearEmailWaitingForm] = useState({ resolution: 'received', notes: '', name: '', followupEmail: '' });
+    const [clearEmailWaitingForm, setClearEmailWaitingForm] = useState({ resolution: 'received', notes: '', name: '', followupEmail: '', date: '' });
+    const [editEmailEntry, setEditEmailEntry] = useState(null);
+    const [editEmailForm, setEditEmailForm] = useState({ date: '', time: '', summary: '', emailText: '', contactedBy: '' });
     const [manualLogModal, setManualLogModal] = useState(false);
     const [directManualModal, setDirectManualModal] = useState(false);
     const [manualLogForm, setManualLogForm] = useState({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false });
@@ -2341,7 +2343,20 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                                     {h.result?.sender?.name && <span style={{fontSize:'10px',color:'var(--text-dim)'}}>From: {h.result.sender.name}</span>}
                                                                 </div>
                                                             </div>
-                                                            <button className="btn btn-sm" style={{padding:'2px 6px',fontSize:'10px',background:'transparent',color:'var(--text-muted)'}} onClick={() => { if(confirm('Delete this entry?')) { const filtered = emailHistory.filter(x => x.id !== h.id); setEmailHistory(filtered); localStorage.setItem('emailParseHistory', JSON.stringify(filtered)); toast('Entry deleted', 'info'); } }}>✕</button>
+                                                            <div style={{display:'flex',gap:'4px'}}>
+                                                                <button className="btn btn-sm" style={{padding:'2px 6px',fontSize:'10px',background:'transparent',color:'var(--text-muted)'}} title="Edit" onClick={() => { 
+                                                                    const d = new Date(h.timestamp); 
+                                                                    setEditEmailForm({ 
+                                                                        date: toDateString(d), 
+                                                                        time: d.toTimeString().slice(0,5), 
+                                                                        summary: h.result?.emailSummary || '', 
+                                                                        emailText: h.emailText || '', 
+                                                                        contactedBy: h.result?.sender?.name || '' 
+                                                                    }); 
+                                                                    setEditEmailEntry(h); 
+                                                                }}>✏️</button>
+                                                                <button className="btn btn-sm" style={{padding:'2px 6px',fontSize:'10px',background:'transparent',color:'var(--text-muted)'}} title="Delete" onClick={() => { if(confirm('Delete this entry?')) { const filtered = emailHistory.filter(x => x.id !== h.id); setEmailHistory(filtered); localStorage.setItem('emailParseHistory', JSON.stringify(filtered)); toast('Entry deleted', 'info'); } }}>✕</button>
+                                                            </div>
                                                         </div>
 
                                                         {/* Issue Alert */}
@@ -2791,123 +2806,204 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             </Modal>
             
             {/* Clear Email Waiting Status Modal */}
-            <Modal open={!!clearEmailWaitingModal} onClose={() => setClearEmailWaitingModal(null)} title="Clear Waiting Status">
-                {clearEmailWaitingModal && (
+            <Modal open={!!clearEmailWaitingModal} onClose={() => setClearEmailWaitingModal(null)} title="📋 Update Email Status">
+                {clearEmailWaitingModal && (() => {
+                    const f = clearEmailWaitingForm;
+                    const setF = (updates) => setClearEmailWaitingForm(prev => ({...prev, ...updates}));
+                    const colors = { received: 'var(--green)', waiting_ours: 'var(--amber)', second_email: 'var(--blue)' };
+                    const activeColor = colors[f.resolution];
+                    return (
                     <>
-                        <p style={{marginBottom:'16px',color:'var(--text-dim)'}}>Update status for <strong>{clearEmailWaitingModal.shipName}</strong> email from {new Date(clearEmailWaitingModal.timestamp).toLocaleDateString()}</p>
-                        <div className="form-group">
-                            <label className="form-label">What happened?</label>
-                            <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
-                                <label style={{display:'flex',alignItems:'flex-start',gap:'10px',cursor:'pointer',padding:'10px',background:'var(--bg-input)',borderRadius:'6px',border: clearEmailWaitingForm.resolution === 'received' ? '2px solid var(--green)' : '1px solid var(--border)'}}>
-                                    <input type="radio" checked={clearEmailWaitingForm.resolution === 'received'} onChange={() => setClearEmailWaitingForm({...clearEmailWaitingForm, resolution: 'received'})} style={{marginTop:'2px'}}/>
-                                    <div>
-                                        <div style={{fontWeight:600,fontSize:'13px'}}>✅ They Replied</div>
-                                        <div style={{fontSize:'11px',color:'var(--text-muted)'}}>Received response from the ship</div>
-                                    </div>
-                                </label>
-                                <label style={{display:'flex',alignItems:'flex-start',gap:'10px',cursor:'pointer',padding:'10px',background:'var(--bg-input)',borderRadius:'6px',border: clearEmailWaitingForm.resolution === 'waiting_ours' ? '2px solid var(--amber)' : '1px solid var(--border)'}}>
-                                    <input type="radio" checked={clearEmailWaitingForm.resolution === 'waiting_ours'} onChange={() => setClearEmailWaitingForm({...clearEmailWaitingForm, resolution: 'waiting_ours'})} style={{marginTop:'2px'}}/>
-                                    <div>
-                                        <div style={{fontWeight:600,fontSize:'13px'}}>⏳ Waiting on Our Reply</div>
-                                        <div style={{fontSize:'11px',color:'var(--text-muted)'}}>They responded, now we need to reply</div>
-                                    </div>
-                                </label>
-                                <label style={{display:'flex',alignItems:'flex-start',gap:'10px',cursor:'pointer',padding:'10px',background:'var(--bg-input)',borderRadius:'6px',border: clearEmailWaitingForm.resolution === 'second_email' ? '2px solid var(--blue)' : '1px solid var(--border)'}}>
-                                    <input type="radio" checked={clearEmailWaitingForm.resolution === 'second_email'} onChange={() => setClearEmailWaitingForm({...clearEmailWaitingForm, resolution: 'second_email'})} style={{marginTop:'2px'}}/>
-                                    <div>
-                                        <div style={{fontWeight:600,fontSize:'13px'}}>📧 Sent Follow-up Email</div>
-                                        <div style={{fontSize:'11px',color:'var(--text-muted)'}}>No reply yet, sent another email (keeps waiting active)</div>
-                                    </div>
-                                </label>
-                            </div>
+                        <div style={{padding:'10px 12px',background:'var(--bg-input)',borderRadius:'6px',marginBottom:'16px',display:'flex',justifyContent:'space-between',alignItems:'center',fontSize:'12px'}}>
+                            <span><strong>{clearEmailWaitingModal.shipName}</strong></span>
+                            <span style={{color:'var(--text-muted)'}}>Original: {new Date(clearEmailWaitingModal.timestamp).toLocaleDateString()}</span>
                         </div>
-                        {(clearEmailWaitingForm.resolution === 'received' || clearEmailWaitingForm.resolution === 'waiting_ours') && (
-                            <div className="form-group">
-                                <label className="form-label">Notes (optional)</label>
-                                <textarea className="form-textarea" style={{minHeight:'80px'}} placeholder="Summary of their reply..." value={clearEmailWaitingForm.notes} onChange={e => setClearEmailWaitingForm({...clearEmailWaitingForm, notes: e.target.value})}/>
+                        
+                        {/* Resolution options - compact tabs */}
+                        <div style={{display:'flex',gap:'4px',marginBottom:'16px'}}>
+                            {[
+                                { key: 'received', icon: '✅', label: 'They Replied' },
+                                { key: 'waiting_ours', icon: '⏳', label: 'On Our End' },
+                                { key: 'second_email', icon: '📧', label: 'Follow-up Sent' }
+                            ].map(opt => (
+                                <button key={opt.key} onClick={() => setF({ resolution: opt.key })} style={{
+                                    flex:1, padding:'10px 8px', borderRadius:'6px', cursor:'pointer', textAlign:'center',
+                                    background: f.resolution === opt.key ? colors[opt.key] + '22' : 'var(--bg-input)',
+                                    border: f.resolution === opt.key ? `2px solid ${colors[opt.key]}` : '1px solid var(--border)',
+                                    color: f.resolution === opt.key ? colors[opt.key] : 'var(--text-muted)', fontSize:'11px', fontWeight:600, transition:'all 0.15s'
+                                }}>
+                                    <div style={{fontSize:'16px',marginBottom:'4px'}}>{opt.icon}</div>
+                                    {opt.label}
+                                </button>
+                            ))}
+                        </div>
+
+                        {/* Date field - shown for all options */}
+                        <div style={{display:'grid',gridTemplateColumns: f.resolution === 'second_email' ? '1fr' : '1fr 1fr',gap:'12px',marginBottom:'12px'}}>
+                            <div className="form-group" style={{margin:0}}>
+                                <label className="form-label" style={{fontSize:'11px'}}>{f.resolution === 'second_email' ? 'Date Sent' : f.resolution === 'received' ? 'Date Received' : 'Date of Reply'}</label>
+                                <input type="date" className="form-input" value={f.date} onChange={e => setF({ date: e.target.value })}/>
+                            </div>
+                            {f.resolution !== 'second_email' && (
+                                <div className="form-group" style={{margin:0}}>
+                                    <label className="form-label" style={{fontSize:'11px'}}>Your Name</label>
+                                    <input className="form-input" placeholder="Who updated this" value={f.name} onChange={e => setF({ name: e.target.value })}/>
+                                </div>
+                            )}
+                        </div>
+
+                        {/* Follow-up specific fields */}
+                        {f.resolution === 'second_email' && (
+                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'12px'}}>
+                                <div className="form-group" style={{margin:0}}>
+                                    <label className="form-label" style={{fontSize:'11px'}}>Your Name *</label>
+                                    <input className="form-input" placeholder="Enter your name" value={f.name} onChange={e => setF({ name: e.target.value })}/>
+                                </div>
+                                <div className="form-group" style={{margin:0}}>
+                                    <label className="form-label" style={{fontSize:'11px'}}>&nbsp;</label>
+                                    <div style={{padding:'8px 12px',background:'var(--blue-glow)',borderRadius:'6px',fontSize:'11px',color:'var(--blue)',border:'1px solid var(--blue)'}}>⏳ Keeps waiting active</div>
+                                </div>
                             </div>
                         )}
-                        {clearEmailWaitingForm.resolution === 'second_email' && (
-                            <>
-                                <div className="form-group">
-                                    <label className="form-label">Your Name *</label>
-                                    <input className="form-input" placeholder="Enter your name" value={clearEmailWaitingForm.name} onChange={e => setClearEmailWaitingForm({...clearEmailWaitingForm, name: e.target.value})}/>
-                                </div>
-                                <div className="form-group">
-                                    <label className="form-label">Follow-up Email Sent *</label>
-                                    <textarea className="form-textarea" style={{minHeight:'100px'}} placeholder="Paste or summarize the follow-up email you sent..." value={clearEmailWaitingForm.followupEmail} onChange={e => setClearEmailWaitingForm({...clearEmailWaitingForm, followupEmail: e.target.value})}/>
-                                </div>
-                            </>
-                        )}
-                        <div className="btn-group mt-md">
-                            <button className="btn btn-primary" onClick={() => {
+
+                        {/* Notes / Email content */}
+                        <div className="form-group" style={{margin:'0 0 16px 0'}}>
+                            <label className="form-label" style={{fontSize:'11px'}}>{f.resolution === 'second_email' ? 'Follow-up Email Content *' : 'Notes / Reply Summary'}</label>
+                            <textarea className="form-textarea" style={{minHeight: f.resolution === 'second_email' ? '100px' : '70px'}} 
+                                placeholder={f.resolution === 'second_email' ? 'Paste or summarize the follow-up email...' : f.resolution === 'received' ? 'What did they say?' : 'What needs to happen on our end?'} 
+                                value={f.resolution === 'second_email' ? f.followupEmail : f.notes} 
+                                onChange={e => f.resolution === 'second_email' ? setF({ followupEmail: e.target.value }) : setF({ notes: e.target.value })}/>
+                        </div>
+
+                        <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+                            <button className="btn btn-secondary" onClick={() => setClearEmailWaitingModal(null)}>Cancel</button>
+                            <button className="btn" style={{background: activeColor, color:'#fff'}} onClick={() => {
                                 const item = clearEmailWaitingModal;
                                 
-                                // Validate follow-up email requires name and email content
-                                if (clearEmailWaitingForm.resolution === 'second_email') {
-                                    if (!clearEmailWaitingForm.name.trim()) { toast('Please enter your name', 'error'); return; }
-                                    if (!clearEmailWaitingForm.followupEmail.trim()) { toast('Please enter the follow-up email content', 'error'); return; }
+                                if (f.resolution === 'second_email') {
+                                    if (!f.name.trim()) { toast('Please enter your name', 'error'); return; }
+                                    if (!f.followupEmail.trim()) { toast('Please enter the follow-up email content', 'error'); return; }
                                 }
                                 
-                                const resText = clearEmailWaitingForm.resolution === 'received' ? 'Reply received' 
-                                    : clearEmailWaitingForm.resolution === 'waiting_ours' ? 'Waiting on our reply'
-                                    : `Follow-up sent by ${clearEmailWaitingForm.name}`;
+                                const resText = f.resolution === 'received' ? 'Reply received' 
+                                    : f.resolution === 'waiting_ours' ? 'Waiting on our reply'
+                                    : `Follow-up sent by ${f.name}`;
                                 
-                                // Create new log entry for the resolution
+                                const entryDate = f.date ? f.date + 'T12:00:00' : new Date().toISOString();
+                                
                                 const historyEntry = {
                                     id: 'EH' + Date.now(),
                                     shipId: item.shipId,
                                     shipName: item.shipName,
-                                    timestamp: new Date().toISOString(),
+                                    timestamp: entryDate,
                                     type: 'manual',
-                                    emailText: clearEmailWaitingForm.resolution === 'second_email' ? clearEmailWaitingForm.followupEmail : '',
+                                    emailText: f.resolution === 'second_email' ? f.followupEmail : '',
                                     result: {
-                                        emailSummary: clearEmailWaitingForm.resolution === 'second_email' 
-                                            ? `Follow-up email sent by ${clearEmailWaitingForm.name}`
-                                            : `Status update: ${resText}${clearEmailWaitingForm.notes ? ' - ' + clearEmailWaitingForm.notes : ''}`,
-                                        waitingReply: clearEmailWaitingForm.resolution === 'second_email',
-                                        sender: clearEmailWaitingForm.resolution === 'second_email' ? { name: clearEmailWaitingForm.name } : null
+                                        emailSummary: f.resolution === 'second_email' 
+                                            ? `Follow-up email sent by ${f.name}`
+                                            : `${resText}${f.notes ? ': ' + f.notes : ''}`,
+                                        waitingReply: f.resolution === 'second_email',
+                                        sender: f.name ? { name: f.name } : null
                                     },
                                     changes: [resText]
                                 };
                                 
-                                // Update original entry to clear waiting
                                 const updatedHistory = emailHistory.map(h => 
                                     h.id === item.id ? { ...h, result: { ...h.result, waitingReply: false } } : h
                                 );
-                                
-                                // Add new entry at top
                                 const newHistory = [historyEntry, ...updatedHistory].slice(0, 100);
                                 setEmailHistory(newHistory);
                                 localStorage.setItem('emailParseHistory', JSON.stringify(newHistory));
                                 
-                                // Update ship
                                 if (item.shipId) {
-                                    const shouldStillWait = clearEmailWaitingForm.resolution === 'second_email';
+                                    const shouldStillWait = f.resolution === 'second_email';
                                     const shipUpdate = { 
                                         waitingReply: shouldStillWait, 
-                                        lastContact: new Date().toISOString(),
-                                        ...(clearEmailWaitingForm.resolution === 'second_email' ? { 
-                                            contactedBy: clearEmailWaitingForm.name,
-                                            lastSaid: `Follow-up sent: ${clearEmailWaitingForm.followupEmail.substring(0, 200)}${clearEmailWaitingForm.followupEmail.length > 200 ? '...' : ''}`
-                                        } : {})
+                                        lastContact: entryDate,
+                                        ...(f.name ? { contactedBy: f.name } : {}),
+                                        ...(f.resolution === 'second_email' ? { 
+                                            lastSaid: `Follow-up sent: ${f.followupEmail.substring(0, 200)}${f.followupEmail.length > 200 ? '...' : ''}`
+                                        } : f.notes ? { lastSaid: f.notes.substring(0, 200) } : {})
                                     };
-                                    
-                                    // Update in ships list
                                     setShips(p => p.map(s => s.id === item.shipId ? { ...s, ...shipUpdate } : s));
-                                    
-                                    // Update selected ship if it's the same one
-                                    if (sel && sel.id === item.shipId) {
-                                        setSel(prev => ({ ...prev, ...shipUpdate }));
-                                    }
+                                    if (sel && sel.id === item.shipId) setSel(prev => ({ ...prev, ...shipUpdate }));
                                 }
                                 
-                                logActivity(`Cleared waiting for ${item.shipName}: ${resText}`, { ship: item.shipName, resolution: resText, notes: clearEmailWaitingForm.notes, contactedBy: clearEmailWaitingForm.name || null });
+                                logActivity(`Updated ${item.shipName}: ${resText}`, { ship: item.shipName, resolution: resText, notes: f.notes, contactedBy: f.name || null });
                                 toast('Status updated', 'success');
                                 setClearEmailWaitingModal(null);
-                                setClearEmailWaitingForm({ resolution: 'received', notes: '', name: '', followupEmail: '' });
+                                setClearEmailWaitingForm({ resolution: 'received', notes: '', name: '', followupEmail: '', date: '' });
                             }}>Update Status</button>
-                            <button className="btn btn-secondary" onClick={() => setClearEmailWaitingModal(null)}>Cancel</button>
+                        </div>
+                    </>
+                    );
+                })()}
+            </Modal>
+
+            {/* Edit Email Entry Modal */}
+            <Modal open={!!editEmailEntry} onClose={() => setEditEmailEntry(null)} title="✏️ Edit Email Entry">
+                {editEmailEntry && (
+                    <>
+                        <div style={{padding:'10px 12px',background:'var(--bg-input)',borderRadius:'6px',marginBottom:'16px',fontSize:'12px'}}>
+                            <strong>{editEmailEntry.shipName}</strong>
+                        </div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'12px'}}>
+                            <div className="form-group" style={{margin:0}}>
+                                <label className="form-label" style={{fontSize:'11px'}}>Date</label>
+                                <input type="date" className="form-input" value={editEmailForm.date} onChange={e => setEditEmailForm({...editEmailForm, date: e.target.value})}/>
+                            </div>
+                            <div className="form-group" style={{margin:0}}>
+                                <label className="form-label" style={{fontSize:'11px'}}>Time</label>
+                                <input type="time" className="form-input" value={editEmailForm.time} onChange={e => setEditEmailForm({...editEmailForm, time: e.target.value})}/>
+                            </div>
+                        </div>
+                        <div className="form-group" style={{margin:'0 0 12px 0'}}>
+                            <label className="form-label" style={{fontSize:'11px'}}>Contacted By</label>
+                            <input className="form-input" placeholder="Name" value={editEmailForm.contactedBy} onChange={e => setEditEmailForm({...editEmailForm, contactedBy: e.target.value})}/>
+                        </div>
+                        <div className="form-group" style={{margin:'0 0 12px 0'}}>
+                            <label className="form-label" style={{fontSize:'11px'}}>Summary</label>
+                            <textarea className="form-textarea" style={{minHeight:'70px'}} placeholder="Email summary..." value={editEmailForm.summary} onChange={e => setEditEmailForm({...editEmailForm, summary: e.target.value})}/>
+                        </div>
+                        <div className="form-group" style={{margin:'0 0 16px 0'}}>
+                            <label className="form-label" style={{fontSize:'11px'}}>Full Email Content</label>
+                            <textarea className="form-textarea" style={{minHeight:'100px',fontFamily:'JetBrains Mono',fontSize:'11px'}} placeholder="Full email text..." value={editEmailForm.emailText} onChange={e => setEditEmailForm({...editEmailForm, emailText: e.target.value})}/>
+                        </div>
+                        <div style={{display:'flex',gap:'8px',justifyContent:'flex-end'}}>
+                            <button className="btn btn-secondary" onClick={() => setEditEmailEntry(null)}>Cancel</button>
+                            <button className="btn btn-primary" onClick={() => {
+                                const ts = editEmailForm.date 
+                                    ? (editEmailForm.time ? `${editEmailForm.date}T${editEmailForm.time}:00` : `${editEmailForm.date}T12:00:00`)
+                                    : editEmailEntry.timestamp;
+                                
+                                const updated = emailHistory.map(h => h.id === editEmailEntry.id ? {
+                                    ...h,
+                                    timestamp: ts,
+                                    emailText: editEmailForm.emailText,
+                                    result: {
+                                        ...h.result,
+                                        emailSummary: editEmailForm.summary,
+                                        sender: editEmailForm.contactedBy ? { name: editEmailForm.contactedBy } : h.result?.sender
+                                    }
+                                } : h);
+                                setEmailHistory(updated);
+                                localStorage.setItem('emailParseHistory', JSON.stringify(updated));
+                                
+                                // Update ship lastContact if this is the most recent entry for this ship
+                                const shipEntries = updated.filter(e => e.shipId === editEmailEntry.shipId).sort((a,b) => new Date(b.timestamp) - new Date(a.timestamp));
+                                if (shipEntries.length > 0 && shipEntries[0].id === editEmailEntry.id) {
+                                    const shipUpdate = { 
+                                        lastContact: ts,
+                                        ...(editEmailForm.contactedBy ? { contactedBy: editEmailForm.contactedBy } : {}),
+                                        ...(editEmailForm.summary ? { lastSaid: editEmailForm.summary.substring(0, 200) } : {})
+                                    };
+                                    setShips(p => p.map(s => s.id === editEmailEntry.shipId ? { ...s, ...shipUpdate } : s));
+                                    if (sel && sel.id === editEmailEntry.shipId) setSel(prev => ({ ...prev, ...shipUpdate }));
+                                }
+                                
+                                toast('Entry updated', 'success');
+                                setEditEmailEntry(null);
+                            }}>Save Changes</button>
                         </div>
                     </>
                 )}
