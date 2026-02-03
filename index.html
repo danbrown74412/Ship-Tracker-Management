@@ -688,6 +688,10 @@ function AuthWrapper() {
     }, []);
 
     const logout = (reason) => { 
+        // Clean up presence document
+        if (currentUser?.username) {
+            db.collection('presence').doc(currentUser.username).delete().catch(() => {});
+        }
         localStorage.removeItem('shipTrackerUser'); 
         setCurrentUser(null); 
         setSessionWarning(false);
@@ -983,7 +987,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
     const [parts, setParts] = useFirestore('parts', []);
     const [activityLog, setActivityLog] = useFirestore('activityLog', defaultActivityLog);
     const [suggestions, setSuggestions] = useFirestore('suggestions', []);
-    const [onlineUsers, setOnlineUsers] = useFirestore('onlineUsers', []);
+    const [onlineUsers, setOnlineUsers] = useState([]);
     // Local-only settings (not shared)
     const [toasts, setToasts] = useState([]);
     const [editingShip, setEditingShip] = useState(null);
@@ -997,36 +1001,49 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
     const [showOnlineTooltip, setShowOnlineTooltip] = useState(false);
     const searchRef = useRef(null);
     
-    // Update online presence
+    // Update online presence - each user writes their own document
     useEffect(() => {
         if (!currentUser) return;
         
+        const presenceRef = db.collection('presence').doc(currentUser.username);
+        
         const updatePresence = () => {
-            const now = Date.now();
-            setOnlineUsers(prev => {
-                // Remove stale users (inactive > 2 minutes)
-                const active = prev.filter(u => now - u.lastSeen < 120000 && u.username !== currentUser.username);
-                // Add/update current user
-                return [...active, { username: currentUser.username, lastSeen: now }];
-            });
+            presenceRef.set({ 
+                username: currentUser.username, 
+                lastSeen: Date.now(),
+                isAdmin: currentUser.isAdmin || false
+            }).catch(() => {});
         };
         
-        // Update immediately and every 30 seconds
+        // Update immediately and every 20 seconds
         updatePresence();
-        const interval = setInterval(updatePresence, 30000);
+        const interval = setInterval(updatePresence, 20000);
         
-        // Cleanup on unmount
+        // Listen for ALL presence docs
+        const unsubscribe = db.collection('presence').onSnapshot((snapshot) => {
+            const now = Date.now();
+            const users = snapshot.docs
+                .map(doc => doc.data())
+                .filter(u => now - u.lastSeen < 120000); // active in last 2 min
+            setOnlineUsers(users);
+        });
+        
+        // Cleanup: remove self on logout/close
+        const cleanup = () => {
+            presenceRef.delete().catch(() => {});
+        };
+        window.addEventListener('beforeunload', cleanup);
+        
         return () => {
             clearInterval(interval);
-            setOnlineUsers(prev => prev.filter(u => u.username !== currentUser.username));
+            window.removeEventListener('beforeunload', cleanup);
+            cleanup();
+            unsubscribe();
         };
     }, [currentUser]);
     
-    // Get currently online users (seen in last 2 minutes)
-    const activeUsers = useMemo(() => {
-        const now = Date.now();
-        return onlineUsers.filter(u => now - u.lastSeen < 120000);
-    }, [onlineUsers]);
+    // Get currently online users (already filtered in snapshot listener)
+    const activeUsers = onlineUsers;
 
     const toast = (msg, type = 'info') => { const id = Date.now(); setToasts(t => [...t, { id, message: msg, type }]); setTimeout(() => setToasts(t => t.filter(x => x.id !== id)), 3000); };
     const logActivity = (text, details = null) => { 
@@ -1285,7 +1302,6 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     
     // Generate Weekly Management Report
     const generateReport = () => {
-        // Get the week's dates (Monday to Friday)
         const now = new Date();
         const dayOfWeek = now.getDay();
         const monday = new Date(now);
@@ -1303,181 +1319,140 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         friday.setDate(monday.getDate() + 4);
         const weekEnd = friday.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
         
-        // Calculate daily stats for each day
-        const dailyStats = weekDates.map(date => {
-            const dayChecks = dailyChecks.filter(c => c.date === date);
-            let online = 0, partial = 0, offline = 0;
-            ships.forEach(ship => {
-                const check = dayChecks.find(c => c.shipId === ship.id);
-                if (!check) return;
-                if (check.statusAM && check.statusPM) online++;
-                else if (!check.statusAM && !check.statusPM) offline++;
-                else partial++;
-            });
-            return { date, online, partial, offline, total: dayChecks.length };
+        // Find ships that are currently down (most recent check shows offline)
+        const downShips = [];
+        const partialShips = [];
+        ships.forEach(ship => {
+            const latestCheck = dailyChecks.filter(c => c.shipId === ship.id).sort((a,b) => b.date.localeCompare(a.date))[0];
+            const shipIssues = issues.filter(i => i.shipId === ship.id && !i.resolved);
+            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
+            
+            if (isInPort) return; // Skip in-port ships
+            
+            if (latestCheck && !latestCheck.statusAM && !latestCheck.statusPM) {
+                downShips.push({ ship, check: latestCheck, issues: shipIssues });
+            } else if (latestCheck && (!latestCheck.statusAM || !latestCheck.statusPM)) {
+                partialShips.push({ ship, check: latestCheck, issues: shipIssues });
+            }
         });
         
-        // Calculate weekly averages
-        const avgOnline = Math.round(dailyStats.reduce((a, d) => a + d.online, 0) / 5);
-        const avgPartial = Math.round(dailyStats.reduce((a, d) => a + d.partial, 0) / 5);
-        const avgOffline = Math.round(dailyStats.reduce((a, d) => a + d.offline, 0) / 5);
-        
-        // Current open issues
+        // All open issues grouped by ship
         const openIssues = issues.filter(i => !i.resolved).map(i => ({
             ...i,
             shipName: ships.find(s => s.id === i.shipId)?.name || 'Unknown'
         }));
         const urgentIssues = openIssues.filter(i => i.threat === 'Urgent');
+        const mildIssues = openIssues.filter(i => i.threat === 'Mild');
         
-        // Contact status
+        // Ships waiting on reply
         const waitingShips = ships.filter(s => s.waitingReply);
-        const overdueShips = ships.filter(s => {
-            if (s.waitingReply) return false;
-            return getEmailStatus(s, issues).status === 'OVERDUE';
-        });
         
-        // Parts data
-        const builtComputers = parseInt(localStorage.getItem('builtComputers')) || 4;
-        const targetSystems = parseInt(localStorage.getItem('targetSystems')) || 10;
-        const criticalParts = parts.filter(p => p.perBuild > 0);
-        let canBuild = Infinity;
-        let limitingParts = [];
-        criticalParts.forEach(p => {
-            const builds = Math.floor((p.inStock || 0) / (p.perBuild || 1));
-            if (builds < canBuild) {
-                canBuild = builds;
-                limitingParts = [p.name];
-            } else if (builds === canBuild && limitingParts.length < 3) {
-                limitingParts.push(p.name);
-            }
-        });
-        canBuild = canBuild === Infinity ? 0 : canBuild;
-        const outOfStock = parts.filter(p => (p.inStock || 0) === 0 && (p.need || 0) > 0);
-        
-        // Uptime percentage
-        const totalChecks = dailyStats.reduce((a, d) => a + d.online + d.partial + d.offline, 0);
-        const uptimePercent = totalChecks > 0 ? Math.round((dailyStats.reduce((a, d) => a + d.online, 0) / totalChecks) * 100) : 0;
-        
-        // Upcoming Trips
-        const todayStart = new Date(); todayStart.setHours(0,0,0,0);
-        const upcomingInstalls = (installs || []).filter(i => parseLocalDate(i.start) >= todayStart);
-        
-        // Ships In Port
+        // Ships in port
         const inPortShips = ships.filter(s => s.inPort && parseLocalDate(s.inPortUntil) >= new Date(new Date().setHours(0,0,0,0)));
         
         // Build report
         let report = '';
-        
-        // Header
         const dateRange = `${weekStart} - ${weekEnd}`;
-        const headerTitle = 'REAP FLEET WEEKLY STATUS REPORT';
+        const headerTitle = 'REAP WEEKLY STATUS REPORT';
         const headerW = Math.max(headerTitle.length, dateRange.length) + 4;
         report += `\n`;
         report += `  ${'═'.repeat(headerW)}\n`;
         report += `  ${' '.repeat(Math.floor((headerW - headerTitle.length) / 2))}${headerTitle}\n`;
         report += `  ${' '.repeat(Math.floor((headerW - dateRange.length) / 2))}${dateRange}\n`;
-        report += `  ${'═'.repeat(headerW)}\n`;
-        report += `\n`;
+        report += `  ${'═'.repeat(headerW)}\n\n`;
         
-        // Executive Summary
-        report += `       EXECUTIVE SUMMARY\n`;
-        report += `  ${'─'.repeat(30)}\n`;
-        report += `  Fleet Size:       ${ships.length} ships\n`;
-        report += `  Weekly Uptime:    ${uptimePercent}%\n`;
-        report += `  Open Issues:      ${openIssues.length} (${urgentIssues.length} urgent)\n`;
-        report += `  Awaiting Reply:   ${waitingShips.length} ships\n`;
-        report += `  Build Progress:   ${builtComputers}/${targetSystems} complete\n`;
-        report += `\n`;
-        
-        // Action Items (if any)
-        const hasActions = urgentIssues.length > 0 || waitingShips.length > 0 || outOfStock.length > 0 || builtComputers < targetSystems;
-        if (hasActions) {
-            report += `        ACTION REQUIRED\n`;
-            report += `  ${'─'.repeat(30)}\n`;
-            report += `\n`;
-            
-            if (urgentIssues.length > 0) {
-                report += `  🚨 URGENT ISSUES\n`;
-                report += `  ${'─'.repeat(20)}\n`;
-                urgentIssues.forEach(i => {
-                    const title = i.title || i.details.substring(0, 30);
-                    report += `  • ${i.shipName.padEnd(8)} - ${title}\n`;
-                });
-                report += `\n`;
-            }
-            
-            if (waitingShips.length > 0) {
-                report += `  ⏳ AWAITING REPLY\n`;
-                report += `  ${'─'.repeat(20)}\n`;
-                waitingShips.forEach(s => {
-                    const days = s.lastContact ? Math.floor((new Date() - parseLocalDate(s.lastContact)) / (1000*60*60*24)) : 0;
-                    const issue = issues.find(i => i.shipId === s.id && !i.resolved);
-                    const reason = issue ? (issue.title || issue.details.substring(0, 25)) : 'Status check';
-                    report += `  • ${s.name.padEnd(8)} ${days}d - ${reason}\n`;
-                });
-                report += `\n`;
-            }
-            
-            if (outOfStock.length > 0 || builtComputers < targetSystems) {
-                report += `  📦 PARTS / BUILD STATUS\n`;
-                report += `  ${'─'.repeat(32)}\n`;
-                
-                // Build progress first
-                const progressBar = '█'.repeat(Math.round(builtComputers / targetSystems * 20)) + '░'.repeat(20 - Math.round(builtComputers / targetSystems * 20));
-                const progressPercent = Math.round((builtComputers / targetSystems) * 100);
-                report += `  [${progressBar}] ${progressPercent}%\n`;
-                report += `  Built: ${builtComputers}/${targetSystems}  Can Build: ${canBuild}\n`;
-                if (limitingParts.length > 0) {
-                    report += `  Bottleneck: ${limitingParts[0].substring(0, 25)}\n`;
-                }
-                
-                // Then out of stock parts
-                if (outOfStock.length > 0) {
-                    report += `\n  Out of Stock:\n`;
-                    outOfStock.slice(0, 3).forEach(p => {
-                        report += `  • ${p.name.substring(0, 25)} (${p.need})\n`;
+        // SHIPS DOWN
+        if (downShips.length > 0) {
+            report += `  🔴 SHIPS DOWN (${downShips.length})\n`;
+            report += `  ${'─'.repeat(40)}\n`;
+            downShips.forEach(({ ship, check, issues: si }) => {
+                report += `\n  ${ship.name} (${ship.type})\n`;
+                report += `    Last checked: ${fmtDate(check.date)}\n`;
+                if (ship.lastContact) report += `    Last contact: ${fmtDate(ship.lastContact)}${ship.contactedBy ? ` by ${ship.contactedBy}` : ''}\n`;
+                if (si.length > 0) {
+                    si.forEach(issue => {
+                        const label = issue.threat === 'Urgent' ? '🚨 URGENT' : '⚠️  MILD';
+                        report += `    ${label}: ${issue.details}\n`;
+                        if (issue.owner) report += `      Owner: ${issue.owner}\n`;
                     });
-                    if (outOfStock.length > 3) report += `  • +${outOfStock.length - 3} more items\n`;
+                } else {
+                    report += `    No issues logged\n`;
                 }
-                report += `\n`;
-            }
-        }
-        
-        // Weekly Performance Table
-        report += `      WEEKLY PERFORMANCE\n`;
-        report += `  ${'─'.repeat(38)}\n`;
-        report += `  DAY          ONLINE   PARTIAL  OFFLINE\n`;
-        report += `  ${'─'.repeat(38)}\n`;
-        const dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday'];
-        dailyStats.forEach((stat, i) => {
-            const name = dayNames[i].padEnd(12);
-            report += `  ${name}  ${String(stat.online).padStart(2)}       ${String(stat.partial).padStart(2)}       ${String(stat.offline).padStart(2)}\n`;
-        });
-        report += `  ${'─'.repeat(38)}\n`;
-        report += `  AVERAGE        ${String(avgOnline).padStart(2)}       ${String(avgPartial).padStart(2)}       ${String(avgOffline).padStart(2)}\n`;
-        report += `\n`;
-        
-        // Ships In Port (if any)
-        if (inPortShips.length > 0) {
-            report += `         SHIPS IN PORT\n`;
-            report += `  ${'─'.repeat(28)}\n`;
-            inPortShips.forEach(s => {
-                report += `  ⚓ ${s.name.padEnd(8)} Back: ${fmtDate(s.inPortUntil)}\n`;
             });
             report += `\n`;
         }
         
-        // Overall Status
-        report += `        OVERALL STATUS\n`;
-        report += `  ${'─'.repeat(28)}\n`;
-        if (!hasActions && avgOffline === 0) {
-            report += `  ✅ All systems operational.\n`;
-        } else if (urgentIssues.length === 0 && overdueShips.length === 0) {
-            report += `  ✅ No critical issues.\n`;
-        } else {
-            report += `  ⚠️  Action required.\n`;
+        // SHIPS PARTIAL
+        if (partialShips.length > 0) {
+            report += `  🟡 SHIPS PARTIAL (${partialShips.length})\n`;
+            report += `  ${'─'.repeat(40)}\n`;
+            partialShips.forEach(({ ship, check, issues: si }) => {
+                const status = check.statusAM && !check.statusPM ? 'AM up / PM down' : 'AM down / PM up';
+                report += `\n  ${ship.name} (${ship.type}) - ${status}\n`;
+                report += `    Last checked: ${fmtDate(check.date)}\n`;
+                if (si.length > 0) {
+                    si.forEach(issue => {
+                        const label = issue.threat === 'Urgent' ? '🚨 URGENT' : '⚠️  MILD';
+                        report += `    ${label}: ${issue.details}\n`;
+                    });
+                }
+            });
+            report += `\n`;
         }
-        report += `\n`;
+        
+        // OPEN ISSUES (for ships that are online but have issues)
+        const onlineShipIssues = openIssues.filter(oi => {
+            const isDown = downShips.some(d => d.ship.id === oi.shipId);
+            const isPartial = partialShips.some(p => p.ship.id === oi.shipId);
+            return !isDown && !isPartial;
+        });
+        if (onlineShipIssues.length > 0) {
+            report += `  ⚠️  OPEN ISSUES ON ONLINE SHIPS (${onlineShipIssues.length})\n`;
+            report += `  ${'─'.repeat(40)}\n`;
+            // Group by ship
+            const grouped = {};
+            onlineShipIssues.forEach(i => {
+                if (!grouped[i.shipName]) grouped[i.shipName] = [];
+                grouped[i.shipName].push(i);
+            });
+            Object.entries(grouped).forEach(([shipName, iss]) => {
+                report += `\n  ${shipName}\n`;
+                iss.forEach(i => {
+                    const label = i.threat === 'Urgent' ? '🚨' : '⚠️';
+                    report += `    ${label} [${i.threat}] ${i.details}\n`;
+                    if (i.owner) report += `      Owner: ${i.owner}\n`;
+                });
+            });
+            report += `\n`;
+        }
+        
+        // WAITING ON REPLY
+        if (waitingShips.length > 0) {
+            report += `  ⏳ WAITING ON REPLY (${waitingShips.length})\n`;
+            report += `  ${'─'.repeat(40)}\n`;
+            waitingShips.forEach(s => {
+                const days = s.lastContact ? Math.floor((new Date() - parseLocalDate(s.lastContact)) / (1000*60*60*24)) : 0;
+                report += `  ${s.name.padEnd(8)} - ${days}d since last contact`;
+                if (s.contactedBy) report += ` (${s.contactedBy})`;
+                report += `\n`;
+            });
+            report += `\n`;
+        }
+        
+        // IN PORT
+        if (inPortShips.length > 0) {
+            report += `  ⚓ IN PORT (${inPortShips.length})\n`;
+            report += `  ${'─'.repeat(40)}\n`;
+            inPortShips.forEach(s => {
+                report += `  ${s.name.padEnd(8)} - Back: ${fmtDate(s.inPortUntil)}\n`;
+            });
+            report += `\n`;
+        }
+        
+        // NO ISSUES
+        if (downShips.length === 0 && partialShips.length === 0 && openIssues.length === 0) {
+            report += `  ✅ All ships operational. No open issues.\n\n`;
+        }
         
         // Footer
         const genDate = new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -1485,8 +1460,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         const footer = `Generated: ${genDate} ${genTime}`;
         report += `  ${'═'.repeat(footer.length + 2)}\n`;
         report += `  ${footer}\n`;
-        report += `  ${'═'.repeat(footer.length + 2)}\n`;
-        report += `\n`;
+        report += `  ${'═'.repeat(footer.length + 2)}\n\n`;
         
         return report;
     };
