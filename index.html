@@ -1534,7 +1534,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             
             if (open) {
                 rows.push([
-                    ship.name, ship.type||'', ship.location||'', status,
+                    ship.name, ship.name.startsWith('CG') ? 'Cruiser' : 'Destroyer', ship.location||'', status,
                     open.threat||'', esc(open.title||''), esc(open.category||''), esc(open.details||''),
                     fmtD(open.created),
                     '',
@@ -1545,7 +1545,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 ].join(','));
             } else if (resolved) {
                 rows.push([
-                    ship.name, ship.type||'', ship.location||'', status,
+                    ship.name, ship.name.startsWith('CG') ? 'Cruiser' : 'Destroyer', ship.location||'', status,
                     '', '', '', '',
                     '',
                     fmtD(resolved.resolvedDate),
@@ -1556,7 +1556,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 ].join(','));
             } else {
                 rows.push([
-                    ship.name, ship.type||'', ship.location||'', status,
+                    ship.name, ship.name.startsWith('CG') ? 'Cruiser' : 'Destroyer', ship.location||'', status,
                     '', '', '', '',
                     '',
                     '',
@@ -5202,7 +5202,7 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
             
             if (open) {
                 rows.push([
-                    ship.name, ship.type||'', ship.location||'', status,
+                    ship.name, ship.name.startsWith('CG') ? 'Cruiser' : 'Destroyer', ship.location||'', status,
                     open.threat||'', esc(open.title||''), esc(open.category||''), esc(open.details||''),
                     fmtD(open.created), '',
                     fmtD(ship.lastContact), esc(summary),
@@ -5211,7 +5211,7 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
                 ].join(','));
             } else if (resolved) {
                 rows.push([
-                    ship.name, ship.type||'', ship.location||'', status,
+                    ship.name, ship.name.startsWith('CG') ? 'Cruiser' : 'Destroyer', ship.location||'', status,
                     '', '', '', '',
                     '', fmtD(resolved.resolvedDate),
                     fmtD(ship.lastContact), esc(summary),
@@ -5220,7 +5220,7 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
                 ].join(','));
             } else {
                 rows.push([
-                    ship.name, ship.type||'', ship.location||'', status,
+                    ship.name, ship.name.startsWith('CG') ? 'Cruiser' : 'Destroyer', ship.location||'', status,
                     '', '', '', '',
                     '', '',
                     fmtD(ship.lastContact), esc(summary),
