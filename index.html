@@ -727,10 +727,10 @@ const defaultShips = [
 ];
 
 const defaultIssues = [
-    { id: 'I1768930451445', shipId: 'S007', shipName: 'DDG55', threat: 'Mild', title: 'Systems Offline', category: 'Network/Equipment', details: 'We noticed that both systems have been offline since yesterday. Is SF currently experiencing a power outage or SIPR outage in CSER2?', created: '2026-01-20T17:34:11.445Z', resolved: false },
-    { id: 'I1768930471981', shipId: 'S003', shipName: 'DDG54', threat: 'Mild', title: 'CNO till May', category: 'Ship Maintenance', details: 'I am reaching out regarding the (STAR & DATA) Reap PCs. Both systems have appeared to go offline since 12/16.', created: '2026-01-20T17:34:31.981Z', resolved: false },
-    { id: 'I1768931474446', shipId: 'S005', shipName: 'DDG62', threat: 'Mild', title: 'REAP PCs Offline', category: 'Network/Equipment', details: 'We have noticed that the REAP STAR & DATA PCs are offline at this time.', created: '2026-01-20T17:51:14.446Z', resolved: false },
-    { id: 'I1768931502710', shipId: 'S014', shipName: 'DDG103', threat: 'Mild', title: 'Intermittent Connection', category: 'Network/Equipment', details: 'We are currently experiencing intermittent SHF/EHF which is causing issues seeing the system online.', created: '2026-01-20T17:51:42.710Z', resolved: false },
+    { id: 'I1768930451445', shipId: 'S007', shipName: 'DDG55', threat: 'Mild', title: 'Systems Offline', category: 'Network/Equipment', details: 'We noticed that both systems have been offline since yesterday. Is SF currently experiencing a power outage or SIPR outage in CSER2?', created: '2026-01-20T17:34:11.445Z', resolved: false, responsibility: 'Ship' },
+    { id: 'I1768930471981', shipId: 'S003', shipName: 'DDG54', threat: 'Mild', title: 'CNO till May', category: 'Ship Maintenance', details: 'I am reaching out regarding the (STAR & DATA) Reap PCs. Both systems have appeared to go offline since 12/16.', created: '2026-01-20T17:34:31.981Z', resolved: false, responsibility: 'Ship' },
+    { id: 'I1768931474446', shipId: 'S005', shipName: 'DDG62', threat: 'Mild', title: 'REAP PCs Offline', category: 'Network/Equipment', details: 'We have noticed that the REAP STAR & DATA PCs are offline at this time.', created: '2026-01-20T17:51:14.446Z', resolved: false, responsibility: 'Ship' },
+    { id: 'I1768931502710', shipId: 'S014', shipName: 'DDG103', threat: 'Mild', title: 'Intermittent Connection', category: 'Network/Equipment', details: 'We are currently experiencing intermittent SHF/EHF which is causing issues seeing the system online.', created: '2026-01-20T17:51:42.710Z', resolved: false, responsibility: 'Ship' },
 ];
 
 const defaultDailyChecks = [
@@ -1223,7 +1223,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const [detailTab, setDetailTab] = useState('info');
     const [modal, setModal] = useState(false);
     const [quickIssueModal, setQuickIssueModal] = useState(false);
-    const [quickIssue, setQuickIssue] = useState({ threat: 'Mild', details: '' });
+    const [quickIssue, setQuickIssue] = useState({ threat: 'Mild', details: '', responsibility: 'Ship' });
     const [typeFilter, setTypeFilter] = useState('all');
     const [contactModal, setContactModal] = useState(false);
     const [contactForm, setContactForm] = useState({ name: '', date: toDateString(new Date()), notes: '', waitingReply: false });
@@ -1251,7 +1251,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const [editEmailForm, setEditEmailForm] = useState({ date: '', time: '', summary: '', emailText: '', contactedBy: '' });
     const [manualLogModal, setManualLogModal] = useState(false);
     const [directManualModal, setDirectManualModal] = useState(false);
-    const [manualLogForm, setManualLogForm] = useState({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false });
+    const [manualLogForm, setManualLogForm] = useState({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', issueResponsibility: 'Ship', waitingReply: false });
     const today = toDateString(new Date());
     
     // Auto-import existing ship emails into history on first load
@@ -1365,7 +1365,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                     si.forEach(issue => {
                         const label = issue.threat === 'Urgent' ? '🚨 URGENT' : '⚠️  MILD';
                         report += `    ${label}: ${issue.details}\n`;
-                        if (issue.owner) report += `      Owner: ${issue.owner}\n`;
+                        if (issue.responsibility) report += `      Responsibility: ${issue.responsibility === 'REAP' ? 'REAP (Us)' : 'Ship (Them)'}\n`;
                     });
                 } else {
                     report += `    No issues logged\n`;
@@ -1412,7 +1412,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 iss.forEach(i => {
                     const label = i.threat === 'Urgent' ? '🚨' : '⚠️';
                     report += `    ${label} [${i.threat}] ${i.details}\n`;
-                    if (i.owner) report += `      Owner: ${i.owner}\n`;
+                    if (i.responsibility) report += `      Responsibility: ${i.responsibility === 'REAP' ? 'REAP (Us)' : 'Ship (Them)'}\n`;
                 });
             });
             report += `\n`;
@@ -1475,6 +1475,58 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         a.click();
         logActivity('Downloaded weekly report');
         toast('Report downloaded!', 'success');
+    };
+
+    // Power BI Export
+    const exportPowerBI = () => {
+        const esc = (s) => {
+            if (s === null || s === undefined || s === '') return '';
+            const str = String(s).replace(/"/g, '""');
+            return str.includes(',') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+        };
+        const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-US') : '';
+        const getStatus = (ship) => {
+            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
+            if (isInPort) return 'In Port';
+            const latest = dailyChecks.filter(c => c.shipId === ship.id).sort((a,b) => b.date.localeCompare(a.date))[0];
+            if (!latest) return 'No Data';
+            if (latest.statusAM && latest.statusPM) return 'Online';
+            if (!latest.statusAM && !latest.statusPM) return 'Offline';
+            return 'Partial';
+        };
+        const headers = ['ShipHull#','ShipType','Location','Status','Priority','IssueTitle','IssueCategory','IssueDetails','IssueOpenedDate','DateResolved','LastResponseDate','LastShipResponse','ResolutionSummary','Notes','AssignedTo'];
+        let rows = [headers.join(',')];
+        ships.forEach(ship => {
+            const status = getStatus(ship);
+            // Most recent open issue (or most recent resolved if no open)
+            const openIssues = issues.filter(i => i.shipId === ship.id && !i.resolved).sort((a,b) => new Date(b.created) - new Date(a.created));
+            const resolvedIssues = issues.filter(i => i.shipId === ship.id && i.resolved).sort((a,b) => new Date(b.resolvedDate || b.created) - new Date(a.resolvedDate || a.created));
+            const issue = openIssues[0] || null;
+            const lastResolved = resolvedIssues[0] || null;
+            rows.push([
+                ship.name,
+                ship.type || '',
+                ship.location || '',
+                status,
+                issue ? issue.threat || '' : '',
+                esc(issue ? issue.title || '' : ''),
+                esc(issue ? issue.category || '' : ''),
+                esc(issue ? issue.details || '' : ''),
+                issue ? fmtD(issue.created) : '',
+                lastResolved ? fmtD(lastResolved.resolvedDate) : '',
+                fmtD(ship.lastContact),
+                esc(ship.lastSaid || ''),
+                esc(lastResolved ? lastResolved.resolveNotes || '' : ''),
+                esc(ship.notes || ''),
+                issue ? issue.responsibility || 'Ship' : ''
+            ].join(','));
+        });
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
+        a.download = `PowerBI_REAP_Export_${toDateString(new Date())}.csv`;
+        a.click();
+        logActivity('Exported Power BI data', { rows: rows.length - 1 });
+        toast(`Power BI export downloaded! (${rows.length - 1} rows)`, 'success');
     };
     
     // Stats calculations
@@ -1613,7 +1665,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         if (!sel || !quickIssue.details.trim()) { toast('Enter issue details', 'error'); return; }
         setIssues(p => [...p, { id: genId('I'), shipId: sel.id, shipName: sel.name, ...quickIssue, created: new Date().toISOString(), resolved: false }]);
         logActivity(`Added ${quickIssue.threat} issue to ${sel.name}`, { ship: sel.name, threat: quickIssue.threat, details: quickIssue.details });
-        setQuickIssue({ threat: 'Mild', details: '' });
+        setQuickIssue({ threat: 'Mild', details: '', responsibility: 'Ship' });
         setQuickIssueModal(false);
         toast('Issue added!', 'success');
     };
@@ -2096,6 +2148,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                     </div>
                     <button className="btn btn-primary" onClick={copyReport}>📋 Weekly Report</button>
                     <button className="btn btn-secondary" onClick={downloadReport}>⬇️ Download</button>
+                    <button className="btn btn-secondary" onClick={exportPowerBI} style={{background:'var(--primary-glow)',border:'1px solid var(--primary)',color:'var(--primary)'}}>📊 Power BI Export</button>
                     <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print"/> Print</button>
                 </div>
             </div>
@@ -2426,17 +2479,21 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
                                             {selIssues.map(issue => (
                                                 <div key={issue.id} style={{padding:'12px',background: issue.threat === 'Urgent' ? 'var(--red-glow)' : 'var(--amber-glow)',borderRadius:'8px',border: `1px solid ${issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)'}`}}>
-                                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
                                                         <div style={{flex:1}}>
-                                                            <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}}>
+                                                            <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',flexWrap:'wrap'}}>
                                                                 <span className={`badge badge-${issue.threat.toLowerCase()}`}>{issue.threat}</span>
+                                                                <span style={{fontSize:'9px',padding:'2px 6px',borderRadius:'4px',fontWeight:600,background: issue.responsibility === 'REAP' ? 'var(--primary-glow)' : 'var(--bg-input)',color: issue.responsibility === 'REAP' ? 'var(--primary)' : 'var(--text-muted)',border: `1px solid ${issue.responsibility === 'REAP' ? 'var(--primary)' : 'var(--border)'}`}}>{issue.responsibility === 'REAP' ? '🛠️ REAP' : '🚢 Ship'}</span>
                                                                 {issue.category && <span style={{fontSize:'10px',color:'var(--text-muted)'}}>{issue.category}</span>}
                                                                 <span style={{fontSize:'10px',color:'var(--text-muted)'}}>• {fmtDate(issue.created)}</span>
                                                             </div>
                                                             <div style={{fontSize:'13px'}}>{issue.title || issue.details}</div>
                                                             {issue.title && issue.details && issue.title !== issue.details && <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>{issue.details}</div>}
                                                         </div>
-                                                        <button className="btn btn-sm btn-success" onClick={() => { setResolveIssueModal(issue); setResolveNotes(''); }}>✓ Resolve</button>
+                                                        <div style={{display:'flex',gap:'4px',alignItems:'center'}}>
+                                                            <button className="btn btn-sm" style={{padding:'2px 6px',fontSize:'9px',background: issue.responsibility === 'REAP' ? 'var(--amber-glow)' : 'var(--primary-glow)',color: issue.responsibility === 'REAP' ? 'var(--amber)' : 'var(--primary)',border: `1px solid ${issue.responsibility === 'REAP' ? 'var(--amber)' : 'var(--primary)'}`}} title={`Switch to ${issue.responsibility === 'REAP' ? 'Ship' : 'REAP'}`} onClick={() => setIssues(p => p.map(x => x.id === issue.id ? {...x, responsibility: x.responsibility === 'REAP' ? 'Ship' : 'REAP'} : x))}>{issue.responsibility === 'REAP' ? '→ Ship' : '→ REAP'}</button>
+                                                            <button className="btn btn-sm btn-success" onClick={() => { setResolveIssueModal(issue); setResolveNotes(''); }}>✓ Resolve</button>
+                                                        </div>
                                                     </div>
                                                 </div>
                                             ))}
@@ -2537,7 +2594,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             
             <Modal open={modal} onClose={() => setModal(false)} title="Edit Email Response">{sel && <><p className="mb-md" style={{color:'var(--text-dim)',fontSize:'13px'}}>Ship: {sel.name}</p><div className="form-group"><label className="form-label">Email Content</label><textarea className="form-textarea" style={{minHeight:'150px'}} value={sel.lastSaid} onChange={e => setSel({...sel, lastSaid: e.target.value})}/></div><div className="btn-group mt-md"><button className="btn btn-primary" onClick={() => { save(); setModal(false); }}>Save</button><button className="btn btn-secondary" onClick={() => setModal(false)}>Close</button></div></>}</Modal>
             
-            <Modal open={quickIssueModal} onClose={() => setQuickIssueModal(false)} title="Quick Add Issue">{sel && <><p className="mb-md" style={{color:'var(--text-dim)',fontSize:'13px'}}>Ship: {sel.name}</p><div className="form-group"><label className="form-label">Threat Level</label><div className="radio-group"><label className="radio urgent"><input type="radio" checked={quickIssue.threat==='Urgent'} onChange={() => setQuickIssue({...quickIssue, threat:'Urgent'})}/>Urgent</label><label className="radio mild"><input type="radio" checked={quickIssue.threat==='Mild'} onChange={() => setQuickIssue({...quickIssue, threat:'Mild'})}/>Mild</label></div></div><div className="form-group"><label className="form-label">Details</label><textarea className="form-textarea" value={quickIssue.details} onChange={e => setQuickIssue({...quickIssue, details: e.target.value})} placeholder="Describe the issue..."/></div><div className="btn-group mt-md"><button className="btn btn-primary" onClick={addQuickIssue}>Add Issue</button><button className="btn btn-secondary" onClick={() => setQuickIssueModal(false)}>Cancel</button></div></>}</Modal>
+            <Modal open={quickIssueModal} onClose={() => setQuickIssueModal(false)} title="Quick Add Issue">{sel && <><p className="mb-md" style={{color:'var(--text-dim)',fontSize:'13px'}}>Ship: {sel.name}</p><div className="form-group"><label className="form-label">Threat Level</label><div className="radio-group"><label className="radio urgent"><input type="radio" checked={quickIssue.threat==='Urgent'} onChange={() => setQuickIssue({...quickIssue, threat:'Urgent'})}/>Urgent</label><label className="radio mild"><input type="radio" checked={quickIssue.threat==='Mild'} onChange={() => setQuickIssue({...quickIssue, threat:'Mild'})}/>Mild</label></div></div><div className="form-group"><label className="form-label">Responsibility</label><div style={{display:'flex',gap:'8px'}}><button type="button" onClick={() => setQuickIssue({...quickIssue, responsibility:'REAP'})} style={{flex:1,padding:'8px',borderRadius:'6px',border: quickIssue.responsibility==='REAP' ? '2px solid var(--primary)' : '1px solid var(--border)',background: quickIssue.responsibility==='REAP' ? 'var(--primary-glow)' : 'var(--bg-input)',color: quickIssue.responsibility==='REAP' ? 'var(--primary)' : 'var(--text-muted)',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>🛠️ REAP (Us)</button><button type="button" onClick={() => setQuickIssue({...quickIssue, responsibility:'Ship'})} style={{flex:1,padding:'8px',borderRadius:'6px',border: quickIssue.responsibility==='Ship' ? '2px solid var(--amber)' : '1px solid var(--border)',background: quickIssue.responsibility==='Ship' ? 'var(--amber-glow)' : 'var(--bg-input)',color: quickIssue.responsibility==='Ship' ? 'var(--amber)' : 'var(--text-muted)',fontSize:'12px',fontWeight:600,cursor:'pointer'}}>🚢 Ship (Them)</button></div></div><div className="form-group"><label className="form-label">Details</label><textarea className="form-textarea" value={quickIssue.details} onChange={e => setQuickIssue({...quickIssue, details: e.target.value})} placeholder="Describe the issue..."/></div><div className="btn-group mt-md"><button className="btn btn-primary" onClick={addQuickIssue}>Add Issue</button><button className="btn btn-secondary" onClick={() => setQuickIssueModal(false)}>Cancel</button></div></>}</Modal>
             
             <Modal open={contactModal} onClose={() => setContactModal(false)} title="✉️ Mark Ship as Emailed">
                 {sel && <>
@@ -3020,7 +3077,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                     <div style={{padding:'10px',background:'var(--bg-input)',borderRadius:'6px',border:'1px solid var(--border)',marginBottom:'16px'}}>
                         <div style={{fontSize:'12px',fontWeight:600,marginBottom:'4px'}}>Issue Details</div>
                         <div style={{fontSize:'12px',color:'var(--text)'}}>{resolveIssueModal.details}</div>
-                        <div style={{marginTop:'8px'}}><span className={`badge badge-${resolveIssueModal.threat.toLowerCase()}`}>{resolveIssueModal.threat}</span></div>
+                        <div style={{marginTop:'8px',display:'flex',gap:'6px',alignItems:'center'}}><span className={`badge badge-${resolveIssueModal.threat.toLowerCase()}`}>{resolveIssueModal.threat}</span><span style={{fontSize:'10px',padding:'2px 6px',borderRadius:'4px',fontWeight:600,background: resolveIssueModal.responsibility === 'REAP' ? 'var(--primary-glow)' : 'var(--bg-input)',color: resolveIssueModal.responsibility === 'REAP' ? 'var(--primary)' : 'var(--text-muted)',border: `1px solid ${resolveIssueModal.responsibility === 'REAP' ? 'var(--primary)' : 'var(--border)'}`}}>{resolveIssueModal.responsibility === 'REAP' ? '🛠️ REAP' : '🚢 Ship'}</span></div>
                     </div>
                     <div className="form-group">
                         <label className="form-label">How was this resolved? *</label>
@@ -3308,6 +3365,13 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         </div>
                                     </div>
                                     <div className="form-group">
+                                        <label className="form-label">Responsibility</label>
+                                        <div style={{display:'flex',gap:'8px'}}>
+                                            <button type="button" onClick={() => setManualLogForm({...manualLogForm, issueResponsibility:'REAP'})} style={{flex:1,padding:'6px',borderRadius:'6px',border: manualLogForm.issueResponsibility==='REAP' ? '2px solid var(--primary)' : '1px solid var(--border)',background: manualLogForm.issueResponsibility==='REAP' ? 'var(--primary-glow)' : 'var(--bg-input)',color: manualLogForm.issueResponsibility==='REAP' ? 'var(--primary)' : 'var(--text-muted)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>🛠️ REAP</button>
+                                            <button type="button" onClick={() => setManualLogForm({...manualLogForm, issueResponsibility:'Ship'})} style={{flex:1,padding:'6px',borderRadius:'6px',border: manualLogForm.issueResponsibility==='Ship' ? '2px solid var(--amber)' : '1px solid var(--border)',background: manualLogForm.issueResponsibility==='Ship' ? 'var(--amber-glow)' : 'var(--bg-input)',color: manualLogForm.issueResponsibility==='Ship' ? 'var(--amber)' : 'var(--text-muted)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>🚢 Ship</button>
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
                                         <label className="form-label">Issue Details</label>
                                         <input className="form-input" placeholder="Brief description..." value={manualLogForm.issueDetails} onChange={e => setManualLogForm({...manualLogForm, issueDetails: e.target.value})}/>
                                     </div>
@@ -3353,6 +3417,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         shipName: sel.name,
                                         threat: manualLogForm.issueThreat,
                                         details: manualLogForm.issueDetails,
+                                        responsibility: manualLogForm.issueResponsibility,
                                         created: new Date().toISOString(),
                                         resolved: false
                                     }]);
@@ -3370,7 +3435,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                     result: {
                                         inPort: manualLogForm.inPort,
                                         inPortUntil: manualLogForm.inPortUntil,
-                                        issue: manualLogForm.hasIssue ? { hasIssue: true, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails } : { hasIssue: false },
+                                        issue: manualLogForm.hasIssue ? { hasIssue: true, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails, responsibility: manualLogForm.issueResponsibility } : { hasIssue: false },
                                         emailSummary: manualLogForm.notes,
                                         waitingReply: manualLogForm.waitingReply
                                     },
@@ -3383,7 +3448,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 logActivity(`Manual log for ${sel.name}: ${changes.join(', ')}`, { ship: sel.name, notes: manualLogForm.notes });
                                 toast(`Logged: ${changes.join(', ')}`, 'success');
                                 setManualLogModal(false);
-                                setManualLogForm({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false });
+                                setManualLogForm({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', issueResponsibility: 'Ship', waitingReply: false });
                             }}>💾 Save Entry</button>
                             <button className="btn btn-secondary" onClick={() => setManualLogModal(false)}>Cancel</button>
                         </div>
@@ -3474,6 +3539,13 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         </div>
                                     </div>
                                     <div className="form-group">
+                                        <label className="form-label">Responsibility</label>
+                                        <div style={{display:'flex',gap:'8px'}}>
+                                            <button type="button" onClick={() => setManualLogForm({...manualLogForm, issueResponsibility:'REAP'})} style={{flex:1,padding:'6px',borderRadius:'6px',border: manualLogForm.issueResponsibility==='REAP' ? '2px solid var(--primary)' : '1px solid var(--border)',background: manualLogForm.issueResponsibility==='REAP' ? 'var(--primary-glow)' : 'var(--bg-input)',color: manualLogForm.issueResponsibility==='REAP' ? 'var(--primary)' : 'var(--text-muted)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>🛠️ REAP</button>
+                                            <button type="button" onClick={() => setManualLogForm({...manualLogForm, issueResponsibility:'Ship'})} style={{flex:1,padding:'6px',borderRadius:'6px',border: manualLogForm.issueResponsibility==='Ship' ? '2px solid var(--amber)' : '1px solid var(--border)',background: manualLogForm.issueResponsibility==='Ship' ? 'var(--amber-glow)' : 'var(--bg-input)',color: manualLogForm.issueResponsibility==='Ship' ? 'var(--amber)' : 'var(--text-muted)',fontSize:'11px',fontWeight:600,cursor:'pointer'}}>🚢 Ship</button>
+                                        </div>
+                                    </div>
+                                    <div className="form-group">
                                         <label className="form-label">Issue Details</label>
                                         <input className="form-input" placeholder="Brief description..." value={manualLogForm.issueDetails} onChange={e => setManualLogForm({...manualLogForm, issueDetails: e.target.value})}/>
                                     </div>
@@ -3505,7 +3577,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 }
 
                                 if (manualLogForm.hasIssue && manualLogForm.issueDetails) {
-                                    const newIssue = { id: genId('I'), shipId: sel.id, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails, created: toDateString(new Date()), resolved: false };
+                                    const newIssue = { id: genId('I'), shipId: sel.id, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails, responsibility: manualLogForm.issueResponsibility, created: toDateString(new Date()), resolved: false };
                                     setIssues(p => [...p, newIssue]);
                                     changes.push(`Added ${manualLogForm.issueThreat} issue`);
                                 }
@@ -3529,7 +3601,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         emailSummary: manualLogForm.notes.substring(0, 200) + (manualLogForm.notes.length > 200 ? '...' : ''),
                                         inPort: manualLogForm.inPort,
                                         inPortUntil: manualLogForm.inPortUntil,
-                                        issue: manualLogForm.hasIssue ? { hasIssue: true, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails } : { hasIssue: false },
+                                        issue: manualLogForm.hasIssue ? { hasIssue: true, threat: manualLogForm.issueThreat, details: manualLogForm.issueDetails, responsibility: manualLogForm.issueResponsibility } : { hasIssue: false },
                                         waitingReply: manualLogForm.waitingReply
                                     },
                                     changes: changes
@@ -3540,7 +3612,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
 
                                 logActivity(`Logged email for ${sel.name}`, { ship: sel.name, changes });
                                 toast('Email logged successfully', 'success');
-                                setManualLogForm({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', waitingReply: false });
+                                setManualLogForm({ notes: '', inPort: false, inPortUntil: '', hasIssue: false, issueThreat: 'Mild', issueDetails: '', issueResponsibility: 'Ship', waitingReply: false });
                                 setDirectManualModal(false);
                             }}>Save Email Log</button>
                             <button className="btn btn-secondary" onClick={() => setDirectManualModal(false)}>Cancel</button>
@@ -5031,7 +5103,7 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
                 if (newChecks.length > 0) { setDailyChecks(prev => { const newKeys = newChecks.map(c => `${c.shipId}-${c.date}`); const filtered = prev.filter(c => !newKeys.includes(`${c.shipId}-${c.date}`)); return [...filtered, ...newChecks]; }); toast(`Imported ${newChecks.length} daily checks!`, 'success'); }
             } else if (importType === 'issues') {
                 const newIssues = [];
-                for (let i = 1; i < lines.length; i++) { const vals = parseCSVLine(lines[i]); if (vals.length < 2) continue; const issue = { id: genId('I'), shipId: '', shipName: getVal(vals, headers, ['shipname', 'ship', 'hull']) || vals[0] || '', threat: getVal(vals, headers, ['threat', 'level']) || vals[1] || 'Mild', owner: getVal(vals, headers, ['owner']) || '', lastSaid: getVal(vals, headers, ['lastsaid']) || '', created: new Date().toISOString(), due: getVal(vals, headers, ['due', 'duedate']) || '', details: getVal(vals, headers, ['details', 'description', 'issue']) || vals[2] || '', resolved: false }; const matchShip = ships.find(s => s.name.toLowerCase() === issue.shipName.toLowerCase()); if (matchShip) issue.shipId = matchShip.id; if (issue.details) newIssues.push(issue); }
+                for (let i = 1; i < lines.length; i++) { const vals = parseCSVLine(lines[i]); if (vals.length < 2) continue; const issue = { id: genId('I'), shipId: '', shipName: getVal(vals, headers, ['shipname', 'ship', 'hull']) || vals[0] || '', threat: getVal(vals, headers, ['threat', 'level']) || vals[1] || 'Mild', responsibility: getVal(vals, headers, ['responsibility', 'assignedto', 'assigned']) || 'Ship', lastSaid: getVal(vals, headers, ['lastsaid']) || '', created: new Date().toISOString(), due: getVal(vals, headers, ['due', 'duedate']) || '', details: getVal(vals, headers, ['details', 'description', 'issue']) || vals[2] || '', resolved: false }; const matchShip = ships.find(s => s.name.toLowerCase() === issue.shipName.toLowerCase()); if (matchShip) issue.shipId = matchShip.id; if (issue.details) newIssues.push(issue); }
                 if (newIssues.length > 0) { setIssues(prev => [...prev, ...newIssues]); toast(`Imported ${newIssues.length} issues!`, 'success'); }
             }
             setImportText('');
@@ -5043,73 +5115,50 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
     // Power BI Export function
     const exportPowerBI = () => {
         const today = toDateString(new Date());
-        const todayChecks = dailyChecks.filter(c => c.date === today);
-        
-        // Build table data (main sheet)
-        let tableCSV = 'ShipHull#,ShipType,Location,Status,Priority,IssueTitle,IssueCategory,IssueDetails,IssueOpenedDate,DateResolved,LastResponseDate,LastShipResponse,ResolutionSummary,Notes,AssignedTo\n';
-        
+        const esc = (s) => {
+            if (s === null || s === undefined || s === '') return '';
+            const str = String(s).replace(/"/g, '""');
+            return str.includes(',') || str.includes('"') || str.includes('\n') ? `"${str}"` : str;
+        };
+        const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-US') : '';
+        const getStatus = (ship) => {
+            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
+            if (isInPort) return 'In Port';
+            const latest = dailyChecks.filter(c => c.shipId === ship.id).sort((a,b) => b.date.localeCompare(a.date))[0];
+            if (!latest) return 'No Data';
+            if (latest.statusAM && latest.statusPM) return 'Online';
+            if (!latest.statusAM && !latest.statusPM) return 'Offline';
+            return 'Partial';
+        };
+        const headers = ['ShipHull#','ShipType','Location','Status','Priority','IssueTitle','IssueCategory','IssueDetails','IssueOpenedDate','DateResolved','LastResponseDate','LastShipResponse','ResolutionSummary','Notes','AssignedTo'];
+        let rows = [headers.join(',')];
         ships.forEach(ship => {
-            // Determine ship type (Cruiser/Destroyer)
-            const shipType = ship.name.startsWith('CG') ? 'Cruiser' : 'Destroyer';
-            
-            // Determine status from today's checks
-            const check = todayChecks.find(c => c.shipId === ship.id);
-            let status = 'NO DATA';
-            if (check) {
-                if (check.statusAM && check.statusPM) status = 'UP';
-                else if (!check.statusAM && !check.statusPM) status = 'DOWN';
-                else status = 'PARTIAL';
-            }
-            
-            // Get latest open issue for this ship
-            const shipIssues = issues.filter(i => i.shipId === ship.id && !i.resolved);
-            const latestIssue = shipIssues.sort((a, b) => new Date(b.created) - new Date(a.created))[0];
-            
-            // Get resolved issues for resolution summary
-            const resolvedIssue = issues.find(i => i.shipId === ship.id && i.resolved);
-            
-            // Priority mapping
-            let priority = 'Low';
-            if (latestIssue) {
-                priority = latestIssue.threat === 'Urgent' ? 'High' : latestIssue.threat === 'Mild' ? 'Medium' : 'Low';
-            }
-            
-            // Format dates
-            const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-US') : 'N/A';
-            
-            // Escape CSV fields
-            const esc = (s) => s ? `"${String(s).replace(/"/g, '""')}"` : 'N/A';
-            
-            const row = [
-                ship.name,
-                shipType,
-                ship.location || 'Unknown',
-                status,
-                priority,
-                esc(latestIssue?.title || (latestIssue ? 'Unknown' : 'N/A')),
-                latestIssue?.category || 'N/A',
-                esc(latestIssue?.details || 'N/A'),
-                latestIssue ? fmtD(latestIssue.created) : 'N/A',
-                resolvedIssue ? fmtD(resolvedIssue.resolvedDate) : 'N/A',
+            const status = getStatus(ship);
+            const openIssues = issues.filter(i => i.shipId === ship.id && !i.resolved).sort((a,b) => new Date(b.created) - new Date(a.created));
+            const resolvedIssues = issues.filter(i => i.shipId === ship.id && i.resolved).sort((a,b) => new Date(b.resolvedDate || b.created) - new Date(a.resolvedDate || a.created));
+            const issue = openIssues[0] || null;
+            const lastResolved = resolvedIssues[0] || null;
+            rows.push([
+                ship.name, ship.type||'', ship.location||'', status,
+                issue ? issue.threat||'' : '',
+                esc(issue ? issue.title||'' : ''),
+                esc(issue ? issue.category||'' : ''),
+                esc(issue ? issue.details||'' : ''),
+                issue ? fmtD(issue.created) : '',
+                lastResolved ? fmtD(lastResolved.resolvedDate) : '',
                 fmtD(ship.lastContact),
-                'N/A', // LastShipResponse - would need additional tracking
-                esc(resolvedIssue?.resolveNotes || 'N/A'),
-                esc(ship.notes || 'N/A'),
-                ship.contactedBy || 'REAP'
-            ];
-            
-            tableCSV += row.join(',') + '\n';
+                esc(ship.lastSaid||''),
+                esc(lastResolved ? lastResolved.resolveNotes||'' : ''),
+                esc(ship.notes||''),
+                issue ? issue.responsibility||'Ship' : ''
+            ].join(','));
         });
-        
-        // Download CSV
-        const blob = new Blob([tableCSV], { type: 'text/csv' });
-        const url = URL.createObjectURL(blob);
-        const a = document.createElement('a');
-        a.href = url;
+        const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
+        const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
         a.download = `PowerBI_REAP_Export_${today}.csv`;
         a.click();
-        
-        toast('Power BI export downloaded!', 'success');
+        logActivity('Exported Power BI data', { rows: rows.length - 1 });
+        toast(`Power BI export downloaded! (${rows.length - 1} rows)`, 'success');
     };
 
     const daysSinceBackup = backupSettings.lastBackup ? Math.floor((new Date() - new Date(backupSettings.lastBackup)) / (1000*60*60*24)) : null;
