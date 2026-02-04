@@ -1486,40 +1486,86 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         };
         const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-US') : '';
         const getStatus = (ship) => {
-            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
-            if (isInPort) return 'In Port';
             const latest = dailyChecks.filter(c => c.shipId === ship.id).sort((a,b) => b.date.localeCompare(a.date))[0];
-            if (!latest) return 'No Data';
-            if (latest.statusAM && latest.statusPM) return 'Online';
-            if (!latest.statusAM && !latest.statusPM) return 'Offline';
-            return 'Partial';
+            if (!latest) return 'Offline';
+            if (latest.statusAM || latest.statusPM) return 'Up';
+            return 'Offline';
         };
         const headers = ['ShipHull#','ShipType','Location','Status','Priority','IssueTitle','IssueCategory','IssueDetails','IssueOpenedDate','DateResolved','LastResponseDate','LastShipResponse','ResolutionSummary','Notes','AssignedTo'];
         let rows = [headers.join(',')];
+        
+        // Sort ships to match Power BI Excel order
+        const pbiOrder = [67, 70, 54, 56, 62, 63, 55, 57, 72, 96, 98, 101, 103, 109, 111];
+        const hn = (name) => parseInt(name.replace(/\D/g, '')) || 0;
+        const sortedShips = [...ships].sort((a, b) => {
+            const ai = pbiOrder.indexOf(hn(a.name)), bi = pbiOrder.indexOf(hn(b.name));
+            if (ai !== -1 && bi !== -1) return ai - bi;
+            if (ai !== -1) return -1;
+            if (bi !== -1) return 1;
+            return hn(a.name) - hn(b.name);
+        });
+        
+        // Build a concise status summary for LastShipResponse
+        const buildSummary = (ship, status, openIssue, allOpen) => {
+            const parts = [];
+            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
+            if (isInPort) parts.push(`In port until ${fmtD(ship.inPortUntil)}`);
+            if (openIssue) {
+                const prefix = openIssue.threat === 'Urgent' ? 'URGENT: ' : '';
+                parts.push(`${prefix}${openIssue.title || openIssue.details}`.substring(0, 80));
+                if (allOpen.length > 1) parts.push(`+${allOpen.length - 1} more issue${allOpen.length > 2 ? 's' : ''}`);
+            }
+            if (ship.waitingReply) parts.push('Awaiting ship reply');
+            if (parts.length === 0) {
+                if (status === 'Up') return 'Up - No issues';
+                if (status === 'Offline') return 'Offline - No contact';
+                return status;
+            }
+            return parts.join(' | ');
+        };
+        
         ships.forEach(ship => {
             const status = getStatus(ship);
-            // Most recent open issue (or most recent resolved if no open)
             const openIssues = issues.filter(i => i.shipId === ship.id && !i.resolved).sort((a,b) => new Date(b.created) - new Date(a.created));
             const resolvedIssues = issues.filter(i => i.shipId === ship.id && i.resolved).sort((a,b) => new Date(b.resolvedDate || b.created) - new Date(a.resolvedDate || a.created));
-            const issue = openIssues[0] || null;
-            const lastResolved = resolvedIssues[0] || null;
-            rows.push([
-                ship.name,
-                ship.type || '',
-                ship.location || '',
-                status,
-                issue ? issue.threat || '' : '',
-                esc(issue ? issue.title || '' : ''),
-                esc(issue ? issue.category || '' : ''),
-                esc(issue ? issue.details || '' : ''),
-                issue ? fmtD(issue.created) : '',
-                lastResolved ? fmtD(lastResolved.resolvedDate) : '',
-                fmtD(ship.lastContact),
-                esc(ship.lastSaid || ''),
-                esc(lastResolved ? lastResolved.resolveNotes || '' : ''),
-                esc(ship.notes || ''),
-                issue ? issue.responsibility || 'Ship' : ''
-            ].join(','));
+            const open = openIssues[0] || null;
+            const resolved = resolvedIssues[0] || null;
+            const summary = buildSummary(ship, status, open, openIssues);
+            
+            if (open) {
+                rows.push([
+                    ship.name, ship.type||'', ship.location||'', status,
+                    open.threat||'', esc(open.title||''), esc(open.category||''), esc(open.details||''),
+                    fmtD(open.created),
+                    '',
+                    fmtD(ship.lastContact), esc(summary),
+                    '',
+                    esc(ship.notes||''),
+                    open.responsibility||'Ship'
+                ].join(','));
+            } else if (resolved) {
+                rows.push([
+                    ship.name, ship.type||'', ship.location||'', status,
+                    '', '', '', '',
+                    '',
+                    fmtD(resolved.resolvedDate),
+                    fmtD(ship.lastContact), esc(summary),
+                    esc(resolved.resolveNotes||''),
+                    esc(ship.notes||''),
+                    ''
+                ].join(','));
+            } else {
+                rows.push([
+                    ship.name, ship.type||'', ship.location||'', status,
+                    '', '', '', '',
+                    '',
+                    '',
+                    fmtD(ship.lastContact), esc(summary),
+                    '',
+                    esc(ship.notes||''),
+                    ''
+                ].join(','));
+            }
         });
         const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
@@ -5122,36 +5168,66 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
         };
         const fmtD = (d) => d ? new Date(d).toLocaleDateString('en-US') : '';
         const getStatus = (ship) => {
-            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
-            if (isInPort) return 'In Port';
             const latest = dailyChecks.filter(c => c.shipId === ship.id).sort((a,b) => b.date.localeCompare(a.date))[0];
-            if (!latest) return 'No Data';
-            if (latest.statusAM && latest.statusPM) return 'Online';
-            if (!latest.statusAM && !latest.statusPM) return 'Offline';
-            return 'Partial';
+            if (!latest) return 'Offline';
+            if (latest.statusAM || latest.statusPM) return 'Up';
+            return 'Offline';
         };
         const headers = ['ShipHull#','ShipType','Location','Status','Priority','IssueTitle','IssueCategory','IssueDetails','IssueOpenedDate','DateResolved','LastResponseDate','LastShipResponse','ResolutionSummary','Notes','AssignedTo'];
         let rows = [headers.join(',')];
+        const buildSummary = (ship, status, openIssue, allOpen) => {
+            const parts = [];
+            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
+            if (isInPort) parts.push(`In port until ${fmtD(ship.inPortUntil)}`);
+            if (openIssue) {
+                const prefix = openIssue.threat === 'Urgent' ? 'URGENT: ' : '';
+                parts.push(`${prefix}${openIssue.title || openIssue.details}`.substring(0, 80));
+                if (allOpen.length > 1) parts.push(`+${allOpen.length - 1} more issue${allOpen.length > 2 ? 's' : ''}`);
+            }
+            if (ship.waitingReply) parts.push('Awaiting ship reply');
+            if (parts.length === 0) {
+                if (status === 'Up') return 'Up - No issues';
+                if (status === 'Offline') return 'Offline - No contact';
+                return status;
+            }
+            return parts.join(' | ');
+        };
         ships.forEach(ship => {
             const status = getStatus(ship);
             const openIssues = issues.filter(i => i.shipId === ship.id && !i.resolved).sort((a,b) => new Date(b.created) - new Date(a.created));
             const resolvedIssues = issues.filter(i => i.shipId === ship.id && i.resolved).sort((a,b) => new Date(b.resolvedDate || b.created) - new Date(a.resolvedDate || a.created));
-            const issue = openIssues[0] || null;
-            const lastResolved = resolvedIssues[0] || null;
-            rows.push([
-                ship.name, ship.type||'', ship.location||'', status,
-                issue ? issue.threat||'' : '',
-                esc(issue ? issue.title||'' : ''),
-                esc(issue ? issue.category||'' : ''),
-                esc(issue ? issue.details||'' : ''),
-                issue ? fmtD(issue.created) : '',
-                lastResolved ? fmtD(lastResolved.resolvedDate) : '',
-                fmtD(ship.lastContact),
-                esc(ship.lastSaid||''),
-                esc(lastResolved ? lastResolved.resolveNotes||'' : ''),
-                esc(ship.notes||''),
-                issue ? issue.responsibility||'Ship' : ''
-            ].join(','));
+            const open = openIssues[0] || null;
+            const resolved = resolvedIssues[0] || null;
+            const summary = buildSummary(ship, status, open, openIssues);
+            
+            if (open) {
+                rows.push([
+                    ship.name, ship.type||'', ship.location||'', status,
+                    open.threat||'', esc(open.title||''), esc(open.category||''), esc(open.details||''),
+                    fmtD(open.created), '',
+                    fmtD(ship.lastContact), esc(summary),
+                    '',
+                    esc(ship.notes||''), open.responsibility||'Ship'
+                ].join(','));
+            } else if (resolved) {
+                rows.push([
+                    ship.name, ship.type||'', ship.location||'', status,
+                    '', '', '', '',
+                    '', fmtD(resolved.resolvedDate),
+                    fmtD(ship.lastContact), esc(summary),
+                    esc(resolved.resolveNotes||''),
+                    esc(ship.notes||''), ''
+                ].join(','));
+            } else {
+                rows.push([
+                    ship.name, ship.type||'', ship.location||'', status,
+                    '', '', '', '',
+                    '', '',
+                    fmtD(ship.lastContact), esc(summary),
+                    '',
+                    esc(ship.notes||''), ''
+                ].join(','));
+            }
         });
         const blob = new Blob([rows.join('\n')], { type: 'text/csv' });
         const a = document.createElement('a'); a.href = URL.createObjectURL(blob);
