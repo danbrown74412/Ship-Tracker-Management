@@ -1348,11 +1348,31 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         const openIssues = issues.filter(i => !i.resolved);
         const urgentCount = openIssues.filter(i => i.threat === 'Urgent').length;
         
-        // Parts/Build status
+        // Parts/Build status - use real parts data
+        const criticalParts = parts.filter(p => p.perBuild > 0);
+        let canBuild = 0;
+        let bottleneckPart = null;
+        if (criticalParts.length > 0) {
+            let minBuilds = Infinity;
+            criticalParts.forEach(p => {
+                const builds = Math.floor((p.inStock || 0) / (p.perBuild || 1));
+                if (builds < minBuilds) {
+                    minBuilds = builds;
+                    bottleneckPart = p;
+                }
+            });
+            canBuild = minBuilds === Infinity ? 0 : minBuilds;
+        }
+        
         const totalInstalls = installs.length;
         const completedInstalls = installs.filter(i => i.status === 'Installed' || i.status === 'Complete').length;
         const buildProgress = totalInstalls > 0 ? Math.round((completedInstalls / totalInstalls) * 100) : 0;
-        const outOfStock = parts.filter(p => (p.quantity || 0) === 0 && (p.needed || 0) > 0);
+        
+        // Parts stats
+        const outOfStock = parts.filter(p => (p.inStock || 0) === 0 && (p.need || 0) > 0);
+        const lowStock = parts.filter(p => (p.inStock || 0) > 0 && (p.inStock || 0) < (p.need || 0) && (p.need || 0) > 0);
+        const totalItems = parts.reduce((sum, p) => sum + (p.inStock || 0), 0);
+        const totalNeeded = parts.reduce((sum, p) => sum + Math.max(0, (p.need || 0) - (p.inStock || 0)), 0);
         
         // Weekly performance by day
         const dailyStats = weekDates.map((date, idx) => {
@@ -1404,16 +1424,29 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         r += '  📦 PARTS / BUILD STATUS\n';
         r += '  ' + '─'.repeat(32) + '\n';
         r += `  [${bar}] ${buildProgress}%\n`;
-        r += `  Built: ${completedInstalls}/${totalInstalls}  Can Build: ${parts.filter(p => (p.quantity || 0) > 0).length > 0 ? 'Yes' : 'No'}\n`;
+        r += `  Built: ${completedInstalls}/${totalInstalls}  Can Build: ${canBuild}\n`;
+        if (bottleneckPart) {
+            r += `  Bottleneck: ${bottleneckPart.name.substring(0, 25)}\n`;
+        }
         
         if (outOfStock.length > 0) {
             r += '\n  Out of Stock:\n';
             outOfStock.slice(0, 3).forEach(p => {
-                r += `  • ${(p.name || 'Unknown').substring(0, 26)} (${p.needed || 0})\n`;
+                r += `  • ${(p.name || 'Unknown').substring(0, 26)} (need ${p.need || 0})\n`;
             });
             if (outOfStock.length > 3) r += `  • ...and ${outOfStock.length - 3} more\n`;
         }
-        r += '\n';
+        
+        if (lowStock.length > 0) {
+            r += '\n  Low Stock:\n';
+            lowStock.slice(0, 3).forEach(p => {
+                r += `  • ${(p.name || 'Unknown').substring(0, 22)} (${p.inStock}/${p.need})\n`;
+            });
+            if (lowStock.length > 3) r += `  • ...and ${lowStock.length - 3} more\n`;
+        }
+        
+        r += `\n  Total Inventory: ${totalItems} items\n`;
+        r += `  Still Needed: ${totalNeeded} items\n\n`;
         
         // Weekly Performance Table
         r += '  WEEKLY PERFORMANCE\n';
