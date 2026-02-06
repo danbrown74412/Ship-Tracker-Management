@@ -5365,12 +5365,10 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
         { id: 'ballz', name: 'Ballz', emoji: '⚪', category: 'Arcade', multiplayer: false, desc: 'Shoot balls at numbered bricks' },
         { id: 'spaceinvaders', name: 'Space Invaders', emoji: '👾', category: 'Arcade', multiplayer: false, desc: 'Shoot descending aliens' },
         { id: 'asteroids', name: 'Asteroids', emoji: '☄️', category: 'Arcade', multiplayer: false, desc: 'Rotate and shoot rocks' },
-        { id: 'flappybird', name: 'Flappy Bird', emoji: '🐦', category: 'Arcade', multiplayer: false, desc: 'Tap to fly through pipes' },
         // Single Player - Puzzle
 
         { id: 'minesweeper', name: 'Minesweeper', emoji: '💣', category: 'Puzzle', multiplayer: false, desc: 'Flag mines, clear the board' },
         { id: 'sudoku', name: 'Sudoku', emoji: '🔠', category: 'Puzzle', multiplayer: false, desc: 'Fill the grid with numbers' },
-        { id: 'memory', name: 'Memory Match', emoji: '🃏', category: 'Puzzle', multiplayer: false, desc: 'Flip cards, find pairs' },
 
         // Single Player - Quick
         { id: 'typing', name: 'Typing Test', emoji: '⌨️', category: 'Quick Play', multiplayer: false, desc: 'Test your typing speed' },
@@ -5389,7 +5387,6 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
 
         // Multiplayer - Party
 
-        { id: 'typerace', name: 'Type Race', emoji: '🏁', category: 'Multiplayer', multiplayer: true, desc: 'Type faster than others' },
         { id: 'poker', name: 'Texas Hold\'em', emoji: '🃏', category: 'Casino', multiplayer: false, desc: 'Poker vs AI opponents' },
         { id: 'blackjack', name: 'Blackjack', emoji: '🂡', category: 'Casino', multiplayer: false, desc: 'Beat the dealer to 21' },
 
@@ -5399,7 +5396,7 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
         { id: 'fishing', name: 'Fishing', emoji: '🎣', category: 'Skill', multiplayer: false, desc: 'Cast, reel, catch fish' },
     ];
     
-    const categories = ['Arcade', 'Puzzle', 'Quick Play', 'Multiplayer'];
+    const categories = ['Arcade', 'Puzzle', 'Quick Play', 'Casino', 'Action', 'Strategy', 'Skill', 'Multiplayer'];
     
     const getLeaderboard = (gameId) => leaderboards.filter(l => l.gameId === gameId).sort((a, b) => b.score - a.score).slice(0, 10);
     
@@ -5473,11 +5470,9 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
                         {activeGame === 'ballz' && <BallzGame addScore={(s) => addScore('ballz', s)} currentUser={currentUser}/>}
                         {activeGame === 'spaceinvaders' && <SpaceInvadersGame addScore={(s) => addScore('spaceinvaders', s)} currentUser={currentUser}/>}
                         {activeGame === 'asteroids' && <AsteroidsGame addScore={(s) => addScore('asteroids', s)} currentUser={currentUser}/>}
-                        {activeGame === 'flappybird' && <FlappyBirdGame addScore={(s) => addScore('flappybird', s)} currentUser={currentUser}/>}
 
                         {activeGame === 'minesweeper' && <MinesweeperGame addScore={(s) => addScore('minesweeper', s)} currentUser={currentUser}/>}
                         {activeGame === 'sudoku' && <SudokuGame addScore={(s) => addScore('sudoku', s)} currentUser={currentUser}/>}
-                        {activeGame === 'memory' && <MemoryGame addScore={(s) => addScore('memory', s)} currentUser={currentUser}/>}
 
                         {activeGame === 'typing' && <TypingGame addScore={(s) => addScore('typing', s)} currentUser={currentUser}/>}
 
@@ -5491,7 +5486,6 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
                         {activeGame === 'chess' && <ChessGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('chess', s)}/>}
                         {activeGame === 'checkers' && <CheckersGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('checkers', s)}/>}
 
-                        {activeGame === 'typerace' && <TypeRaceGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('typerace', s)}/>}
                         {activeGame === 'poker' && <PokerGame addScore={(s) => addScore('poker', s)} currentUser={currentUser}/>}
                         {activeGame === 'blackjack' && <BlackjackGame addScore={(s) => addScore('blackjack', s)} currentUser={currentUser}/>}
 
@@ -5549,7 +5543,7 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
             
             {categories.map(cat => (
                 <div key={cat} style={{marginBottom:'32px'}}>
-                    <h2 style={{fontSize:'16px',fontWeight:600,marginBottom:'16px',color:'var(--text-muted)'}}>{cat === 'Multiplayer' ? '👥 ' : '🎯 '}{cat}</h2>
+                    <h2 style={{fontSize:'16px',fontWeight:600,marginBottom:'16px',color:'var(--text-muted)'}}>{{'Multiplayer':'👥','Arcade':'🎮','Puzzle':'🧩','Quick Play':'⚡','Casino':'🎰','Action':'💥','Strategy':'🏰','Skill':'🎯'}[cat] || '🎯'} {cat}</h2>
                     <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:'12px'}}>
                         {games.filter(g => g.category === cat).map(game => (
                             <div key={game.id} className="card" style={{padding:'16px',cursor:'pointer',transition:'all 0.2s',border:'1px solid var(--border)'}} onClick={() => game.multiplayer ? createRoom(game.id) : setActiveGame(game.id)} onMouseOver={e => e.currentTarget.style.borderColor = 'var(--primary)'} onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}>
@@ -5597,105 +5591,168 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
 // SNAKE - Bigger, progressive speed
 function SnakeGameInner({ addScore, currentUser }) {
     const canvasRef = useRef(null);
-    const [gameState, setGameState] = useState('idle');
-    const [score, setScore] = useState(0);
-    const [level, setLevel] = useState(1);
-    const gameRef = useRef({ snake: [], food: null, direction: 'right', nextDirection: 'right', bonus: null });
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
     const GRID = 25, SIZE = 600, CELL = SIZE / GRID;
-    
-    const init = () => { gameRef.current = { snake: [{x:12,y:12},{x:11,y:12},{x:10,y:12}], food: spawn([{x:12,y:12}]), direction: 'right', nextDirection: 'right', bonus: null }; setScore(0); setLevel(1); setGameState('playing'); };
+
     const spawn = (snake) => { let f; do { f = {x:Math.floor(Math.random()*GRID),y:Math.floor(Math.random()*GRID)}; } while(snake.some(s=>s.x===f.x&&s.y===f.y)); return f; };
-    
-    const loop = useCallback(() => {
-        if (gameState !== 'playing') return;
-        const { snake, food, nextDirection } = gameRef.current;
-        gameRef.current.direction = nextDirection;
-        const head = { ...snake[0] };
-        if (nextDirection === 'up') head.y--; else if (nextDirection === 'down') head.y++; else if (nextDirection === 'left') head.x--; else head.x++;
-        if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID || snake.some(s => s.x === head.x && s.y === head.y)) { setGameState('over'); addScore(score); return; }
-        const newSnake = [head, ...snake];
-        if (head.x === food.x && head.y === food.y) { 
-            setScore(s => { const ns = s + 10 * level; setLevel(Math.floor(ns / 100) + 1); return ns; }); 
-            gameRef.current.food = spawn(newSnake);
-            if (Math.random() < 0.3) gameRef.current.bonus = { ...spawn(newSnake), timer: 100 };
-        } else newSnake.pop();
-        if (gameRef.current.bonus) {
-            if (head.x === gameRef.current.bonus.x && head.y === gameRef.current.bonus.y) {
-                setScore(s => s + 50 * level); gameRef.current.bonus = null;
-            } else {
-                gameRef.current.bonus.timer--;
-                if (gameRef.current.bonus.timer <= 0) gameRef.current.bonus = null;
+
+    const init = () => {
+        const snake = [{x:12,y:12},{x:11,y:12},{x:10,y:12}];
+        stateRef.current = {
+            phase: 'playing',
+            snake,
+            food: spawn(snake),
+            bonus: null,
+            direction: 'right',
+            nextDirection: 'right',
+            score: 0,
+            level: 1,
+            tickTimer: 0,
+        };
+        forceUpdate(n => n + 1);
+    };
+
+    const loop = () => {
+        const s = stateRef.current;
+        if (s && s.phase === 'playing') {
+            const speed = Math.max(3, 7 - Math.floor(s.level * 0.5));
+            s.tickTimer++;
+            if (s.tickTimer >= speed) {
+                s.tickTimer = 0;
+                s.direction = s.nextDirection;
+                const head = { ...s.snake[0] };
+                if (s.direction === 'up') head.y--;
+                else if (s.direction === 'down') head.y++;
+                else if (s.direction === 'left') head.x--;
+                else head.x++;
+
+                if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID || s.snake.some(seg => seg.x === head.x && seg.y === head.y)) {
+                    s.phase = 'over';
+                    addScore(s.score);
+                    forceUpdate(n => n + 1);
+                } else {
+                    s.snake = [head, ...s.snake];
+                    if (head.x === s.food.x && head.y === s.food.y) {
+                        s.score += 10 * s.level;
+                        s.level = Math.floor(s.score / 100) + 1;
+                        s.food = spawn(s.snake);
+                        if (Math.random() < 0.3) s.bonus = { ...spawn(s.snake), timer: 150 };
+                    } else {
+                        s.snake.pop();
+                    }
+                    if (s.bonus) {
+                        if (head.x === s.bonus.x && head.y === s.bonus.y) {
+                            s.score += 50 * s.level;
+                            s.level = Math.floor(s.score / 100) + 1;
+                            s.bonus = null;
+                        } else {
+                            s.bonus.timer--;
+                            if (s.bonus.timer <= 0) s.bonus = null;
+                        }
+                    }
+                }
             }
         }
-        gameRef.current.snake = newSnake;
         draw();
-    }, [gameState, score, level]);
-    
+        animRef.current = requestAnimationFrame(loop);
+    };
+
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        // Background grid
+        const s = stateRef.current;
+        // Background
         ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, SIZE, SIZE);
         for (let x = 0; x < GRID; x++) for (let y = 0; y < GRID; y++) {
             if ((x + y) % 2 === 0) { ctx.fillStyle = '#131d33'; ctx.fillRect(x*CELL, y*CELL, CELL, CELL); }
         }
-        const { snake, food, bonus } = gameRef.current;
-        // Food with glow
+        if (!s) {
+            ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0,0,SIZE,SIZE);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 48px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🐍', SIZE/2, SIZE/2 - 40);
+            ctx.font = 'bold 28px sans-serif'; ctx.fillText('Snake', SIZE/2, SIZE/2 + 10);
+            ctx.font = '14px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Press SPACE or click to start', SIZE/2, SIZE/2 + 40);
+            ctx.fillText('Arrow keys or WASD to move', SIZE/2, SIZE/2 + 62);
+            return;
+        }
+        const { snake, food, bonus } = s;
+        // Food
         ctx.shadowColor = '#ff6b6b'; ctx.shadowBlur = 15;
         ctx.fillStyle = '#ff6b6b'; ctx.beginPath(); ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2); ctx.fill();
         // Bonus
         if (bonus) {
             ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 20;
             ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(bonus.x*CELL+CELL/2, bonus.y*CELL+CELL/2, CELL/2-1, 0, Math.PI*2); ctx.fill();
+            // Timer indicator
+            ctx.globalAlpha = 0.3; ctx.fillStyle = '#fbbf24';
+            ctx.beginPath(); ctx.arc(bonus.x*CELL+CELL/2, bonus.y*CELL+CELL/2, CELL/2+4, 0, Math.PI*2*(bonus.timer/150)); ctx.stroke();
+            ctx.globalAlpha = 1;
         }
         ctx.shadowBlur = 0;
-        // Snake with gradient body
-        snake.forEach((s, i) => { 
+        // Snake
+        snake.forEach((seg, i) => {
             const hue = 142; const light = Math.max(30, 60 - i * 2);
-            ctx.fillStyle = i === 0 ? '#4ade80' : `hsl(${hue}, 70%, ${light}%)`; 
-            const r = 4; const x = s.x*CELL+1; const y = s.y*CELL+1; const w = CELL-2; const h = CELL-2;
-            ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+            ctx.fillStyle = i === 0 ? '#4ade80' : `hsl(${hue}, 70%, ${light}%)`;
+            ctx.beginPath(); ctx.roundRect(seg.x*CELL+1, seg.y*CELL+1, CELL-2, CELL-2, 4); ctx.fill();
         });
-        // Eyes on head
-        const h = snake[0];
-        ctx.fillStyle = '#000';
-        const dir = gameRef.current.direction;
+        // Eyes
+        const h = snake[0]; ctx.fillStyle = '#000';
+        const dir = s.direction;
         if (dir === 'right') { ctx.fillRect(h.x*CELL+CELL-8, h.y*CELL+4, 3, 3); ctx.fillRect(h.x*CELL+CELL-8, h.y*CELL+CELL-7, 3, 3); }
         else if (dir === 'left') { ctx.fillRect(h.x*CELL+5, h.y*CELL+4, 3, 3); ctx.fillRect(h.x*CELL+5, h.y*CELL+CELL-7, 3, 3); }
         else if (dir === 'up') { ctx.fillRect(h.x*CELL+4, h.y*CELL+5, 3, 3); ctx.fillRect(h.x*CELL+CELL-7, h.y*CELL+5, 3, 3); }
         else { ctx.fillRect(h.x*CELL+4, h.y*CELL+CELL-8, 3, 3); ctx.fillRect(h.x*CELL+CELL-7, h.y*CELL+CELL-8, 3, 3); }
+        // HUD
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(8, 8, 130, 50); ctx.beginPath(); ctx.roundRect(8,8,130,50,6); ctx.fill();
+        ctx.fillStyle = '#64748b'; ctx.font = '10px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText('SCORE', 18, 24);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif';
+        ctx.fillText(s.score.toString(), 18, 45);
+        ctx.fillStyle = '#4ade80'; ctx.font = 'bold 12px sans-serif';
+        ctx.fillText(`LV ${s.level}`, 90, 45);
+        // Game over
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.85)'; ctx.fillRect(0,0,SIZE,SIZE);
+            ctx.fillStyle = '#ff6b6b'; ctx.font = 'bold 24px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('Game Over!', SIZE/2, SIZE/2 - 30);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 48px sans-serif';
+            ctx.fillText(s.score.toString(), SIZE/2, SIZE/2 + 25);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif';
+            ctx.fillText(`Level ${s.level}`, SIZE/2, SIZE/2 + 50);
+            ctx.fillStyle = '#64748b'; ctx.fillText('Press SPACE to retry', SIZE/2, SIZE/2 + 80);
+        }
     };
-    
-    useEffect(() => { if (gameState === 'playing') { const speed = Math.max(50, 110 - level * 8); const i = setInterval(loop, speed); return () => clearInterval(i); } }, [gameState, loop, level]);
-    useEffect(() => { draw(); }, []);
+
+    useEffect(() => {
+        animRef.current = requestAnimationFrame(loop);
+        return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+    }, []);
+
     useEffect(() => {
         const handleKey = (e) => {
             if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d',' ','Enter'].includes(e.key)) e.preventDefault();
-            if (gameState !== 'playing' && (e.key === ' ' || e.key === 'Enter')) { init(); return; }
-            const d = gameRef.current.direction;
-            if ((e.key === 'ArrowUp' || e.key === 'w') && d !== 'down') gameRef.current.nextDirection = 'up';
-            else if ((e.key === 'ArrowDown' || e.key === 's') && d !== 'up') gameRef.current.nextDirection = 'down';
-            else if ((e.key === 'ArrowLeft' || e.key === 'a') && d !== 'right') gameRef.current.nextDirection = 'left';
-            else if ((e.key === 'ArrowRight' || e.key === 'd') && d !== 'left') gameRef.current.nextDirection = 'right';
+            const s = stateRef.current;
+            if (!s && (e.key === ' ' || e.key === 'Enter')) { init(); return; }
+            if (s && s.phase === 'over' && (e.key === ' ' || e.key === 'Enter')) { init(); return; }
+            if (!s || s.phase !== 'playing') return;
+            const d = s.direction;
+            if ((e.key === 'ArrowUp' || e.key === 'w') && d !== 'down') s.nextDirection = 'up';
+            else if ((e.key === 'ArrowDown' || e.key === 's') && d !== 'up') s.nextDirection = 'down';
+            else if ((e.key === 'ArrowLeft' || e.key === 'a') && d !== 'right') s.nextDirection = 'left';
+            else if ((e.key === 'ArrowRight' || e.key === 'd') && d !== 'left') s.nextDirection = 'right';
         };
         window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
-    }, [gameState]);
-    
+    }, []);
+
     return (
         <div style={{position:'relative',width:SIZE,borderRadius:'12px',overflow:'hidden',border:'2px solid var(--border)'}}>
-            <canvas ref={canvasRef} width={SIZE} height={SIZE}/>
-            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                {gameState === 'idle' && <><div style={{fontSize:'64px',marginBottom:'16px'}}>🐍</div><div style={{fontSize:'24px',fontWeight:700}}>Snake</div><div style={{marginTop:'8px',color:'#94a3b8'}}>Press SPACE to start</div><div style={{marginTop:'4px',fontSize:'12px',color:'#64748b'}}>Arrow keys or WASD to move</div></>}
-                {gameState === 'over' && <><div style={{fontSize:'20px',color:'#ff6b6b',marginBottom:'8px'}}>Game Over!</div><div style={{fontSize:'56px',fontWeight:700}}>{score}</div><div style={{color:'#94a3b8',marginTop:'4px'}}>Level {level}</div><div style={{marginTop:'16px',color:'#64748b'}}>Press SPACE to retry</div></>}
-            </div>}
-            {gameState === 'playing' && <div style={{position:'absolute',top:'12px',left:'12px',display:'flex',gap:'24px'}}>
-                <div><div style={{fontSize:'10px',color:'#64748b',letterSpacing:'1px'}}>SCORE</div><div style={{fontSize:'24px',fontWeight:700,color:'#fff'}}>{score}</div></div>
-                <div><div style={{fontSize:'10px',color:'#64748b',letterSpacing:'1px'}}>LEVEL</div><div style={{fontSize:'24px',fontWeight:700,color:'#4ade80'}}>{level}</div></div>
-            </div>}
+            <canvas ref={canvasRef} width={SIZE} height={SIZE} onClick={() => { if (!stateRef.current || stateRef.current.phase === 'over') init(); }} style={{display:'block',cursor:'pointer'}}/>
         </div>
     );
 }
 
-// TETRIS - Bigger, better visuals
 function TetrisGame({ addScore }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
@@ -6903,99 +6960,6 @@ function AsteroidsGame({ addScore }) {
 }
 
 // FLAPPY BIRD - Bigger, progressive difficulty
-function FlappyBirdGame({ addScore }) {
-    const canvasRef = useRef(null);
-    const [gameState, setGameState] = useState('idle');
-    const [score, setScore] = useState(0);
-    const W = 500, H = 650;
-    const gameRef = useRef({ bird: {y:H/2,v:0,r:0}, pipes: [], frame: 0, particles: [] });
-    
-    const init = () => { gameRef.current = { bird: {y:H/2,v:0,r:0}, pipes: [], frame: 0, particles: [] }; setScore(0); setGameState('playing'); };
-    
-    const loop = () => {
-        if (gameState !== 'playing') return;
-        const g = gameRef.current;
-        g.bird.v += 0.45; g.bird.y += g.bird.v;
-        g.bird.r = Math.min(g.bird.v * 3, 70);
-        g.frame++;
-        // Progressive: gap shrinks, speed increases
-        const gap = Math.max(120, 160 - score * 2);
-        const speed = Math.min(3.5 + score * 0.05, 6);
-        if (g.frame % Math.max(60, 90 - score * 2) === 0) {
-            const top = 60 + Math.random() * (H - 180 - gap);
-            g.pipes.push({x:W,top,bottom:top+gap,passed:false,color:`hsl(${Math.random()*60+100}, 60%, 35%)`});
-        }
-        g.pipes = g.pipes.filter(p => { p.x -= speed; return p.x > -65; });
-        g.pipes.forEach(p => { if (!p.passed && p.x < 55) { p.passed = true; setScore(s => s + 1); g.particles.push(...Array(5).fill(0).map(() => ({x:65,y:g.bird.y,dx:(Math.random()-0.5)*4,dy:(Math.random()-0.5)*4,life:15,color:'#fbbf24'}))); } });
-        const hit = g.bird.y < 0 || g.bird.y > H - 30 || g.pipes.some(p => p.x < 85 && p.x > 15 && (g.bird.y < p.top || g.bird.y > p.bottom - 30));
-        if (hit) { setGameState('over'); addScore(score); return; }
-        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
-        draw();
-    };
-    
-    const draw = () => {
-        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        // Sky gradient
-        const grad = ctx.createLinearGradient(0, 0, 0, H);
-        grad.addColorStop(0, '#87ceeb'); grad.addColorStop(0.7, '#c3e8f7'); grad.addColorStop(1, '#228b22');
-        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-        // Ground
-        ctx.fillStyle = '#228b22'; ctx.fillRect(0, H - 50, W, 50);
-        ctx.fillStyle = '#1a7a1a'; ctx.fillRect(0, H - 50, W, 5);
-        
-        const g = gameRef.current;
-        // Pipes
-        g.pipes.forEach(p => {
-            ctx.fillStyle = p.color || '#2d8b2d';
-            ctx.fillRect(p.x, 0, 52, p.top); ctx.fillRect(p.x, p.bottom, 52, H - p.bottom);
-            // Pipe caps
-            ctx.fillStyle = '#1f6b1f';
-            ctx.fillRect(p.x - 4, p.top - 22, 60, 22);
-            ctx.fillRect(p.x - 4, p.bottom, 60, 22);
-            // Highlights
-            ctx.fillStyle = 'rgba(255,255,255,0.12)';
-            ctx.fillRect(p.x + 4, 0, 8, p.top);
-            ctx.fillRect(p.x + 4, p.bottom, 8, H - p.bottom);
-        });
-        // Bird
-        ctx.save(); ctx.translate(55, g.bird.y); ctx.rotate(g.bird.r * Math.PI / 180);
-        ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.ellipse(0, 0, 18, 14, 0, 0, Math.PI * 2); ctx.fill();
-        // Wing
-        ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.ellipse(-8, 4, 10, 6, -0.3, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(7, -4, 6, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(9, -4, 3, 0, Math.PI * 2); ctx.fill();
-        ctx.fillStyle = '#ff6b00'; ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(28, 3); ctx.lineTo(18, 6); ctx.closePath(); ctx.fill();
-        ctx.restore();
-        
-        // Particles
-        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 15; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill(); });
-        ctx.globalAlpha = 1;
-        
-        // Score
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 52px sans-serif'; ctx.textAlign = 'center'; ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 4;
-        ctx.strokeText(score, W / 2, 70); ctx.fillText(score, W / 2, 70);
-    };
-    
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score]);
-    useEffect(() => { draw(); }, []);
-    useEffect(() => {
-        const flap = (e) => { if (e.key === ' ' || e.type === 'click') { e.preventDefault(); if (gameState !== 'playing') init(); else gameRef.current.bird.v = -7.5; } };
-        window.addEventListener('keydown', flap); canvasRef.current?.addEventListener('click', flap);
-        return () => { window.removeEventListener('keydown', flap); };
-    }, [gameState]);
-    
-    return (
-        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
-            <canvas ref={canvasRef} width={W} height={H} style={{display:'block',cursor:'pointer'}}/>
-            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                {gameState === 'idle' && <><div style={{fontSize:'64px'}}>🐦</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Flappy Bird</div><div style={{color:'#ddd',marginTop:'8px'}}>Click or press SPACE to flap</div></>}
-                {gameState === 'over' && <><div style={{color:'#ff6b6b',fontSize:'20px'}}>Game Over!</div><div style={{fontSize:'56px',fontWeight:700,marginTop:'8px'}}>{score}</div><div style={{marginTop:'12px',color:'#ddd'}}>Click to retry</div></>}
-            </div>}
-        </div>
-    );
-}
-
-// 2048 - Bigger tiles
 function MinesweeperGame({ addScore }) {
     const ROWS = 12, COLS = 14, MINES = 25;
     const [board, setBoard] = useState([]);
@@ -7189,41 +7153,6 @@ function SudokuGame({ addScore }) {
 }
 
 
-function MemoryGame({ addScore }) {
-    const [cards, setCards] = useState([]);
-    const [flipped, setFlipped] = useState([]);
-    const [matched, setMatched] = useState([]);
-    const [moves, setMoves] = useState(0);
-    const emojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🦁','🐸','🐙'];
-    
-    const init = () => { const deck = [...emojis,...emojis].sort(() => Math.random() - 0.5); setCards(deck); setFlipped([]); setMatched([]); setMoves(0); };
-    useEffect(() => { init(); }, []);
-    
-    const flip = (i) => {
-        if (flipped.length === 2 || flipped.includes(i) || matched.includes(i)) return;
-        const newFlipped = [...flipped, i];
-        setFlipped(newFlipped);
-        if (newFlipped.length === 2) {
-            setMoves(m => m + 1);
-            if (cards[newFlipped[0]] === cards[newFlipped[1]]) { setMatched(m => [...m, ...newFlipped]); setFlipped([]); if (matched.length + 2 === cards.length) addScore(Math.max(1, 1000 - moves * 5)); }
-            else setTimeout(() => setFlipped([]), 800);
-        }
-    };
-    
-    return (
-        <div>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
-                <div style={{display:'flex',gap:'20px'}}><div style={{fontWeight:600}}>Moves: {moves}</div><div style={{color:'var(--text-muted)'}}>Pairs: {matched.length/2}/{emojis.length}</div></div>
-                <button onClick={init} className="btn btn-secondary">Reset</button>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(6,75px)',gap:'8px'}}>
-                {cards.map((c, i) => <div key={i} onClick={() => flip(i)} style={{width:'75px',height:'75px',background:matched.includes(i)?'#166534':flipped.includes(i)?'#4ade80':'#3b82f6',borderRadius:'10px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'36px',cursor:'pointer',transition:'all 0.2s',transform:flipped.includes(i)||matched.includes(i)?'rotateY(0)':'rotateY(180deg)',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}}>{flipped.includes(i)||matched.includes(i)?c:'?'}</div>)}
-            </div>
-            {matched.length === cards.length && <div style={{marginTop:'16px',textAlign:'center',color:'#4ade80',fontWeight:700,fontSize:'18px'}}>🎉 You won in {moves} moves!</div>}
-        </div>
-    );
-}
-
 function TypingGame({ addScore }) {
     const sentences = ['The quick brown fox jumps over the lazy dog','Ship tracker helps manage fleet operations efficiently','React makes building modern user interfaces easy','Naval operations require constant monitoring and readiness','The best way to predict the future is to create it'];
     const [text] = useState(sentences[Math.floor(Math.random()*sentences.length)]);
@@ -7251,197 +7180,186 @@ function TypingGame({ addScore }) {
 
 function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
     const canvasRef = useRef(null);
-    const W = 550, H = 700;
-    const stateRef = useRef({
-        phase: 'idle', // idle, aiming, flying, aiTurn, over
-        turn: 1, // 1 = player, 2 = AI
-        ball: null,
-        aimAngle: 0,
-        aimPower: 50,
-        powerDir: 1,
-        cupPositionsP1: [], // player's cups (bottom) — AI aims at these
-        cupPositionsP2: [], // AI's cups (top) — player aims at these
-        cupsP1: [1,1,1,1,1,1,1,1,1,1],
-        cupsP2: [1,1,1,1,1,1,1,1,1,1],
-        scoreP1: 0,
-        scoreP2: 0,
-        particles: [],
-        message: '',
-        messageTimer: 0,
-        throwsP1: 0,
-        throwsP2: 0,
-    });
+    const W = 500, H = 700;
+    const stateRef = useRef(null);
     const animRef = useRef(null);
     const [, forceUpdate] = useState(0);
 
-    // Cup triangle positions (centered)
-    const makeCups = (cx, baseY, dir) => {
-        // dir=1 means triangle points up (top of table), dir=-1 means points down
-        const rows = [[0],[- 1, 1],[-2, 0, 2],[-3, -1, 1, 3]];
-        const positions = [];
-        rows.forEach((row, ri) => {
-            row.forEach(offset => {
-                positions.push([cx + offset * 22, baseY + ri * 38 * dir]);
-            });
-        });
-        return positions;
+    const CUP_R = 18;
+
+    const makeCups = (startX, startY, rows, direction) => {
+        const cups = [];
+        for (let row = 0; row < rows; row++) {
+            const count = rows - row;
+            const rowX = startX - (count - 1) * CUP_R;
+            for (let i = 0; i < count; i++) {
+                cups.push({ x: rowX + i * CUP_R * 2, y: startY + row * CUP_R * 1.8 * direction, alive: true });
+            }
+        }
+        return cups;
     };
 
-    const initGame = () => {
-        const s = stateRef.current;
-        s.cupPositionsP2 = makeCups(W / 2, 110, 1);  // AI cups at top
-        s.cupPositionsP1 = makeCups(W / 2, H - 110, -1); // Player cups at bottom
-        s.cupsP1 = [1,1,1,1,1,1,1,1,1,1];
-        s.cupsP2 = [1,1,1,1,1,1,1,1,1,1];
-        s.scoreP1 = 0; s.scoreP2 = 0;
-        s.throwsP1 = 0; s.throwsP2 = 0;
-        s.ball = null;
-        s.aimAngle = 0; s.aimPower = 50; s.powerDir = 1;
-        s.turn = 1;
-        s.phase = 'aiming';
-        s.particles = [];
-        s.message = 'Your turn! Click to set angle, click again to set power';
-        s.messageTimer = 180;
+    const init = () => {
+        stateRef.current = {
+            phase: 'aim', // aim, charging, flying, aiTurn, aiFly, over
+            playerCups: makeCups(W / 2, H - 80, 4, -1),
+            aiCups: makeCups(W / 2, 80, 4, 1),
+            ball: null,
+            aimX: W / 2, aimY: 120,
+            power: 0, maxPower: 100,
+            charging: false,
+            playerScore: 0, aiScore: 0,
+            turn: 'player',
+            message: 'Aim with mouse, hold click for power, release to throw!',
+            messageTimer: 120,
+            particles: [],
+            splashes: [],
+            trail: [],
+            aiTimer: 0,
+        };
         forceUpdate(n => n + 1);
     };
 
-    // Main game loop
+    const throwBall = (startX, startY, targetX, targetY, power) => {
+        const s = stateRef.current;
+        // Power determines how "direct" the arc is - higher power = faster/flatter
+        const speed = 4 + power * 0.08;
+        const dx = targetX - startX;
+        const dy = targetY - startY;
+        const dist = Math.hypot(dx, dy);
+        const vx = (dx / dist) * speed;
+        const vy = (dy / dist) * speed;
+        s.ball = { x: startX, y: startY, vx, vy, gravity: 0.02 + (1 - power / 100) * 0.03 };
+        s.trail = [];
+    };
+
     const loop = () => {
         const s = stateRef.current;
-        if (s.phase === 'idle') { draw(); animRef.current = requestAnimationFrame(loop); return; }
+        if (!s) { draw(); animRef.current = requestAnimationFrame(loop); return; }
 
-        // Animate aim
-        if (s.phase === 'aiming' && s.turn === 1) {
-            s.aimAngle += 0.8;
-            if (s.aimAngle > 40) s.aimAngle = 40;
-            if (s.aimAngle < -40) s.aimAngle = -40;
+        // Charging power
+        if (s.phase === 'charging') {
+            s.power = Math.min(s.maxPower, s.power + 1.2);
         }
 
-        // Power bar oscillates
-        if (s.phase === 'setPower') {
-            s.aimPower += s.powerDir * 1.8;
-            if (s.aimPower >= 100) { s.aimPower = 100; s.powerDir = -1; }
-            if (s.aimPower <= 15) { s.aimPower = 15; s.powerDir = 1; }
-        }
-
-        // AI turn - auto aim and throw
+        // AI turn
         if (s.phase === 'aiTurn') {
-            s.aimPower += s.powerDir * 1.2;
-            if (s.aimPower >= 80) s.powerDir = -1;
-            if (s.aimPower <= 30) s.powerDir = 1;
-            // AI decides when to throw (after oscillating a bit)
-            if (!s.aiThrowTimer) s.aiThrowTimer = 40 + Math.floor(Math.random() * 60);
-            s.aiThrowTimer--;
-            if (s.aiThrowTimer <= 0) {
-                s.aiThrowTimer = null;
-                // AI picks a target cup
-                const aliveCups = s.cupsP1.map((c, i) => c ? i : -1).filter(i => i >= 0);
-                if (aliveCups.length > 0) {
-                    const targetIdx = aliveCups[Math.floor(Math.random() * aliveCups.length)];
-                    const target = s.cupPositionsP1[targetIdx];
-                    // Throw from top toward bottom
-                    const startX = W / 2 + (Math.random() - 0.5) * 40;
-                    const startY = 60;
-                    const dx = target[0] - startX;
-                    const dy = target[1] - startY;
-                    const dist = Math.hypot(dx, dy);
-                    const speed = 5 + Math.random() * 2;
-                    // Add some inaccuracy
-                    const inaccuracy = (Math.random() - 0.5) * 40;
-                    s.ball = {
-                        x: startX, y: startY,
-                        vx: (dx + inaccuracy) / dist * speed * 0.6,
-                        vy: Math.abs(dy) / dist * speed * 0.5,
-                        gravity: 0.08,
-                        size: 1,
-                        trail: []
-                    };
-                    s.phase = 'flying';
+            s.aiTimer++;
+            if (s.aiTimer >= 60) {
+                s.aiTimer = 0;
+                // AI picks a random alive player cup
+                const targets = s.playerCups.filter(c => c.alive);
+                if (targets.length > 0) {
+                    const target = targets[Math.floor(Math.random() * targets.length)];
+                    // Add inaccuracy
+                    const tx = target.x + (Math.random() - 0.5) * 30;
+                    const ty = target.y + (Math.random() - 0.5) * 20;
+                    const power = 50 + Math.random() * 40;
+                    throwBall(W / 2 + (Math.random() - 0.5) * 40, 40, tx, ty, power);
+                    s.phase = 'aiFly';
                 }
             }
         }
 
-        // Ball physics
-        if (s.phase === 'flying' && s.ball) {
+        // Ball in flight
+        if (s.phase === 'flying' || s.phase === 'aiFly') {
             const b = s.ball;
-            b.trail.push({ x: b.x, y: b.y }); if (b.trail.length > 12) b.trail.shift();
-            b.x += b.vx;
-            b.y += b.vy;
-            b.vy += b.gravity;
-            // Shrink ball as it "arcs" (perspective)
-            const midY = H / 2;
-            b.size = 1 - Math.abs(b.y - midY) / H * 0.4;
+            if (b) {
+                // Trail
+                s.trail.push({ x: b.x, y: b.y, life: 15 });
 
-            // Check cup collisions
-            const targetCups = s.turn === 1 ? s.cupsP2 : s.cupsP1;
-            const targetPositions = s.turn === 1 ? s.cupPositionsP2 : s.cupPositionsP1;
-            let hit = false;
-            targetPositions.forEach((pos, i) => {
-                if (targetCups[i] && Math.hypot(b.x - pos[0], b.y - pos[1]) < 26) {
-                    targetCups[i] = 0;
-                    hit = true;
-                    if (s.turn === 1) s.scoreP1++;
-                    else s.scoreP2++;
-                    // Splash particles
-                    for (let j = 0; j < 15; j++) {
-                        s.particles.push({
-                            x: pos[0], y: pos[1],
-                            vx: (Math.random() - 0.5) * 8,
-                            vy: (Math.random() - 0.5) * 8,
-                            life: 25,
-                            color: '#fbbf24'
-                        });
+                b.x += b.vx;
+                b.vy += b.gravity;
+                b.y += b.vy;
+
+                // Wall bounces
+                if (b.x < 8) { b.x = 8; b.vx = Math.abs(b.vx) * 0.7; }
+                if (b.x > W - 8) { b.x = W - 8; b.vx = -Math.abs(b.vx) * 0.7; }
+
+                // Check cup collisions
+                const cups = s.phase === 'flying' ? s.aiCups : s.playerCups;
+                let hit = false;
+                cups.forEach(cup => {
+                    if (!cup.alive) return;
+                    const dist = Math.hypot(b.x - cup.x, b.y - cup.y);
+                    if (dist < CUP_R + 6) {
+                        cup.alive = false;
+                        hit = true;
+                        if (s.phase === 'flying') { s.playerScore++; s.message = '🎯 Sunk it!'; }
+                        else { s.aiScore++; s.message = 'AI sinks a cup!'; }
+                        s.messageTimer = 60;
+                        // Splash particles
+                        for (let i = 0; i < 12; i++) {
+                            s.particles.push({
+                                x: cup.x, y: cup.y,
+                                vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6 - 2,
+                                life: 20, color: '#fbbf24', size: 3 + Math.random() * 3
+                            });
+                        }
+                        // Splash ring
+                        s.splashes.push({ x: cup.x, y: cup.y, radius: CUP_R, maxRadius: CUP_R + 20, timer: 0 });
                     }
-                    s.message = s.turn === 1 ? '🎯 You sunk a cup!' : '😬 AI sunk your cup!';
-                    s.messageTimer = 90;
-                }
-            });
+                });
 
-            // Ball out of bounds or hit
-            if (hit || b.y > H + 20 || b.y < -20 || b.x < -20 || b.x > W + 20) {
-                if (!hit) {
-                    s.message = s.turn === 1 ? 'Miss!' : 'AI missed!';
-                    s.messageTimer = 60;
+                if (hit) {
+                    s.ball = null;
+                    // Check win
+                    if (s.aiCups.every(c => !c.alive)) {
+                        s.phase = 'over'; s.message = '🎉 You Win!'; s.messageTimer = 999;
+                        addScore(s.playerScore * 100);
+                        forceUpdate(n => n + 1);
+                    } else if (s.playerCups.every(c => !c.alive)) {
+                        s.phase = 'over'; s.message = '😢 AI Wins!'; s.messageTimer = 999;
+                        forceUpdate(n => n + 1);
+                    } else {
+                        // Switch turns after delay
+                        setTimeout(() => {
+                            if (!stateRef.current) return;
+                            if (stateRef.current.turn === 'player') {
+                                stateRef.current.turn = 'ai';
+                                stateRef.current.phase = 'aiTurn';
+                                stateRef.current.message = 'AI is throwing...';
+                                stateRef.current.messageTimer = 60;
+                            } else {
+                                stateRef.current.turn = 'player';
+                                stateRef.current.phase = 'aim';
+                                stateRef.current.message = 'Your turn! Aim and hold click for power';
+                                stateRef.current.messageTimer = 90;
+                            }
+                            forceUpdate(n => n + 1);
+                        }, 600);
+                        s.phase = s.phase === 'flying' ? 'aim' : 'aiTurn'; // temp
+                        s.phase = 'wait';
+                    }
                 }
-                s.ball = null;
-                if (s.turn === 1) s.throwsP1++;
-                else s.throwsP2++;
 
-                // Check win
-                if (s.cupsP2.every(c => !c)) {
-                    s.phase = 'over'; s.message = '🎉 YOU WIN!'; s.messageTimer = 999;
-                    forceUpdate(n => n + 1);
-                } else if (s.cupsP1.every(c => !c)) {
-                    s.phase = 'over'; s.message = '😢 AI WINS!'; s.messageTimer = 999;
-                    forceUpdate(n => n + 1);
-                } else {
-                    // Switch turns
-                    s.turn = s.turn === 1 ? 2 : 1;
-                    s.aimAngle = 0; s.aimPower = 50; s.powerDir = 1;
+                // Ball out of bounds (miss)
+                if (!hit && b && (b.y < -20 || b.y > H + 20 || b.x < -20 || b.x > W + 20)) {
+                    s.ball = null;
+                    s.message = s.turn === 'player' ? 'Miss!' : 'AI misses!';
+                    s.messageTimer = 40;
                     setTimeout(() => {
-                        if (s.phase === 'over') return;
-                        if (s.turn === 1) {
-                            s.phase = 'aiming';
-                            s.message = 'Your turn! Click to set angle';
-                            s.messageTimer = 120;
+                        if (!stateRef.current) return;
+                        if (stateRef.current.turn === 'player') {
+                            stateRef.current.turn = 'ai';
+                            stateRef.current.phase = 'aiTurn';
                         } else {
-                            s.phase = 'aiTurn';
-                            s.message = 'AI is aiming...';
-                            s.messageTimer = 120;
+                            stateRef.current.turn = 'player';
+                            stateRef.current.phase = 'aim';
+                            stateRef.current.message = 'Your turn!';
+                            stateRef.current.messageTimer = 60;
                         }
                         forceUpdate(n => n + 1);
-                    }, 600);
-                    s.phase = 'waiting';
+                    }, 500);
+                    s.phase = 'wait';
                 }
             }
         }
 
         // Particles
-        s.particles = s.particles.filter(p => {
-            p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
-            return p.life > 0;
-        });
-
+        s.trail = s.trail.filter(t => { t.life--; return t.life > 0; });
+        s.particles = s.particles.filter(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--; return p.life > 0; });
+        s.splashes = s.splashes.filter(sp => { sp.timer++; sp.radius += 0.8; return sp.timer < 15; });
         if (s.messageTimer > 0) s.messageTimer--;
 
         draw();
@@ -7452,285 +7370,208 @@ function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
         const s = stateRef.current;
 
-        // Table
-        const tableGrad = ctx.createLinearGradient(0, 0, 0, H);
-        tableGrad.addColorStop(0, '#14532d');
-        tableGrad.addColorStop(0.5, '#166534');
-        tableGrad.addColorStop(1, '#14532d');
-        ctx.fillStyle = tableGrad; ctx.fillRect(0, 0, W, H);
-
-        // Table border
-        ctx.strokeStyle = '#854d0e'; ctx.lineWidth = 8;
-        ctx.beginPath(); ctx.roundRect(4, 4, W - 8, H - 8, 8); ctx.stroke();
-
+        // Table background
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#1a3a1a'); grad.addColorStop(0.5, '#2d5a2d'); grad.addColorStop(1, '#1a3a1a');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+        // Table texture lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+        for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
         // Center line
-        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 2;
-        ctx.setLineDash([10, 10]);
-        ctx.beginPath(); ctx.moveTo(30, H / 2); ctx.lineTo(W - 30, H / 2); ctx.stroke();
-        ctx.setLineDash([]);
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
+        ctx.setLineDash([8, 8]); ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke(); ctx.setLineDash([]);
 
-        // Triangle outlines
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-        // Top triangle
-        ctx.beginPath(); ctx.moveTo(W/2, 100); ctx.lineTo(W/2 - 80, 260); ctx.lineTo(W/2 + 80, 260); ctx.closePath(); ctx.stroke();
-        // Bottom triangle
-        ctx.beginPath(); ctx.moveTo(W/2, H - 100); ctx.lineTo(W/2 - 80, H - 260); ctx.lineTo(W/2 + 80, H - 260); ctx.closePath(); ctx.stroke();
+        if (!s) {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🍺 Beer Pong', W/2, H/2-40);
+            ctx.font = '14px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Aim with mouse • Hold click for power • Release to throw', W/2, H/2);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 14px sans-serif';
+            ctx.fillText('Click to start', W/2, H/2+40);
+            return;
+        }
 
-        // Draw cups helper
-        const drawCup = (x, y, alive, isPlayer) => {
-            if (!alive) {
-                // Empty ring
-                ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI * 2); ctx.stroke();
+        // Draw cups
+        const drawCup = (cup, isAI) => {
+            if (!cup.alive) {
+                // Ghost cup
+                ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R, 0, Math.PI * 2); ctx.stroke();
                 return;
             }
-            // Cup outer
-            ctx.fillStyle = '#dc2626';
-            ctx.shadowColor = 'rgba(220,38,38,0.4)'; ctx.shadowBlur = 8;
-            ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fill();
+            // Cup body
+            const cupGrad = ctx.createRadialGradient(cup.x - 3, cup.y - 3, 2, cup.x, cup.y, CUP_R);
+            cupGrad.addColorStop(0, isAI ? '#ef4444' : '#3b82f6');
+            cupGrad.addColorStop(1, isAI ? '#991b1b' : '#1e3a5f');
+            ctx.fillStyle = cupGrad;
+            ctx.shadowColor = isAI ? '#ef4444' : '#3b82f6'; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R, 0, Math.PI * 2); ctx.fill();
             ctx.shadowBlur = 0;
-            // Cup inner (liquid)
-            ctx.fillStyle = '#fbbf24';
-            ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.fill();
-            // Highlight
-            ctx.fillStyle = 'rgba(255,255,255,0.2)';
-            ctx.beginPath(); ctx.arc(x - 5, y - 5, 6, 0, Math.PI * 2); ctx.fill();
+            // Beer surface
+            ctx.fillStyle = isAI ? 'rgba(255,200,50,0.3)' : 'rgba(200,200,255,0.3)';
+            ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R - 4, 0, Math.PI * 2); ctx.fill();
+            // Rim highlight
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R, 0, Math.PI * 2); ctx.stroke();
         };
 
-        // AI cups (top)
-        s.cupPositionsP2.forEach((pos, i) => drawCup(pos[0], pos[1], s.cupsP2[i], false));
-        // Player cups (bottom)
-        s.cupPositionsP1.forEach((pos, i) => drawCup(pos[0], pos[1], s.cupsP1[i], true));
+        s.aiCups.forEach(c => drawCup(c, true));
+        s.playerCups.forEach(c => drawCup(c, false));
 
-        // Labels
-        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillStyle = 'rgba(255,255,255,0.4)';
-        ctx.fillText('AI CUPS', W / 2, 65);
-        ctx.fillText('YOUR CUPS', W / 2, H - 55);
+        // Splash effects
+        s.splashes.forEach(sp => {
+            ctx.strokeStyle = `rgba(251,191,36,${1 - sp.timer / 15})`;
+            ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(sp.x, sp.y, sp.radius, 0, Math.PI * 2); ctx.stroke();
+        });
 
-        // Aim indicator when aiming
-        if (s.phase === 'aiming' && s.turn === 1) {
-            const startX = W / 2;
-            const startY = H - 50;
-            // Swinging aim line
-            const t = Date.now() * 0.002;
-            const swing = Math.sin(t) * 35;
-            const aimRad = (swing) * Math.PI / 180;
-            const lineLen = 120;
-            const endX = startX + Math.sin(aimRad) * lineLen;
-            const endY = startY - Math.cos(aimRad) * lineLen;
+        // Trail
+        s.trail.forEach(t => {
+            ctx.globalAlpha = t.life / 15 * 0.4;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(t.x, t.y, 4, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
 
-            ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2;
-            ctx.setLineDash([6, 4]);
-            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
+        // Ball
+        if (s.ball) {
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#fff'; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.arc(s.ball.x, s.ball.y, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // Shadow on table
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath(); ctx.ellipse(s.ball.x + 5, H - 20, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Aim crosshair
+        if (s.phase === 'aim' || s.phase === 'charging') {
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(s.aimX - 15, s.aimY); ctx.lineTo(s.aimX + 15, s.aimY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(s.aimX, s.aimY - 15); ctx.lineTo(s.aimX, s.aimY + 15); ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath(); ctx.arc(s.aimX, s.aimY, 12, 0, Math.PI * 2); ctx.stroke();
+
+            // Dotted line from throw point to aim
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
+            ctx.setLineDash([4, 6]);
+            ctx.beginPath(); ctx.moveTo(W / 2, H - 50); ctx.lineTo(s.aimX, s.aimY); ctx.stroke();
             ctx.setLineDash([]);
 
-            // Crosshair at end
-            ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(endX, endY, 8, 0, Math.PI * 2); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(endX - 12, endY); ctx.lineTo(endX + 12, endY); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(endX, endY - 12); ctx.lineTo(endX, endY + 12); ctx.stroke();
+            // Power meter
+            if (s.phase === 'charging') {
+                const barW = 20, barH = 150;
+                const bx = W - 40, by = H / 2 - barH / 2;
+                ctx.fillStyle = 'rgba(0,0,0,0.6)';
+                ctx.beginPath(); ctx.roundRect(bx - 2, by - 2, barW + 4, barH + 4, 6); ctx.fill();
+                ctx.fillStyle = '#333'; ctx.fillRect(bx, by, barW, barH);
+                const pct = s.power / s.maxPower;
+                const color = pct > 0.8 ? '#ef4444' : pct > 0.5 ? '#eab308' : '#4ade80';
+                ctx.fillStyle = color;
+                ctx.fillRect(bx, by + barH * (1 - pct), barW, barH * pct);
+                ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
+                ctx.strokeRect(bx, by, barW, barH);
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText(`${Math.round(s.power)}%`, bx + barW / 2, by + barH + 16);
+                ctx.fillText('PWR', bx + barW / 2, by - 6);
+            }
 
-            // Ball at start
-            ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 8;
-            ctx.beginPath(); ctx.arc(startX, startY, 10, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-        }
-
-        // Power bar
-        if (s.phase === 'setPower') {
-            const barW = 200, barH = 20;
-            const bx = W / 2 - barW / 2, by = H - 38;
-            ctx.fillStyle = 'rgba(0,0,0,0.6)';
-            ctx.beginPath(); ctx.roundRect(bx - 2, by - 2, barW + 4, barH + 4, 6); ctx.fill();
-            ctx.fillStyle = '#333';
-            ctx.beginPath(); ctx.roundRect(bx, by, barW, barH, 4); ctx.fill();
-            const pct = s.aimPower / 100;
-            const pColor = pct > 0.7 ? '#ef4444' : pct > 0.4 ? '#eab308' : '#22c55e';
-            ctx.fillStyle = pColor;
-            ctx.beginPath(); ctx.roundRect(bx, by, barW * pct, barH, 4); ctx.fill();
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText(`POWER: ${Math.round(s.aimPower)}%`, W / 2, by + 15);
-
-            // Show locked aim line
-            const startX = W / 2;
-            const startY = H - 50;
-            const aimRad = s.lockedAngle * Math.PI / 180;
-            const lineLen = 100;
-            ctx.strokeStyle = 'rgba(74,222,128,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
-            ctx.beginPath(); ctx.moveTo(startX, startY);
-            ctx.lineTo(startX + Math.sin(aimRad) * lineLen, startY - Math.cos(aimRad) * lineLen);
-            ctx.stroke(); ctx.setLineDash([]);
-
-            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(startX, startY, 10, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // AI aiming indicator
-        if (s.phase === 'aiTurn') {
-            const startX = W / 2 + Math.sin(Date.now() * 0.003) * 20;
-            const startY = 60;
-            ctx.fillStyle = '#ef4444'; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 8;
-            ctx.beginPath(); ctx.arc(startX, startY, 10, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-
-            // Power bar for AI
-            const barW = 120, barH = 12;
-            const bx = W / 2 - barW / 2, by = 30;
-            ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by, barW, barH);
-            ctx.fillStyle = '#ef4444'; ctx.fillRect(bx, by, barW * (s.aimPower / 100), barH);
-        }
-
-        // Flying ball with trail
-        if (s.ball) {
-            const b = s.ball;
-            // Trail
-            b.trail.forEach((t, i) => {
-                const alpha = (i / b.trail.length) * 0.4;
-                ctx.fillStyle = `rgba(255,255,255,${alpha})`;
-                ctx.beginPath(); ctx.arc(t.x, t.y, 4 * b.size, 0, Math.PI * 2); ctx.fill();
-            });
-            // Ball
-            ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 12;
-            ctx.beginPath(); ctx.arc(b.x, b.y, 10 * b.size, 0, Math.PI * 2); ctx.fill();
-            // Ball shadow on table
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = 'rgba(0,0,0,0.2)';
-            ctx.beginPath(); ctx.ellipse(b.x + 5, b.y + 8, 8 * b.size, 4 * b.size, 0, 0, Math.PI * 2); ctx.fill();
+            // Throw position indicator
+            ctx.fillStyle = 'rgba(255,255,255,0.4)';
+            ctx.beginPath(); ctx.arc(W / 2, H - 50, 6, 0, Math.PI * 2); ctx.fill();
         }
 
         // Particles
         s.particles.forEach(p => {
+            ctx.globalAlpha = p.life / 20;
             ctx.fillStyle = p.color;
-            ctx.globalAlpha = p.life / 25;
-            ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
         });
         ctx.globalAlpha = 1;
 
-        // Score HUD
-        ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
-        ctx.fillStyle = '#4ade80';
-        ctx.fillText(`You: ${s.scoreP1}`, 20, H / 2 - 12);
-        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right';
-        ctx.fillText(`AI: ${s.scoreP2}`, W - 20, H / 2 - 12);
-        ctx.textAlign = 'left';
-        ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '11px sans-serif';
-        ctx.fillText(`Throws: ${s.throwsP1}`, 20, H / 2 + 8);
-        ctx.textAlign = 'right';
-        ctx.fillText(`Throws: ${s.throwsP2}`, W - 20, H / 2 + 8);
-
+        // HUD
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        ctx.beginPath(); ctx.roundRect(10, 10, W - 20, 40, 8); ctx.fill();
+        ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`You: ${s.playerScore}`, 25, 36);
+        const playerCupsLeft = s.playerCups.filter(c => c.alive).length;
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+        ctx.fillText(`(${playerCupsLeft} cups left)`, 80, 36);
+        ctx.fillStyle = '#ef4444'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'right';
+        ctx.fillText(`AI: ${s.aiScore}`, W - 25, 36);
+        const aiCupsLeft = s.aiCups.filter(c => c.alive).length;
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+        ctx.fillText(`(${aiCupsLeft} cups left)`, W - 80, 36);
         // Turn indicator
-        if (s.phase !== 'idle' && s.phase !== 'over') {
-            ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillStyle = s.turn === 1 ? '#4ade80' : '#ef4444';
-            ctx.fillText(s.turn === 1 ? '▼ YOUR THROW ▼' : '▲ AI THROWING ▲', W / 2, H / 2 + 6);
-        }
+        ctx.textAlign = 'center';
+        ctx.fillStyle = s.turn === 'player' ? '#4ade80' : '#ef4444';
+        ctx.font = 'bold 13px sans-serif';
+        ctx.fillText(s.turn === 'player' ? '▼ YOUR TURN' : '▲ AI TURN', W / 2, 36);
 
         // Message
         if (s.messageTimer > 0) {
-            ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillStyle = '#fff';
-            const msgY = H / 2 + 32;
-            ctx.fillText(s.message, W / 2, msgY);
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            const tw = ctx.measureText(s.message).width + 24;
+            ctx.beginPath(); ctx.roundRect(W/2 - tw/2, H/2 - 16, tw, 32, 6); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(s.message, W / 2, H / 2 + 4);
         }
 
-        // Idle/Over overlay
-        if (s.phase === 'idle') {
-            ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, W, H);
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText('🍺 Beer Pong', W / 2, H / 2 - 50);
-            ctx.font = '16px sans-serif'; ctx.fillStyle = '#94a3b8';
-            ctx.fillText('Click to set angle → Click to set power → Watch it fly!', W / 2, H / 2);
-            ctx.fillText('Take turns against AI. Clear all cups to win!', W / 2, H / 2 + 28);
-            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif';
-            ctx.fillText('Click anywhere to start', W / 2, H / 2 + 70);
-        }
-
+        // Game over
         if (s.phase === 'over') {
-            ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, H);
-            ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillStyle = s.cupsP2.every(c => !c) ? '#4ade80' : '#ef4444';
+            ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0, 0, W, H);
+            ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = s.message.includes('You') ? '#4ade80' : '#ef4444';
             ctx.fillText(s.message, W / 2, H / 2 - 20);
-            ctx.font = '16px sans-serif'; ctx.fillStyle = '#fff';
-            ctx.fillText(`You: ${s.scoreP1}/10 cups (${s.throwsP1} throws)  •  AI: ${s.scoreP2}/10 cups (${s.throwsP2} throws)`, W / 2, H / 2 + 20);
-            ctx.fillStyle = '#94a3b8';
-            ctx.fillText('Click to play again', W / 2, H / 2 + 55);
+            ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif';
+            ctx.fillText(`${s.playerScore} - ${s.aiScore}`, W / 2, H / 2 + 15);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif';
+            ctx.fillText('Click to play again', W / 2, H / 2 + 50);
         }
     };
 
-    // Click handler
-    const handleClick = (e) => {
-        const s = stateRef.current;
-
-        if (s.phase === 'idle' || s.phase === 'over') {
-            initGame();
-            return;
-        }
-
-        if (s.phase === 'aiming' && s.turn === 1) {
-            // Lock the current aim angle
-            const t = Date.now() * 0.002;
-            s.lockedAngle = Math.sin(t) * 35;
-            s.phase = 'setPower';
-            s.aimPower = 50; s.powerDir = 1;
-            s.message = 'Click to set power!';
-            s.messageTimer = 60;
-            return;
-        }
-
-        if (s.phase === 'setPower' && s.turn === 1) {
-            // Launch ball
-            const aimRad = s.lockedAngle * Math.PI / 180;
-            const speed = 3 + s.aimPower * 0.06;
-            const startX = W / 2;
-            const startY = H - 50;
-            s.ball = {
-                x: startX, y: startY,
-                vx: Math.sin(aimRad) * speed * 0.7,
-                vy: -speed,
-                gravity: 0.06 + (100 - s.aimPower) * 0.001,
-                size: 1,
-                trail: []
-            };
-            s.phase = 'flying';
-            return;
-        }
-    };
-
-    // Start/stop animation loop
     useEffect(() => {
         animRef.current = requestAnimationFrame(loop);
         return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
     }, []);
 
-    // Initial draw
-    useEffect(() => { draw(); }, []);
+    useEffect(() => {
+        const canvas = canvasRef.current; if (!canvas) return;
+        const handleMove = (e) => {
+            const s = stateRef.current; if (!s || (s.phase !== 'aim' && s.phase !== 'charging')) return;
+            const rect = canvas.getBoundingClientRect();
+            s.aimX = e.clientX - rect.left;
+            s.aimY = e.clientY - rect.top;
+            // Restrict aim to upper half of table (AI side)
+            s.aimY = Math.min(H / 2, Math.max(30, s.aimY));
+        };
+        const handleDown = (e) => {
+            const s = stateRef.current;
+            if (!s) { init(); return; }
+            if (s.phase === 'over') { init(); return; }
+            if (s.phase === 'aim') {
+                s.phase = 'charging'; s.power = 0; s.charging = true;
+            }
+        };
+        const handleUp = (e) => {
+            const s = stateRef.current;
+            if (!s || s.phase !== 'charging') return;
+            // Fire!
+            throwBall(W / 2, H - 50, s.aimX, s.aimY, s.power);
+            s.phase = 'flying';
+            s.charging = false;
+        };
+        canvas.addEventListener('mousemove', handleMove);
+        canvas.addEventListener('mousedown', handleDown);
+        canvas.addEventListener('mouseup', handleUp);
+        canvas.addEventListener('mouseleave', (e) => { const s = stateRef.current; if (s && s.phase === 'charging') { s.phase = 'aim'; s.charging = false; } });
+        return () => { canvas.removeEventListener('mousemove', handleMove); canvas.removeEventListener('mousedown', handleDown); canvas.removeEventListener('mouseup', handleUp); };
+    }, []);
 
-    const resetGame = () => { stateRef.current.phase = 'idle'; forceUpdate(n => n + 1); };
-
-    return (
-        <div>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px',alignItems:'center'}}>
-                <div style={{display:'flex',gap:'16px',alignItems:'center'}}>
-                    <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>YOU</span><div style={{fontSize:'20px',fontWeight:700,color:'#4ade80'}}>{stateRef.current.scoreP1}/10</div></div>
-                    <div style={{color:'var(--text-muted)'}}>vs</div>
-                    <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>AI</span><div style={{fontSize:'20px',fontWeight:700,color:'#ef4444'}}>{stateRef.current.scoreP2}/10</div></div>
-                </div>
-                <button onClick={resetGame} className="btn btn-secondary">Reset</button>
-            </div>
-            <canvas ref={canvasRef} width={W} height={H} onClick={handleClick}
-                style={{borderRadius:'10px',cursor:'pointer',border:'2px solid var(--border)',display:'block',userSelect:'none'}}/>
-            <div style={{marginTop:'10px',fontSize:'12px',color:'var(--text-muted)',textAlign:'center'}}>
-                {stateRef.current.phase === 'aiming' ? '🎯 Click to lock your aim angle' :
-                 stateRef.current.phase === 'setPower' ? '💪 Click to set throw power' :
-                 stateRef.current.phase === 'aiTurn' ? '🤖 AI is taking their shot...' :
-                 'Click to start • Take turns throwing at each other\'s cups'}
-            </div>
-        </div>
-    );
+    return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',cursor:'crosshair'}}/>;
 }
 
-
-// PONG - Bigger
 function PongGame({ room, updateRoom, currentUser, addScore }) {
     const canvasRef = useRef(null);
     const [score, setScore] = useState([0, 0]);
@@ -9165,88 +9006,6 @@ function ChessGame({ room, updateRoom, currentUser, addScore }) {
 
 // WORD CHAIN - Take turns making words
 // TRIVIA - Quiz game
-function TypeRaceGame({ room, updateRoom, currentUser, addScore }) {
-    const sentences = [
-        'The quick brown fox jumps over the lazy dog near the old mill',
-        'Ship operations require constant vigilance and careful planning',
-        'A journey of a thousand miles begins with a single step forward',
-        'Technology continues to reshape how we interact with the world',
-        'The ocean waves crashed against the rocky shore at midnight',
-        'Every great achievement started as an impossible dream once',
-    ];
-    const [text] = useState(() => sentences[Math.floor(Math.random() * sentences.length)]);
-    const [input, setInput] = useState('');
-    const [started, setStarted] = useState(false);
-    const [startTime, setStartTime] = useState(0);
-    const [playerWpm, setPlayerWpm] = useState(0);
-    const [aiProgress, setAiProgress] = useState(0);
-    const [aiWpm] = useState(() => 40 + Math.floor(Math.random() * 30)); // 40-70 WPM AI
-    const [winner, setWinner] = useState(null);
-
-    const handleInput = (e) => {
-        if (!started) { setStarted(true); setStartTime(Date.now()); }
-        const val = e.target.value;
-        setInput(val);
-        if (val === text) {
-            const mins = (Date.now() - startTime) / 60000;
-            const wpm = Math.round(text.split(' ').length / mins);
-            setPlayerWpm(wpm);
-            if (!winner) { setWinner('player'); addScore(wpm * 5); }
-        }
-    };
-
-    useEffect(() => {
-        if (!started || winner === 'ai') return;
-        const charsPerMs = (aiWpm * 5) / 60000; // avg 5 chars per word
-        const interval = setInterval(() => {
-            setAiProgress(p => {
-                const np = Math.min(p + charsPerMs * 50 + (Math.random() - 0.3) * 0.5, text.length);
-                if (np >= text.length && !winner) { setWinner('ai'); }
-                return np;
-            });
-        }, 50);
-        return () => clearInterval(interval);
-    }, [started, winner]);
-
-    const playerProgress = input.length / text.length;
-    const aiProgressPct = aiProgress / text.length;
-
-    const reset = () => { setInput(''); setStarted(false); setPlayerWpm(0); setAiProgress(0); setWinner(null); };
-
-    return (
-        <div style={{maxWidth:'600px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
-                <div style={{fontWeight:700,fontSize:'16px'}}>{winner ? (winner === 'player' ? '🏆 You win!' : '😢 AI wins!') : 'Type Race'}</div>
-                <button onClick={reset} className="btn btn-secondary">New Race</button>
-            </div>
-            {/* Progress bars */}
-            <div style={{marginBottom:'20px'}}>
-                <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'}}>
-                    <span style={{fontSize:'12px',minWidth:'40px',color:'#4ade80',fontWeight:600}}>You</span>
-                    <div style={{flex:1,height:'20px',background:'var(--bg-input)',borderRadius:'10px',overflow:'hidden'}}>
-                        <div style={{height:'100%',width:`${playerProgress*100}%`,background:'#4ade80',borderRadius:'10px',transition:'width 0.1s'}}/>
-                    </div>
-                    {playerWpm > 0 && <span style={{fontSize:'12px',fontWeight:600,color:'#4ade80'}}>{playerWpm} WPM</span>}
-                </div>
-                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
-                    <span style={{fontSize:'12px',minWidth:'40px',color:'#ef4444',fontWeight:600}}>AI</span>
-                    <div style={{flex:1,height:'20px',background:'var(--bg-input)',borderRadius:'10px',overflow:'hidden'}}>
-                        <div style={{height:'100%',width:`${aiProgressPct*100}%`,background:'#ef4444',borderRadius:'10px',transition:'width 0.1s'}}/>
-                    </div>
-                    <span style={{fontSize:'12px',fontWeight:600,color:'#ef4444'}}>{aiWpm} WPM</span>
-                </div>
-            </div>
-            {/* Text display */}
-            <div style={{padding:'20px',background:'var(--bg-input)',borderRadius:'10px',marginBottom:'16px',fontSize:'20px',lineHeight:1.8,border:'1px solid var(--border)'}}>
-                {text.split('').map((c, i) => <span key={i} style={{color:i<input.length?(input[i]===c?'#4ade80':'#ef4444'):'var(--text)',background:i===input.length?'rgba(74,222,128,0.3)':'transparent',borderRadius:'2px'}}>{c}</span>)}
-            </div>
-            <input value={input} onChange={handleInput} disabled={winner !== null} placeholder={winner ? 'Race finished!' : 'Start typing to begin the race...'} className="form-input" style={{fontSize:'18px',padding:'14px'}} autoFocus/>
-        </div>
-    );
-}
-
-
-// BLACKJACK - Full casino blackjack vs dealer
 function BlackjackGame({ addScore }) {
     const [deck, setDeck] = useState([]);
     const [playerHand, setPlayerHand] = useState([]);
