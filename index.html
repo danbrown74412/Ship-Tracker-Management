@@ -5361,25 +5361,24 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
         // Single Player - Arcade
         { id: 'snake', name: 'Snake', emoji: '🐍', category: 'Arcade', multiplayer: false, desc: 'Classic snake - eat food, grow longer' },
         { id: 'tetris', name: 'Tetris', emoji: '🧱', category: 'Arcade', multiplayer: false, desc: 'Stack blocks, clear lines' },
-        { id: 'breakout', name: 'Breakout', emoji: '🧱', category: 'Arcade', multiplayer: false, desc: 'Paddle and ball, break bricks' },
+        { id: 'breakout', name: 'Brick Breaker', emoji: '🧱', category: 'Arcade', multiplayer: false, desc: 'Break bricks with power-ups & levels' },
+        { id: 'ballz', name: 'Ballz', emoji: '⚪', category: 'Arcade', multiplayer: false, desc: 'Shoot balls at numbered bricks' },
         { id: 'spaceinvaders', name: 'Space Invaders', emoji: '👾', category: 'Arcade', multiplayer: false, desc: 'Shoot descending aliens' },
         { id: 'asteroids', name: 'Asteroids', emoji: '☄️', category: 'Arcade', multiplayer: false, desc: 'Rotate and shoot rocks' },
         { id: 'flappybird', name: 'Flappy Bird', emoji: '🐦', category: 'Arcade', multiplayer: false, desc: 'Tap to fly through pipes' },
         // Single Player - Puzzle
-        { id: '2048', name: '2048', emoji: '🔢', category: 'Puzzle', multiplayer: false, desc: 'Slide tiles, combine numbers' },
+
         { id: 'minesweeper', name: 'Minesweeper', emoji: '💣', category: 'Puzzle', multiplayer: false, desc: 'Flag mines, clear the board' },
         { id: 'sudoku', name: 'Sudoku', emoji: '🔠', category: 'Puzzle', multiplayer: false, desc: 'Fill the grid with numbers' },
         { id: 'memory', name: 'Memory Match', emoji: '🃏', category: 'Puzzle', multiplayer: false, desc: 'Flip cards, find pairs' },
-        { id: 'wordle', name: 'Wordle', emoji: '📝', category: 'Puzzle', multiplayer: false, desc: 'Guess the 5-letter word' },
+
         // Single Player - Quick
         { id: 'typing', name: 'Typing Test', emoji: '⌨️', category: 'Quick Play', multiplayer: false, desc: 'Test your typing speed' },
-        { id: 'reaction', name: 'Reaction Time', emoji: '⚡', category: 'Quick Play', multiplayer: false, desc: 'Click when color changes' },
-        { id: 'simon', name: 'Simon Says', emoji: '🔴', category: 'Quick Play', multiplayer: false, desc: 'Memory pattern game' },
-        { id: 'whackamole', name: 'Whack-a-Mole', emoji: '🔨', category: 'Quick Play', multiplayer: false, desc: 'Hit the moles fast' },
+
         // Multiplayer - Real-time
         { id: 'beerpong', name: 'Beer Pong', emoji: '🍺', category: 'Multiplayer', multiplayer: true, desc: 'Pull back, aim, throw!' },
         { id: 'pong', name: 'Pong', emoji: '🏓', category: 'Multiplayer', multiplayer: true, desc: '1v1 paddle battle' },
-        { id: 'tanks', name: 'Tank Battle', emoji: '🎯', category: 'Multiplayer', multiplayer: true, desc: 'Move and shoot' },
+        { id: 'tanks', name: 'Scorched Earth', emoji: '💥', category: 'Multiplayer', multiplayer: true, desc: 'Artillery duel, destructible terrain' },
         { id: 'tron', name: 'Tron', emoji: '🏍️', category: 'Multiplayer', multiplayer: true, desc: 'Light bikes, leave trails' },
         { id: 'racing', name: 'Racing', emoji: '🏎️', category: 'Multiplayer', multiplayer: true, desc: 'Race to the finish' },
         { id: 'sumo', name: 'Sumo', emoji: '🤼', category: 'Multiplayer', multiplayer: true, desc: 'Push opponent out' },
@@ -5387,9 +5386,9 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
         { id: 'battleship', name: 'Battleship', emoji: '🚢', category: 'Multiplayer', multiplayer: true, desc: 'Find and sink ships' },
         { id: 'chess', name: 'Chess', emoji: '♟️', category: 'Multiplayer', multiplayer: true, desc: 'Classic strategy' },
         { id: 'checkers', name: 'Checkers', emoji: '🔴', category: 'Multiplayer', multiplayer: true, desc: 'Jump and capture' },
-        { id: 'wordchain', name: 'Word Chain', emoji: '🔤', category: 'Multiplayer', multiplayer: true, desc: 'Build words in turns' },
+
         // Multiplayer - Party
-        { id: 'trivia', name: 'Trivia', emoji: '❓', category: 'Multiplayer', multiplayer: true, desc: 'Answer questions fast' },
+
         { id: 'typerace', name: 'Type Race', emoji: '🏁', category: 'Multiplayer', multiplayer: true, desc: 'Type faster than others' },
     ];
     
@@ -5464,18 +5463,17 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
                         {activeGame === 'snake' && <SnakeGameInner addScore={(s) => addScore('snake', s)} currentUser={currentUser}/>}
                         {activeGame === 'tetris' && <TetrisGame addScore={(s) => addScore('tetris', s)} currentUser={currentUser}/>}
                         {activeGame === 'breakout' && <BreakoutGame addScore={(s) => addScore('breakout', s)} currentUser={currentUser}/>}
+                        {activeGame === 'ballz' && <BallzGame addScore={(s) => addScore('ballz', s)} currentUser={currentUser}/>}
                         {activeGame === 'spaceinvaders' && <SpaceInvadersGame addScore={(s) => addScore('spaceinvaders', s)} currentUser={currentUser}/>}
                         {activeGame === 'asteroids' && <AsteroidsGame addScore={(s) => addScore('asteroids', s)} currentUser={currentUser}/>}
                         {activeGame === 'flappybird' && <FlappyBirdGame addScore={(s) => addScore('flappybird', s)} currentUser={currentUser}/>}
-                        {activeGame === '2048' && <Game2048 addScore={(s) => addScore('2048', s)} currentUser={currentUser}/>}
+
                         {activeGame === 'minesweeper' && <MinesweeperGame addScore={(s) => addScore('minesweeper', s)} currentUser={currentUser}/>}
                         {activeGame === 'sudoku' && <SudokuGame addScore={(s) => addScore('sudoku', s)} currentUser={currentUser}/>}
                         {activeGame === 'memory' && <MemoryGame addScore={(s) => addScore('memory', s)} currentUser={currentUser}/>}
-                        {activeGame === 'wordle' && <WordleGame addScore={(s) => addScore('wordle', s)} currentUser={currentUser}/>}
+
                         {activeGame === 'typing' && <TypingGame addScore={(s) => addScore('typing', s)} currentUser={currentUser}/>}
-                        {activeGame === 'reaction' && <ReactionGame addScore={(s) => addScore('reaction', s)} currentUser={currentUser}/>}
-                        {activeGame === 'simon' && <SimonGame addScore={(s) => addScore('simon', s)} currentUser={currentUser}/>}
-                        {activeGame === 'whackamole' && <WhackAMoleGame addScore={(s) => addScore('whackamole', s)} currentUser={currentUser}/>}
+
                         {activeGame === 'beerpong' && <BeerPongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('beerpong', s)} toast={toast}/>}
                         {activeGame === 'pong' && <PongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('pong', s)}/>}
                         {activeGame === 'tanks' && <TanksGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('tanks', s)}/>}
@@ -5485,8 +5483,7 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
                         {activeGame === 'battleship' && <BattleshipGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('battleship', s)}/>}
                         {activeGame === 'chess' && <ChessGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('chess', s)}/>}
                         {activeGame === 'checkers' && <CheckersGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('checkers', s)}/>}
-                        {activeGame === 'wordchain' && <WordChainGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('wordchain', s)}/>}
-                        {activeGame === 'trivia' && <TriviaGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('trivia', s)}/>}
+
                         {activeGame === 'typerace' && <TypeRaceGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('typerace', s)}/>}
                     </div>
                     
@@ -6062,6 +6059,449 @@ function BreakoutGame({ addScore }) {
     );
 }
 
+
+function BallzGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const W = 560, H = 700;
+    const COLS = 8, CELL = W / COLS;
+    const ROWS = 9; // visible rows before game over line
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
+
+    const init = () => {
+        stateRef.current = {
+            phase: 'aiming', // aiming, shooting, collecting, over
+            bricks: [],  // {col, row, hp, maxHp, color}
+            pickups: [],  // {col, row, type:'ball'|'split'}
+            balls: [],
+            totalBalls: 1,
+            launchX: W / 2,
+            aimAngle: 0,
+            score: 0,
+            turn: 1,
+            ballsReturned: 0,
+            nextLaunchX: W / 2,
+            firstBallLanded: false,
+            particles: [],
+            shootTimer: 0,
+            ballIndex: 0,
+        };
+        spawnRow(stateRef.current);
+        forceUpdate(n => n + 1);
+    };
+
+    const spawnRow = (s) => {
+        const turn = s.turn;
+        const baseHp = turn;
+        // Generate a random row pattern with gaps
+        const filled = [];
+        for (let c = 0; c < COLS; c++) {
+            const rand = Math.random();
+            if (rand < 0.45) {
+                const hp = baseHp + Math.floor(Math.random() * Math.ceil(turn * 0.5));
+                const colors = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6','#ec4899','#06b6d4'];
+                filled.push({ col: c, row: 0, hp, maxHp: hp, color: colors[Math.floor(Math.random() * colors.length)] });
+            } else if (rand < 0.55) {
+                // Ball pickup
+                s.pickups.push({ col: c, row: 0, type: 'ball' });
+            }
+        }
+        // Ensure at least 2 bricks per row
+        while (filled.length < 2) {
+            const c = Math.floor(Math.random() * COLS);
+            if (!filled.find(b => b.col === c) && !s.pickups.find(p => p.col === c && p.row === 0)) {
+                const hp = baseHp;
+                const colors = ['#ef4444','#f97316','#eab308','#22c55e','#3b82f6','#8b5cf6'];
+                filled.push({ col: c, row: 0, hp, maxHp: hp, color: colors[Math.floor(Math.random() * colors.length)] });
+            }
+        }
+        // Add walls/barriers occasionally (every 3rd turn+)
+        if (turn >= 3 && Math.random() < 0.3) {
+            const wallCol = Math.floor(Math.random() * COLS);
+            if (!filled.find(b => b.col === wallCol)) {
+                filled.push({ col: wallCol, row: 0, hp: -1, maxHp: -1, color: '#64748b', isWall: true }); // wall = indestructible
+            }
+        }
+        s.bricks.push(...filled);
+    };
+
+    const pushDown = (s) => {
+        s.bricks.forEach(b => b.row++);
+        s.pickups.forEach(p => p.row++);
+        // Remove pickups that fell off
+        s.pickups = s.pickups.filter(p => p.row < ROWS + 1);
+        // Check game over
+        if (s.bricks.some(b => b.row >= ROWS)) {
+            s.phase = 'over';
+            addScore(s.score);
+        }
+    };
+
+    const shoot = (angle) => {
+        const s = stateRef.current;
+        if (s.phase !== 'aiming') return;
+        s.aimAngle = angle;
+        s.phase = 'shooting';
+        s.ballIndex = 0;
+        s.shootTimer = 0;
+        s.ballsReturned = 0;
+        s.firstBallLanded = false;
+        s.nextLaunchX = s.launchX;
+        s.balls = [];
+    };
+
+    const loop = () => {
+        const s = stateRef.current;
+        if (!s) { animRef.current = requestAnimationFrame(loop); draw(); return; }
+
+        if (s.phase === 'shooting') {
+            // Launch balls one by one
+            s.shootTimer++;
+            if (s.shootTimer % 4 === 0 && s.ballIndex < s.totalBalls) {
+                const speed = 12;
+                s.balls.push({
+                    x: s.launchX,
+                    y: H - 30,
+                    vx: Math.cos(s.aimAngle) * speed,
+                    vy: Math.sin(s.aimAngle) * speed,
+                    active: true
+                });
+                s.ballIndex++;
+            }
+
+            // Move balls
+            s.balls.forEach(ball => {
+                if (!ball.active) return;
+                ball.x += ball.vx;
+                ball.y += ball.vy;
+
+                // Wall bounces
+                if (ball.x <= 6) { ball.x = 6; ball.vx = Math.abs(ball.vx); }
+                if (ball.x >= W - 6) { ball.x = W - 6; ball.vx = -Math.abs(ball.vx); }
+                if (ball.y <= 6) { ball.y = 6; ball.vy = Math.abs(ball.vy); }
+
+                // Brick collisions
+                for (let i = s.bricks.length - 1; i >= 0; i--) {
+                    const b = s.bricks[i];
+                    const bx = b.col * CELL, by = b.row * CELL + 30;
+                    const bw = CELL - 2, bh = CELL - 2;
+                    // AABB collision
+                    if (ball.x >= bx && ball.x <= bx + bw && ball.y >= by && ball.y <= by + bh) {
+                        if (!b.isWall) {
+                            b.hp--;
+                            if (b.hp <= 0) {
+                                // Destroy
+                                s.score += 10;
+                                for (let p = 0; p < 6; p++) {
+                                    s.particles.push({
+                                        x: bx + bw/2, y: by + bh/2,
+                                        vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6,
+                                        life: 18, color: b.color
+                                    });
+                                }
+                                s.bricks.splice(i, 1);
+                            }
+                        }
+                        // Bounce
+                        const cx = bx + bw/2, cy = by + bh/2;
+                        const dx = ball.x - cx, dy = ball.y - cy;
+                        if (Math.abs(dx / bw) > Math.abs(dy / bh)) ball.vx = dx > 0 ? Math.abs(ball.vx) : -Math.abs(ball.vx);
+                        else ball.vy = dy > 0 ? Math.abs(ball.vy) : -Math.abs(ball.vy);
+                        break; // one collision per frame per ball
+                    }
+                }
+
+                // Pickup collisions
+                for (let i = s.pickups.length - 1; i >= 0; i--) {
+                    const p = s.pickups[i];
+                    const px = p.col * CELL + CELL/2, py = p.row * CELL + 30 + CELL/2;
+                    if (Math.hypot(ball.x - px, ball.y - py) < CELL * 0.4) {
+                        if (p.type === 'ball') {
+                            s.totalBalls++;
+                            for (let j = 0; j < 8; j++) s.particles.push({ x: px, y: py, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, life: 15, color: '#4ade80' });
+                        }
+                        s.pickups.splice(i, 1);
+                    }
+                }
+
+                // Ball hits bottom
+                if (ball.y >= H - 30) {
+                    ball.active = false;
+                    ball.y = H - 30;
+                    s.ballsReturned++;
+                    if (!s.firstBallLanded) {
+                        s.firstBallLanded = true;
+                        s.nextLaunchX = ball.x;
+                    }
+                }
+            });
+
+            // All balls done?
+            if (s.ballIndex >= s.totalBalls && s.balls.every(b => !b.active)) {
+                s.phase = 'collecting';
+                s.launchX = Math.max(20, Math.min(W - 20, s.nextLaunchX));
+                s.turn++;
+                pushDown(s);
+                if (s.phase !== 'over') {
+                    spawnRow(s);
+                    setTimeout(() => {
+                        if (stateRef.current && stateRef.current.phase === 'collecting') {
+                            stateRef.current.phase = 'aiming';
+                            stateRef.current.balls = [];
+                            forceUpdate(n => n + 1);
+                        }
+                    }, 400);
+                }
+                forceUpdate(n => n + 1);
+            }
+        }
+
+        // Particles
+        if (s.particles) {
+            s.particles = s.particles.filter(p => {
+                p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--;
+                return p.life > 0;
+            });
+        }
+
+        draw();
+        animRef.current = requestAnimationFrame(loop);
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d');
+        if (!ctx) return;
+        const s = stateRef.current;
+
+        // Background
+        ctx.fillStyle = '#0a0f1e';
+        ctx.fillRect(0, 0, W, H);
+
+        // Grid lines
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)';
+        ctx.lineWidth = 0.5;
+        for (let c = 0; c <= COLS; c++) { ctx.beginPath(); ctx.moveTo(c * CELL, 30); ctx.lineTo(c * CELL, H - 20); ctx.stroke(); }
+        for (let r = 0; r <= ROWS; r++) { ctx.beginPath(); ctx.moveTo(0, r * CELL + 30); ctx.lineTo(W, r * CELL + 30); ctx.stroke(); }
+
+        // Game over line
+        ctx.strokeStyle = 'rgba(239,68,68,0.25)';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath(); ctx.moveTo(0, ROWS * CELL + 30); ctx.lineTo(W, ROWS * CELL + 30); ctx.stroke();
+        ctx.setLineDash([]);
+
+        if (!s) {
+            // Idle screen
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('⚪ Ballz', W/2, H/2 - 60);
+            ctx.font = '16px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Aim and shoot balls at numbered bricks', W/2, H/2 - 20);
+            ctx.fillText('Collect green circles for +1 ball', W/2, H/2 + 10);
+            ctx.fillText('Clear bricks before they reach the bottom!', W/2, H/2 + 40);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('Click to start', W/2, H/2 + 80);
+            return;
+        }
+
+        // Draw bricks
+        s.bricks.forEach(b => {
+            const bx = b.col * CELL + 1, by = b.row * CELL + 31;
+            const bw = CELL - 2, bh = CELL - 2;
+            if (b.isWall) {
+                ctx.fillStyle = '#334155';
+                ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
+                ctx.strokeStyle = '#475569'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.stroke();
+                // cross pattern
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.moveTo(bx + 8, by + 8); ctx.lineTo(bx + bw - 8, by + bh - 8); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(bx + bw - 8, by + 8); ctx.lineTo(bx + 8, by + bh - 8); ctx.stroke();
+                return;
+            }
+            // Brick color based on remaining HP
+            const hpRatio = b.hp / b.maxHp;
+            ctx.fillStyle = b.color;
+            ctx.globalAlpha = 0.3 + hpRatio * 0.7;
+            ctx.shadowColor = b.color;
+            ctx.shadowBlur = hpRatio > 0.5 ? 4 : 0;
+            ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.globalAlpha = 1;
+            // Border
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.roundRect(bx, by, bw, bh, 6); ctx.stroke();
+            // HP number
+            ctx.fillStyle = '#fff';
+            ctx.font = `bold ${b.hp >= 100 ? 13 : b.hp >= 10 ? 16 : 18}px sans-serif`;
+            ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(b.hp, bx + bw/2, by + bh/2);
+        });
+        ctx.textBaseline = 'alphabetic';
+
+        // Draw pickups
+        s.pickups.forEach(p => {
+            const px = p.col * CELL + CELL/2, py = p.row * CELL + 30 + CELL/2;
+            if (p.type === 'ball') {
+                ctx.fillStyle = '#4ade80';
+                ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 8;
+                ctx.beginPath(); ctx.arc(px, py, 10, 0, Math.PI * 2); ctx.fill();
+                ctx.shadowBlur = 0;
+                ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('+1', px, py + 4);
+            }
+        });
+
+        // Draw balls
+        s.balls.forEach(ball => {
+            if (!ball.active && s.phase === 'shooting') {
+                // Landed ball
+                ctx.fillStyle = 'rgba(255,255,255,0.3)';
+                ctx.beginPath(); ctx.arc(ball.x, ball.y, 5, 0, Math.PI * 2); ctx.fill();
+                return;
+            }
+            if (!ball.active) return;
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#fff'; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        // Aim indicator
+        if (s.phase === 'aiming') {
+            // Launch position marker
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(s.launchX, H - 30, 7, 0, Math.PI * 2); ctx.fill();
+
+            // If hovering, show dotted aim line
+            if (s.aimAngle !== 0) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.4)';
+                ctx.lineWidth = 1.5;
+                ctx.setLineDash([4, 6]);
+                ctx.beginPath();
+                ctx.moveTo(s.launchX, H - 30);
+                let px = s.launchX, py = H - 30;
+                const speed = 12;
+                let vx = Math.cos(s.aimAngle) * speed;
+                let vy = Math.sin(s.aimAngle) * speed;
+                for (let i = 0; i < 30; i++) {
+                    px += vx; py += vy;
+                    if (px <= 0 || px >= W) vx *= -1;
+                    if (py <= 0) vy *= -1;
+                    ctx.lineTo(Math.max(0, Math.min(W, px)), Math.max(0, py));
+                    if (py <= 40) break;
+                }
+                ctx.stroke();
+                ctx.setLineDash([]);
+            }
+
+            // Ball count
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`×${s.totalBalls}`, s.launchX, H - 10);
+        }
+
+        // Particles
+        if (s.particles) {
+            s.particles.forEach(p => {
+                ctx.fillStyle = p.color;
+                ctx.globalAlpha = p.life / 18;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+            });
+            ctx.globalAlpha = 1;
+        }
+
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${s.score}`, 12, 22);
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#94a3b8'; ctx.font = '13px sans-serif';
+        ctx.fillText(`Turn ${s.turn}`, W/2, 22);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#4ade80'; ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`⚪ ×${s.totalBalls}`, W - 12, 22);
+
+        // Shooting status
+        if (s.phase === 'shooting') {
+            const remaining = s.totalBalls - s.ballsReturned;
+            ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`${remaining} ball${remaining !== 1 ? 's' : ''} in play`, W/2, H - 6);
+        }
+
+        // Game over overlay
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.75)';
+            ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', W/2, H/2 - 40);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 24px sans-serif';
+            ctx.fillText(`Score: ${s.score}`, W/2, H/2 + 5);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif';
+            ctx.fillText(`Turn ${s.turn} • ${s.totalBalls} balls`, W/2, H/2 + 35);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('Click to play again', W/2, H/2 + 70);
+        }
+    };
+
+    // Mouse/touch handling
+    const handleClick = (e) => {
+        const s = stateRef.current;
+        if (!s) { init(); return; }
+        if (s.phase === 'over') { init(); return; }
+    };
+
+    const handleMouseMove = (e) => {
+        const s = stateRef.current;
+        if (!s || s.phase !== 'aiming') return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const mx = e.clientX - rect.left;
+        const my = e.clientY - rect.top;
+        const dx = mx - s.launchX;
+        const dy = my - (H - 30);
+        // Only allow upward angles
+        if (dy < -10) {
+            s.aimAngle = Math.atan2(dy, dx);
+            // Clamp to not shoot too horizontally
+            if (s.aimAngle > -0.15) s.aimAngle = -0.15;
+            if (s.aimAngle < -Math.PI + 0.15) s.aimAngle = -Math.PI + 0.15;
+        }
+    };
+
+    const handleMouseDown = (e) => {
+        const s = stateRef.current;
+        if (!s) { init(); return; }
+        if (s.phase === 'over') { init(); return; }
+        if (s.phase === 'aiming' && s.aimAngle !== 0) {
+            shoot(s.aimAngle);
+        }
+    };
+
+    useEffect(() => {
+        animRef.current = requestAnimationFrame(loop);
+        return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+    }, []);
+
+    useEffect(() => { draw(); }, []);
+
+    return (
+        <div>
+            <canvas ref={canvasRef} width={W} height={H}
+                onClick={handleClick}
+                onMouseMove={handleMouseMove}
+                onMouseDown={handleMouseDown}
+                style={{borderRadius:'10px',cursor:'crosshair',border:'2px solid var(--border)',display:'block',background:'#0a0f1e'}}/>
+            <div style={{marginTop:'8px',fontSize:'12px',color:'var(--text-muted)',textAlign:'center'}}>
+                {!stateRef.current ? 'Click to start' :
+                 stateRef.current.phase === 'aiming' ? 'Aim with mouse, click to shoot' :
+                 stateRef.current.phase === 'shooting' ? 'Balls bouncing...' :
+                 stateRef.current.phase === 'over' ? 'Click to play again' : 'Next turn...'}
+            </div>
+        </div>
+    );
+}
+
+
 // SPACE INVADERS - Progressive waves, power-ups, bigger screen
 function SpaceInvadersGame({ addScore }) {
     const canvasRef = useRef(null);
@@ -6542,62 +6982,6 @@ function FlappyBirdGame({ addScore }) {
 }
 
 // 2048 - Bigger tiles
-function Game2048({ addScore }) {
-    const [board, setBoard] = useState(Array(16).fill(0));
-    const [score, setScore] = useState(0);
-    const [gameOver, setGameOver] = useState(false);
-    const [best, setBest] = useState(0);
-    
-    const init = () => { const b = Array(16).fill(0); addTile(b); addTile(b); setBoard(b); setScore(0); setGameOver(false); };
-    const addTile = (b) => { const empty = b.map((v,i) => v === 0 ? i : -1).filter(i => i >= 0); if (empty.length) b[empty[Math.floor(Math.random()*empty.length)]] = Math.random() < 0.9 ? 2 : 4; };
-    
-    const move = (dir) => {
-        if (gameOver) return;
-        let b = [...board], moved = false, pts = 0;
-        const slide = (arr) => { let a = arr.filter(x => x), n = []; for (let i = 0; i < a.length; i++) { if (a[i] === a[i+1]) { n.push(a[i]*2); pts += a[i]*2; i++; } else n.push(a[i]); } while (n.length < 4) n.push(0); return n; };
-        const getRow = (r) => [b[r*4],b[r*4+1],b[r*4+2],b[r*4+3]];
-        const setRow = (r, arr) => { for (let i = 0; i < 4; i++) b[r*4+i] = arr[i]; };
-        const getCol = (c) => [b[c],b[c+4],b[c+8],b[c+12]];
-        const setCol = (c, arr) => { for (let i = 0; i < 4; i++) b[c+i*4] = arr[i]; };
-        for (let i = 0; i < 4; i++) {
-            let line, newLine;
-            if (dir === 'left') { line = getRow(i); newLine = slide(line); setRow(i, newLine); }
-            else if (dir === 'right') { line = getRow(i).reverse(); newLine = slide(line).reverse(); setRow(i, newLine); }
-            else if (dir === 'up') { line = getCol(i); newLine = slide(line); setCol(i, newLine); }
-            else if (dir === 'down') { line = getCol(i).reverse(); newLine = slide(line).reverse(); setCol(i, newLine); }
-            if (JSON.stringify(line) !== JSON.stringify(newLine)) moved = true;
-        }
-        if (moved) { addTile(b); setBoard(b); setScore(s => { const ns = s + pts; setBest(prev => Math.max(prev, ns)); return ns; }); }
-        const canMove = b.some((v,i) => v === 0 || (i % 4 < 3 && v === b[i+1]) || (i < 12 && v === b[i+4]));
-        if (!canMove) { setGameOver(true); addScore(score + pts); }
-    };
-    
-    useEffect(() => { init(); }, []);
-    useEffect(() => {
-        const handleKey = (e) => { if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) { e.preventDefault(); if (e.key === 'ArrowLeft') move('left'); else if (e.key === 'ArrowRight') move('right'); else if (e.key === 'ArrowUp') move('up'); else if (e.key === 'ArrowDown') move('down'); } };
-        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
-    });
-    
-    const colors = {0:'#cdc1b4',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e',4096:'#3c3a32',8192:'#3c3a32'};
-    
-    return (
-        <div>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
-                <div style={{display:'flex',gap:'24px'}}>
-                    <div><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>SCORE</div><div style={{fontSize:'28px',fontWeight:700}}>{score}</div></div>
-                    <div><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>BEST</div><div style={{fontSize:'28px',fontWeight:700,color:'var(--primary)'}}>{best}</div></div>
-                </div>
-                <button onClick={init} className="btn btn-secondary">New Game</button>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,90px)',gap:'10px',background:'#bbada0',padding:'10px',borderRadius:'10px'}}>
-                {board.map((v, i) => <div key={i} style={{width:'90px',height:'90px',background:colors[v]||'#3c3a32',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:v>999?'22px':v>99?'28px':'36px',fontWeight:700,color:v<=4?'#776e65':'#f9f6f2',transition:'all 0.1s'}}>{v||''}</div>)}
-            </div>
-            {gameOver && <div style={{marginTop:'16px',textAlign:'center',color:'#ff6b6b',fontWeight:700,fontSize:'18px'}}>Game Over! Final: {score}</div>}
-        </div>
-    );
-}
-
-// MINESWEEPER - Bigger
 function MinesweeperGame({ addScore }) {
     const ROWS = 12, COLS = 14, MINES = 25;
     const [board, setBoard] = useState([]);
@@ -6826,46 +7210,6 @@ function MemoryGame({ addScore }) {
     );
 }
 
-function WordleGame({ addScore }) {
-    const words = ['REACT','SNAKE','GAMES','SHIPS','NAVAL','FLEET','TRACK','PARTS','SOLVE','BRICK','POWER','SPACE','LEVEL','SCORE','RADAR'];
-    const [target] = useState(words[Math.floor(Math.random()*words.length)]);
-    const [guesses, setGuesses] = useState([]);
-    const [current, setCurrent] = useState('');
-    const [won, setWon] = useState(false);
-    
-    const submit = () => {
-        if (current.length !== 5) return;
-        const g = [...guesses, current.toUpperCase()];
-        setGuesses(g);
-        if (current.toUpperCase() === target) { setWon(true); addScore((7 - g.length) * 100); }
-        setCurrent('');
-    };
-    
-    useEffect(() => {
-        const handleKey = (e) => {
-            if (won || guesses.length >= 6) return;
-            if (e.key === 'Enter') submit();
-            else if (e.key === 'Backspace') setCurrent(c => c.slice(0,-1));
-            else if (/^[a-zA-Z]$/.test(e.key) && current.length < 5) setCurrent(c => c + e.key.toUpperCase());
-        };
-        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
-    });
-    
-    const getColor = (letter, i) => { if (target[i] === letter) return '#538d4e'; if (target.includes(letter)) return '#b59f3b'; return '#3a3a3c'; };
-    
-    return (
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
-            {[...guesses, ...(guesses.length < 6 && !won ? [current.padEnd(5)] : []),...Array(Math.max(0, 6 - guesses.length - (won ? 0 : 1))).fill('     ')].slice(0,6).map((g, gi) => (
-                <div key={gi} style={{display:'flex',gap:'6px'}}>
-                    {g.split('').map((l, li) => <div key={li} style={{width:'56px',height:'56px',background:gi<guesses.length?getColor(l,li):'var(--bg-input)',border:'2px solid '+(gi<guesses.length?'transparent':'var(--border)'),display:'flex',alignItems:'center',justifyContent:'center',fontSize:'26px',fontWeight:700,color:'#fff',borderRadius:'4px',transition:'all 0.2s'}}>{l !== ' ' ? l : ''}</div>)}
-                </div>
-            ))}
-            {won && <div style={{color:'#4ade80',fontWeight:700,marginTop:'16px',fontSize:'18px'}}>🎉 You got it in {guesses.length}!</div>}
-            {!won && guesses.length >= 6 && <div style={{color:'#ff6b6b',marginTop:'16px',fontSize:'16px'}}>The word was: <strong>{target}</strong></div>}
-        </div>
-    );
-}
-
 function TypingGame({ addScore }) {
     const sentences = ['The quick brown fox jumps over the lazy dog','Ship tracker helps manage fleet operations efficiently','React makes building modern user interfaces easy','Naval operations require constant monitoring and readiness','The best way to predict the future is to create it'];
     const [text] = useState(sentences[Math.floor(Math.random()*sentences.length)]);
@@ -6891,167 +7235,486 @@ function TypingGame({ addScore }) {
     );
 }
 
-function ReactionGame({ addScore }) {
-    const [state, setState] = useState('waiting');
-    const [startTime, setStartTime] = useState(0);
-    const [result, setResult] = useState(0);
-    const [results, setResults] = useState([]);
-    
-    const start = () => { setState('ready'); setTimeout(() => { setStartTime(Date.now()); setState('go'); }, 1000 + Math.random() * 3000); };
-    const click = () => {
-        if (state === 'waiting') start();
-        else if (state === 'ready') { setState('early'); setTimeout(() => setState('waiting'), 1000); }
-        else if (state === 'go') { const ms = Date.now() - startTime; setResult(ms); setResults(r => [...r, ms]); setState('done'); addScore(Math.max(1, 500 - ms)); }
-        else if (state === 'done' || state === 'early') setState('waiting');
-    };
-    
-    const colors = {waiting:'#3b82f6',ready:'#ef4444',go:'#22c55e',early:'#ef4444',done:'#3b82f6'};
-    const text = {waiting:'Click to start',ready:'Wait for green...',go:'CLICK NOW!',early:'Too early! Click to retry',done:`${result}ms`};
-    const avg = results.length ? Math.round(results.reduce((a,b)=>a+b,0)/results.length) : 0;
-    
-    return (
-        <div>
-            <div onClick={click} style={{width:'500px',height:'350px',background:colors[state],borderRadius:'14px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#fff',fontSize:'28px',fontWeight:700,transition:'background 0.15s',userSelect:'none'}}>
-                <div>{text[state]}</div>
-                {state === 'done' && <div style={{fontSize:'14px',fontWeight:400,marginTop:'8px'}}>Click to try again</div>}
-            </div>
-            {results.length > 0 && <div style={{marginTop:'12px',display:'flex',gap:'20px',fontSize:'14px',color:'var(--text-muted)'}}>
-                <span>Best: {Math.min(...results)}ms</span>
-                <span>Average: {avg}ms</span>
-                <span>Attempts: {results.length}</span>
-            </div>}
-        </div>
-    );
-}
-
-function SimonGame({ addScore }) {
-    const [sequence, setSequence] = useState([]);
-    const [playerSeq, setPlayerSeq] = useState([]);
-    const [playing, setPlaying] = useState(false);
-    const [showing, setShowing] = useState(-1);
-    const [best, setBest] = useState(0);
-    const colors = ['#ef4444','#22c55e','#3b82f6','#eab308'];
-    
-    const start = () => { const s = [Math.floor(Math.random()*4)]; setSequence(s); setPlayerSeq([]); showSequence(s); };
-    const showSequence = async (s) => { setPlaying(false); for (let i of s) { setShowing(i); await new Promise(r => setTimeout(r, 500)); setShowing(-1); await new Promise(r => setTimeout(r, 200)); } setPlaying(true); };
-    const press = (i) => {
-        if (!playing) return;
-        const newSeq = [...playerSeq, i];
-        if (sequence[newSeq.length-1] !== i) { const sc = (sequence.length-1)*10; addScore(sc); setBest(b => Math.max(b, sequence.length-1)); setPlaying(false); setSequence([]); setPlayerSeq([]); return; }
-        setPlayerSeq(newSeq);
-        if (newSeq.length === sequence.length) { const next = [...sequence, Math.floor(Math.random()*4)]; setSequence(next); setPlayerSeq([]); setTimeout(() => showSequence(next), 800); }
-    };
-    
-    return (
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px'}}>
-            <div style={{display:'flex',gap:'24px'}}>
-                <div><span style={{color:'var(--text-muted)',fontSize:'12px'}}>ROUND</span><div style={{fontSize:'24px',fontWeight:700}}>{sequence.length ? sequence.length : 0}</div></div>
-                <div><span style={{color:'var(--text-muted)',fontSize:'12px'}}>BEST</span><div style={{fontSize:'24px',fontWeight:700,color:'var(--primary)'}}>{best}</div></div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(2,120px)',gap:'10px'}}>
-                {colors.map((c, i) => <div key={i} onClick={() => press(i)} style={{width:'120px',height:'120px',background:c,opacity:showing===i?1:0.5,borderRadius:'12px',cursor:'pointer',transition:'all 0.15s',transform:showing===i?'scale(1.05)':'scale(1)',boxShadow:showing===i?`0 0 20px ${c}`:'none'}}/>)}
-            </div>
-            {!sequence.length && <button onClick={start} className="btn btn-primary" style={{padding:'12px 32px',fontSize:'14px'}}>Start Game</button>}
-            {!playing && sequence.length > 0 && <div style={{color:'var(--text-muted)',fontSize:'14px'}}>Watch the sequence...</div>}
-        </div>
-    );
-}
-
-function WhackAMoleGame({ addScore }) {
-    const [moles, setMoles] = useState(Array(9).fill(false));
-    const [score, setScore] = useState(0);
-    const [playing, setPlaying] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(30);
-    const [combo, setCombo] = useState(0);
-    
-    const start = () => { setScore(0); setTimeLeft(30); setPlaying(true); setCombo(0); };
-    const whack = (i) => { if (moles[i]) { setCombo(c => c + 1); setScore(s => s + 1 + Math.floor(combo / 3)); const m = [...moles]; m[i] = false; setMoles(m); } else { setCombo(0); } };
-    
-    useEffect(() => {
-        if (!playing) return;
-        const speed = Math.max(400, 800 - score * 10);
-        const moleTimer = setInterval(() => { const m = Array(9).fill(false); const count = Math.min(3, 1 + Math.floor(score / 10)); for (let i = 0; i < count; i++) m[Math.floor(Math.random()*9)] = true; setMoles(m); }, speed);
-        const gameTimer = setInterval(() => setTimeLeft(t => { if (t <= 1) { setPlaying(false); addScore(score); return 0; } return t - 1; }), 1000);
-        return () => { clearInterval(moleTimer); clearInterval(gameTimer); };
-    }, [playing, score, combo]);
-    
-    return (
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px'}}>
-            <div style={{display:'flex',gap:'32px',fontSize:'16px'}}>
-                <div><span style={{color:'var(--text-muted)',fontSize:'11px'}}>SCORE</span><div style={{fontSize:'28px',fontWeight:700}}>{score}</div></div>
-                <div><span style={{color:'var(--text-muted)',fontSize:'11px'}}>TIME</span><div style={{fontSize:'28px',fontWeight:700,color:timeLeft<=5?'var(--red)':'var(--text)'}}>{timeLeft}s</div></div>
-                {combo >= 3 && <div><span style={{color:'var(--amber)',fontSize:'11px'}}>COMBO</span><div style={{fontSize:'28px',fontWeight:700,color:'var(--amber)'}}>{combo}x</div></div>}
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,100px)',gap:'12px'}}>
-                {moles.map((up, i) => <div key={i} onClick={() => whack(i)} style={{width:'100px',height:'100px',background:'#92400e',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'50px',cursor:'pointer',transition:'all 0.1s',boxShadow:'inset 0 -4px 8px rgba(0,0,0,0.3)',transform:up?'scale(1.1)':'scale(1)'}}>{up ? '🐹' : ''}</div>)}
-            </div>
-            {!playing && <button onClick={start} className="btn btn-primary" style={{padding:'12px 32px',fontSize:'14px'}}>{timeLeft === 0 ? `Play Again (Score: ${score})` : 'Start Game'}</button>}
-        </div>
-    );
-}
-
-// ==================== MULTIPLAYER GAMES ====================
-
-// BEER PONG - same as before
 function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
     const canvasRef = useRef(null);
-    const [power, setPower] = useState(0);
-    const [angle, setAngle] = useState(45);
-    const [dragging, setDragging] = useState(false);
-    const [dragStart, setDragStart] = useState(null);
-    const [ball, setBall] = useState(null);
-    const [cups, setCups] = useState([1,1,1,1,1,1,1,1,1,1]);
-    const [scores, setScores] = useState([0, 0]);
-    const W = 500, H = 600;
-    
-    useEffect(() => { draw(); }, [cups, ball, power, angle, dragging]);
-    
+    const W = 550, H = 700;
+    const stateRef = useRef({
+        phase: 'idle', // idle, aiming, flying, aiTurn, over
+        turn: 1, // 1 = player, 2 = AI
+        ball: null,
+        aimAngle: 0,
+        aimPower: 50,
+        powerDir: 1,
+        cupPositionsP1: [], // player's cups (bottom) — AI aims at these
+        cupPositionsP2: [], // AI's cups (top) — player aims at these
+        cupsP1: [1,1,1,1,1,1,1,1,1,1],
+        cupsP2: [1,1,1,1,1,1,1,1,1,1],
+        scoreP1: 0,
+        scoreP2: 0,
+        particles: [],
+        message: '',
+        messageTimer: 0,
+        throwsP1: 0,
+        throwsP2: 0,
+    });
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
+
+    // Cup triangle positions (centered)
+    const makeCups = (cx, baseY, dir) => {
+        // dir=1 means triangle points up (top of table), dir=-1 means points down
+        const rows = [[0],[- 1, 1],[-2, 0, 2],[-3, -1, 1, 3]];
+        const positions = [];
+        rows.forEach((row, ri) => {
+            row.forEach(offset => {
+                positions.push([cx + offset * 22, baseY + ri * 38 * dir]);
+            });
+        });
+        return positions;
+    };
+
+    const initGame = () => {
+        const s = stateRef.current;
+        s.cupPositionsP2 = makeCups(W / 2, 110, 1);  // AI cups at top
+        s.cupPositionsP1 = makeCups(W / 2, H - 110, -1); // Player cups at bottom
+        s.cupsP1 = [1,1,1,1,1,1,1,1,1,1];
+        s.cupsP2 = [1,1,1,1,1,1,1,1,1,1];
+        s.scoreP1 = 0; s.scoreP2 = 0;
+        s.throwsP1 = 0; s.throwsP2 = 0;
+        s.ball = null;
+        s.aimAngle = 0; s.aimPower = 50; s.powerDir = 1;
+        s.turn = 1;
+        s.phase = 'aiming';
+        s.particles = [];
+        s.message = 'Your turn! Click to set angle, click again to set power';
+        s.messageTimer = 180;
+        forceUpdate(n => n + 1);
+    };
+
+    // Main game loop
+    const loop = () => {
+        const s = stateRef.current;
+        if (s.phase === 'idle') { draw(); animRef.current = requestAnimationFrame(loop); return; }
+
+        // Animate aim
+        if (s.phase === 'aiming' && s.turn === 1) {
+            s.aimAngle += 0.8;
+            if (s.aimAngle > 40) s.aimAngle = 40;
+            if (s.aimAngle < -40) s.aimAngle = -40;
+        }
+
+        // Power bar oscillates
+        if (s.phase === 'setPower') {
+            s.aimPower += s.powerDir * 1.8;
+            if (s.aimPower >= 100) { s.aimPower = 100; s.powerDir = -1; }
+            if (s.aimPower <= 15) { s.aimPower = 15; s.powerDir = 1; }
+        }
+
+        // AI turn - auto aim and throw
+        if (s.phase === 'aiTurn') {
+            s.aimPower += s.powerDir * 1.2;
+            if (s.aimPower >= 80) s.powerDir = -1;
+            if (s.aimPower <= 30) s.powerDir = 1;
+            // AI decides when to throw (after oscillating a bit)
+            if (!s.aiThrowTimer) s.aiThrowTimer = 40 + Math.floor(Math.random() * 60);
+            s.aiThrowTimer--;
+            if (s.aiThrowTimer <= 0) {
+                s.aiThrowTimer = null;
+                // AI picks a target cup
+                const aliveCups = s.cupsP1.map((c, i) => c ? i : -1).filter(i => i >= 0);
+                if (aliveCups.length > 0) {
+                    const targetIdx = aliveCups[Math.floor(Math.random() * aliveCups.length)];
+                    const target = s.cupPositionsP1[targetIdx];
+                    // Throw from top toward bottom
+                    const startX = W / 2 + (Math.random() - 0.5) * 40;
+                    const startY = 60;
+                    const dx = target[0] - startX;
+                    const dy = target[1] - startY;
+                    const dist = Math.hypot(dx, dy);
+                    const speed = 5 + Math.random() * 2;
+                    // Add some inaccuracy
+                    const inaccuracy = (Math.random() - 0.5) * 40;
+                    s.ball = {
+                        x: startX, y: startY,
+                        vx: (dx + inaccuracy) / dist * speed * 0.6,
+                        vy: Math.abs(dy) / dist * speed * 0.5,
+                        gravity: 0.08,
+                        size: 1,
+                        trail: []
+                    };
+                    s.phase = 'flying';
+                }
+            }
+        }
+
+        // Ball physics
+        if (s.phase === 'flying' && s.ball) {
+            const b = s.ball;
+            b.trail.push({ x: b.x, y: b.y }); if (b.trail.length > 12) b.trail.shift();
+            b.x += b.vx;
+            b.y += b.vy;
+            b.vy += b.gravity;
+            // Shrink ball as it "arcs" (perspective)
+            const midY = H / 2;
+            b.size = 1 - Math.abs(b.y - midY) / H * 0.4;
+
+            // Check cup collisions
+            const targetCups = s.turn === 1 ? s.cupsP2 : s.cupsP1;
+            const targetPositions = s.turn === 1 ? s.cupPositionsP2 : s.cupPositionsP1;
+            let hit = false;
+            targetPositions.forEach((pos, i) => {
+                if (targetCups[i] && Math.hypot(b.x - pos[0], b.y - pos[1]) < 26) {
+                    targetCups[i] = 0;
+                    hit = true;
+                    if (s.turn === 1) s.scoreP1++;
+                    else s.scoreP2++;
+                    // Splash particles
+                    for (let j = 0; j < 15; j++) {
+                        s.particles.push({
+                            x: pos[0], y: pos[1],
+                            vx: (Math.random() - 0.5) * 8,
+                            vy: (Math.random() - 0.5) * 8,
+                            life: 25,
+                            color: '#fbbf24'
+                        });
+                    }
+                    s.message = s.turn === 1 ? '🎯 You sunk a cup!' : '😬 AI sunk your cup!';
+                    s.messageTimer = 90;
+                }
+            });
+
+            // Ball out of bounds or hit
+            if (hit || b.y > H + 20 || b.y < -20 || b.x < -20 || b.x > W + 20) {
+                if (!hit) {
+                    s.message = s.turn === 1 ? 'Miss!' : 'AI missed!';
+                    s.messageTimer = 60;
+                }
+                s.ball = null;
+                if (s.turn === 1) s.throwsP1++;
+                else s.throwsP2++;
+
+                // Check win
+                if (s.cupsP2.every(c => !c)) {
+                    s.phase = 'over'; s.message = '🎉 YOU WIN!'; s.messageTimer = 999;
+                    forceUpdate(n => n + 1);
+                } else if (s.cupsP1.every(c => !c)) {
+                    s.phase = 'over'; s.message = '😢 AI WINS!'; s.messageTimer = 999;
+                    forceUpdate(n => n + 1);
+                } else {
+                    // Switch turns
+                    s.turn = s.turn === 1 ? 2 : 1;
+                    s.aimAngle = 0; s.aimPower = 50; s.powerDir = 1;
+                    setTimeout(() => {
+                        if (s.phase === 'over') return;
+                        if (s.turn === 1) {
+                            s.phase = 'aiming';
+                            s.message = 'Your turn! Click to set angle';
+                            s.messageTimer = 120;
+                        } else {
+                            s.phase = 'aiTurn';
+                            s.message = 'AI is aiming...';
+                            s.messageTimer = 120;
+                        }
+                        forceUpdate(n => n + 1);
+                    }, 600);
+                    s.phase = 'waiting';
+                }
+            }
+        }
+
+        // Particles
+        s.particles = s.particles.filter(p => {
+            p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--;
+            return p.life > 0;
+        });
+
+        if (s.messageTimer > 0) s.messageTimer--;
+
+        draw();
+        animRef.current = requestAnimationFrame(loop);
+    };
+
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#1a472a'; ctx.fillRect(0, 0, W, H);
-        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(10, 10, W-20, H-20);
-        ctx.beginPath(); ctx.moveTo(10, H/2); ctx.lineTo(W-10, H/2); ctx.stroke();
-        const cupPositions = [[W/2,100],[W/2-35,145],[W/2+35,145],[W/2-70,190],[W/2,190],[W/2+70,190],[W/2-105,235],[W/2-35,235],[W/2+35,235],[W/2+105,235]];
-        cupPositions.forEach((pos, i) => {
-            if (cups[i]) { ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 24, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 15, 0, Math.PI*2); ctx.fill(); }
-        });
-        if (!ball) {
-            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(W/2, H-60, 12, 0, Math.PI*2); ctx.fill();
-            if (dragging) { ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.moveTo(W/2, H-60); const rad = (90 - angle) * Math.PI / 180; ctx.lineTo(W/2 + Math.cos(rad) * power * 2, H-60 - Math.sin(rad) * power * 2); ctx.stroke(); ctx.setLineDash([]); }
-        } else { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 12, 0, Math.PI*2); ctx.fill(); }
-        ctx.fillStyle = '#333'; ctx.fillRect(20, H-35, 120, 18); ctx.fillStyle = power > 70 ? '#ef4444' : power > 40 ? '#eab308' : '#22c55e'; ctx.fillRect(20, H-35, power * 1.2, 18);
-    };
-    
-    const handleMouseDown = (e) => { if (ball) return; const rect = canvasRef.current.getBoundingClientRect(); setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top }); setDragging(true); };
-    const handleMouseMove = (e) => { if (!dragging || !dragStart) return; const rect = canvasRef.current.getBoundingClientRect(); const x = e.clientX - rect.left, y = e.clientY - rect.top; const dx = dragStart.x - x, dy = dragStart.y - y; setPower(Math.min(100, Math.hypot(dx, dy))); setAngle(Math.max(20, Math.min(80, Math.atan2(dy, dx) * 180 / Math.PI))); };
-    const handleMouseUp = () => { if (!dragging) return; setDragging(false); if (power > 10) { const rad = (90 - angle) * Math.PI / 180; setBall({ x: W/2, y: H-60, vx: Math.cos(rad) * power * 0.08, vy: -Math.sin(rad) * power * 0.12 }); } };
-    
-    useEffect(() => {
-        if (!ball) return;
-        const interval = setInterval(() => {
-            setBall(b => {
-                if (!b) return null;
-                const newB = { ...b, x: b.x + b.vx, y: b.y + b.vy, vy: b.vy + 0.3 };
-                const cupPositions = [[W/2,100],[W/2-35,145],[W/2+35,145],[W/2-70,190],[W/2,190],[W/2+70,190],[W/2-105,235],[W/2-35,235],[W/2+35,235],[W/2+105,235]];
-                cupPositions.forEach((pos, i) => { if (cups[i] && Math.hypot(newB.x - pos[0], newB.y - pos[1]) < 28) { setCups(c => { const nc = [...c]; nc[i] = 0; return nc; }); setScores(s => [s[0] + 1, s[1]]); toast('🎯 Cup hit!', 'success'); } });
-                if (newB.y > H || newB.x < 0 || newB.x > W || newB.y < 0) { setPower(0); return null; }
-                return newB;
+        const s = stateRef.current;
+
+        // Table
+        const tableGrad = ctx.createLinearGradient(0, 0, 0, H);
+        tableGrad.addColorStop(0, '#14532d');
+        tableGrad.addColorStop(0.5, '#166534');
+        tableGrad.addColorStop(1, '#14532d');
+        ctx.fillStyle = tableGrad; ctx.fillRect(0, 0, W, H);
+
+        // Table border
+        ctx.strokeStyle = '#854d0e'; ctx.lineWidth = 8;
+        ctx.beginPath(); ctx.roundRect(4, 4, W - 8, H - 8, 8); ctx.stroke();
+
+        // Center line
+        ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 2;
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath(); ctx.moveTo(30, H / 2); ctx.lineTo(W - 30, H / 2); ctx.stroke();
+        ctx.setLineDash([]);
+
+        // Triangle outlines
+        ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
+        // Top triangle
+        ctx.beginPath(); ctx.moveTo(W/2, 100); ctx.lineTo(W/2 - 80, 260); ctx.lineTo(W/2 + 80, 260); ctx.closePath(); ctx.stroke();
+        // Bottom triangle
+        ctx.beginPath(); ctx.moveTo(W/2, H - 100); ctx.lineTo(W/2 - 80, H - 260); ctx.lineTo(W/2 + 80, H - 260); ctx.closePath(); ctx.stroke();
+
+        // Draw cups helper
+        const drawCup = (x, y, alive, isPlayer) => {
+            if (!alive) {
+                // Empty ring
+                ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = 1;
+                ctx.beginPath(); ctx.arc(x, y, 18, 0, Math.PI * 2); ctx.stroke();
+                return;
+            }
+            // Cup outer
+            ctx.fillStyle = '#dc2626';
+            ctx.shadowColor = 'rgba(220,38,38,0.4)'; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.arc(x, y, 20, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // Cup inner (liquid)
+            ctx.fillStyle = '#fbbf24';
+            ctx.beginPath(); ctx.arc(x, y, 13, 0, Math.PI * 2); ctx.fill();
+            // Highlight
+            ctx.fillStyle = 'rgba(255,255,255,0.2)';
+            ctx.beginPath(); ctx.arc(x - 5, y - 5, 6, 0, Math.PI * 2); ctx.fill();
+        };
+
+        // AI cups (top)
+        s.cupPositionsP2.forEach((pos, i) => drawCup(pos[0], pos[1], s.cupsP2[i], false));
+        // Player cups (bottom)
+        s.cupPositionsP1.forEach((pos, i) => drawCup(pos[0], pos[1], s.cupsP1[i], true));
+
+        // Labels
+        ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        ctx.fillText('AI CUPS', W / 2, 65);
+        ctx.fillText('YOUR CUPS', W / 2, H - 55);
+
+        // Aim indicator when aiming
+        if (s.phase === 'aiming' && s.turn === 1) {
+            const startX = W / 2;
+            const startY = H - 50;
+            // Swinging aim line
+            const t = Date.now() * 0.002;
+            const swing = Math.sin(t) * 35;
+            const aimRad = (swing) * Math.PI / 180;
+            const lineLen = 120;
+            const endX = startX + Math.sin(aimRad) * lineLen;
+            const endY = startY - Math.cos(aimRad) * lineLen;
+
+            ctx.strokeStyle = 'rgba(255,255,255,0.6)'; ctx.lineWidth = 2;
+            ctx.setLineDash([6, 4]);
+            ctx.beginPath(); ctx.moveTo(startX, startY); ctx.lineTo(endX, endY); ctx.stroke();
+            ctx.setLineDash([]);
+
+            // Crosshair at end
+            ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(endX, endY, 8, 0, Math.PI * 2); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(endX - 12, endY); ctx.lineTo(endX + 12, endY); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(endX, endY - 12); ctx.lineTo(endX, endY + 12); ctx.stroke();
+
+            // Ball at start
+            ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.arc(startX, startY, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        }
+
+        // Power bar
+        if (s.phase === 'setPower') {
+            const barW = 200, barH = 20;
+            const bx = W / 2 - barW / 2, by = H - 38;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.beginPath(); ctx.roundRect(bx - 2, by - 2, barW + 4, barH + 4, 6); ctx.fill();
+            ctx.fillStyle = '#333';
+            ctx.beginPath(); ctx.roundRect(bx, by, barW, barH, 4); ctx.fill();
+            const pct = s.aimPower / 100;
+            const pColor = pct > 0.7 ? '#ef4444' : pct > 0.4 ? '#eab308' : '#22c55e';
+            ctx.fillStyle = pColor;
+            ctx.beginPath(); ctx.roundRect(bx, by, barW * pct, barH, 4); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`POWER: ${Math.round(s.aimPower)}%`, W / 2, by + 15);
+
+            // Show locked aim line
+            const startX = W / 2;
+            const startY = H - 50;
+            const aimRad = s.lockedAngle * Math.PI / 180;
+            const lineLen = 100;
+            ctx.strokeStyle = 'rgba(74,222,128,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([4, 4]);
+            ctx.beginPath(); ctx.moveTo(startX, startY);
+            ctx.lineTo(startX + Math.sin(aimRad) * lineLen, startY - Math.cos(aimRad) * lineLen);
+            ctx.stroke(); ctx.setLineDash([]);
+
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(startX, startY, 10, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // AI aiming indicator
+        if (s.phase === 'aiTurn') {
+            const startX = W / 2 + Math.sin(Date.now() * 0.003) * 20;
+            const startY = 60;
+            ctx.fillStyle = '#ef4444'; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.arc(startX, startY, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+
+            // Power bar for AI
+            const barW = 120, barH = 12;
+            const bx = W / 2 - barW / 2, by = 30;
+            ctx.fillStyle = 'rgba(0,0,0,0.4)'; ctx.fillRect(bx, by, barW, barH);
+            ctx.fillStyle = '#ef4444'; ctx.fillRect(bx, by, barW * (s.aimPower / 100), barH);
+        }
+
+        // Flying ball with trail
+        if (s.ball) {
+            const b = s.ball;
+            // Trail
+            b.trail.forEach((t, i) => {
+                const alpha = (i / b.trail.length) * 0.4;
+                ctx.fillStyle = `rgba(255,255,255,${alpha})`;
+                ctx.beginPath(); ctx.arc(t.x, t.y, 4 * b.size, 0, Math.PI * 2); ctx.fill();
             });
-        }, 16);
-        return () => clearInterval(interval);
-    }, [ball, cups]);
-    
-    const reset = () => { setCups([1,1,1,1,1,1,1,1,1,1]); setScores([0,0]); setBall(null); setPower(0); };
-    
+            // Ball
+            ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 12;
+            ctx.beginPath(); ctx.arc(b.x, b.y, 10 * b.size, 0, Math.PI * 2); ctx.fill();
+            // Ball shadow on table
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = 'rgba(0,0,0,0.2)';
+            ctx.beginPath(); ctx.ellipse(b.x + 5, b.y + 8, 8 * b.size, 4 * b.size, 0, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Particles
+        s.particles.forEach(p => {
+            ctx.fillStyle = p.color;
+            ctx.globalAlpha = p.life / 25;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.globalAlpha = 1;
+
+        // Score HUD
+        ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#4ade80';
+        ctx.fillText(`You: ${s.scoreP1}`, 20, H / 2 - 12);
+        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right';
+        ctx.fillText(`AI: ${s.scoreP2}`, W - 20, H / 2 - 12);
+        ctx.textAlign = 'left';
+        ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '11px sans-serif';
+        ctx.fillText(`Throws: ${s.throwsP1}`, 20, H / 2 + 8);
+        ctx.textAlign = 'right';
+        ctx.fillText(`Throws: ${s.throwsP2}`, W - 20, H / 2 + 8);
+
+        // Turn indicator
+        if (s.phase !== 'idle' && s.phase !== 'over') {
+            ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = s.turn === 1 ? '#4ade80' : '#ef4444';
+            ctx.fillText(s.turn === 1 ? '▼ YOUR THROW ▼' : '▲ AI THROWING ▲', W / 2, H / 2 + 6);
+        }
+
+        // Message
+        if (s.messageTimer > 0) {
+            ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = '#fff';
+            const msgY = H / 2 + 32;
+            ctx.fillText(s.message, W / 2, msgY);
+        }
+
+        // Idle/Over overlay
+        if (s.phase === 'idle') {
+            ctx.fillStyle = 'rgba(0,0,0,0.8)'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🍺 Beer Pong', W / 2, H / 2 - 50);
+            ctx.font = '16px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Click to set angle → Click to set power → Watch it fly!', W / 2, H / 2);
+            ctx.fillText('Take turns against AI. Clear all cups to win!', W / 2, H / 2 + 28);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('Click anywhere to start', W / 2, H / 2 + 70);
+        }
+
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, H);
+            ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = s.cupsP2.every(c => !c) ? '#4ade80' : '#ef4444';
+            ctx.fillText(s.message, W / 2, H / 2 - 20);
+            ctx.font = '16px sans-serif'; ctx.fillStyle = '#fff';
+            ctx.fillText(`You: ${s.scoreP1}/10 cups (${s.throwsP1} throws)  •  AI: ${s.scoreP2}/10 cups (${s.throwsP2} throws)`, W / 2, H / 2 + 20);
+            ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Click to play again', W / 2, H / 2 + 55);
+        }
+    };
+
+    // Click handler
+    const handleClick = (e) => {
+        const s = stateRef.current;
+
+        if (s.phase === 'idle' || s.phase === 'over') {
+            initGame();
+            return;
+        }
+
+        if (s.phase === 'aiming' && s.turn === 1) {
+            // Lock the current aim angle
+            const t = Date.now() * 0.002;
+            s.lockedAngle = Math.sin(t) * 35;
+            s.phase = 'setPower';
+            s.aimPower = 50; s.powerDir = 1;
+            s.message = 'Click to set power!';
+            s.messageTimer = 60;
+            return;
+        }
+
+        if (s.phase === 'setPower' && s.turn === 1) {
+            // Launch ball
+            const aimRad = s.lockedAngle * Math.PI / 180;
+            const speed = 3 + s.aimPower * 0.06;
+            const startX = W / 2;
+            const startY = H - 50;
+            s.ball = {
+                x: startX, y: startY,
+                vx: Math.sin(aimRad) * speed * 0.7,
+                vy: -speed,
+                gravity: 0.06 + (100 - s.aimPower) * 0.001,
+                size: 1,
+                trail: []
+            };
+            s.phase = 'flying';
+            return;
+        }
+    };
+
+    // Start/stop animation loop
+    useEffect(() => {
+        animRef.current = requestAnimationFrame(loop);
+        return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+    }, []);
+
+    // Initial draw
+    useEffect(() => { draw(); }, []);
+
+    const resetGame = () => { stateRef.current.phase = 'idle'; forceUpdate(n => n + 1); };
+
     return (
         <div>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}><div style={{fontWeight:600}}>Cups Hit: {scores[0]}/10</div><button onClick={reset} className="btn btn-secondary">Reset</button></div>
-            <canvas ref={canvasRef} width={W} height={H} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{borderRadius:'10px',cursor:'crosshair',border:'2px solid var(--border)',display:'block'}}/>
-            <div style={{marginTop:'8px',fontSize:'12px',color:'var(--text-muted)'}}>Click and drag back to aim, release to throw!</div>
-            {cups.every(c => !c) && <div style={{marginTop:'12px',textAlign:'center',color:'#4ade80',fontWeight:700,fontSize:'18px'}}>🎉 You cleared the table!</div>}
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px',alignItems:'center'}}>
+                <div style={{display:'flex',gap:'16px',alignItems:'center'}}>
+                    <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>YOU</span><div style={{fontSize:'20px',fontWeight:700,color:'#4ade80'}}>{stateRef.current.scoreP1}/10</div></div>
+                    <div style={{color:'var(--text-muted)'}}>vs</div>
+                    <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>AI</span><div style={{fontSize:'20px',fontWeight:700,color:'#ef4444'}}>{stateRef.current.scoreP2}/10</div></div>
+                </div>
+                <button onClick={resetGame} className="btn btn-secondary">Reset</button>
+            </div>
+            <canvas ref={canvasRef} width={W} height={H} onClick={handleClick}
+                style={{borderRadius:'10px',cursor:'pointer',border:'2px solid var(--border)',display:'block',userSelect:'none'}}/>
+            <div style={{marginTop:'10px',fontSize:'12px',color:'var(--text-muted)',textAlign:'center'}}>
+                {stateRef.current.phase === 'aiming' ? '🎯 Click to lock your aim angle' :
+                 stateRef.current.phase === 'setPower' ? '💪 Click to set throw power' :
+                 stateRef.current.phase === 'aiTurn' ? '🤖 AI is taking their shot...' :
+                 'Click to start • Take turns throwing at each other\'s cups'}
+            </div>
         </div>
     );
 }
+
 
 // PONG - Bigger
 function PongGame({ room, updateRoom, currentUser, addScore }) {
@@ -7098,158 +7761,586 @@ function PongGame({ room, updateRoom, currentUser, addScore }) {
 // TANK BATTLE - Top-down arena shooter vs AI
 function TanksGame({ room, updateRoom, currentUser, addScore }) {
     const canvasRef = useRef(null);
-    const [gameState, setGameState] = useState('idle');
-    const [score, setScore] = useState([0, 0]);
-    const W = 700, H = 500;
-    const gameRef = useRef(null);
+    const W = 800, H = 550;
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
+
+    const generateTerrain = () => {
+        // Generate hilly terrain using layered sine waves
+        const terrain = new Array(W);
+        const baseH = H * 0.45;
+        const amp1 = 60 + Math.random() * 60;
+        const freq1 = 0.005 + Math.random() * 0.005;
+        const amp2 = 30 + Math.random() * 30;
+        const freq2 = 0.015 + Math.random() * 0.01;
+        const amp3 = 15 + Math.random() * 15;
+        const freq3 = 0.04 + Math.random() * 0.02;
+        const offset1 = Math.random() * 100;
+        const offset2 = Math.random() * 100;
+        const offset3 = Math.random() * 100;
+        for (let x = 0; x < W; x++) {
+            terrain[x] = baseH
+                + Math.sin(x * freq1 + offset1) * amp1
+                + Math.sin(x * freq2 + offset2) * amp2
+                + Math.sin(x * freq3 + offset3) * amp3;
+            terrain[x] = Math.max(80, Math.min(H - 60, terrain[x]));
+        }
+        // Add some flat areas / plateaus
+        const plateaus = 2 + Math.floor(Math.random() * 3);
+        for (let p = 0; p < plateaus; p++) {
+            const cx = 100 + Math.random() * (W - 200);
+            const pw = 30 + Math.random() * 50;
+            const ph = terrain[Math.floor(cx)];
+            for (let x = Math.max(0, Math.floor(cx - pw)); x < Math.min(W, Math.floor(cx + pw)); x++) {
+                const blend = 1 - Math.abs(x - cx) / pw;
+                terrain[x] = terrain[x] * (1 - blend * 0.5) + ph * blend * 0.5;
+            }
+        }
+        return terrain;
+    };
 
     const init = () => {
-        const walls = [];
-        for (let i = 0; i < 12; i++) {
-            const x = 80 + Math.random() * (W - 160), y = 80 + Math.random() * (H - 160);
-            const w = Math.random() > 0.5 ? 60 + Math.random() * 40 : 20;
-            const h = w === 20 ? 60 + Math.random() * 40 : 20;
-            walls.push({ x, y, w, h });
-        }
-        gameRef.current = {
-            p1: { x: 80, y: H / 2, angle: 0, turret: 0, hp: 5, maxHp: 5, cooldown: 0, speed: 0 },
-            p2: { x: W - 80, y: H / 2, angle: Math.PI, turret: Math.PI, hp: 5, maxHp: 5, cooldown: 0, speed: 0, aiTarget: null, aiTimer: 0 },
-            bullets: [], walls, particles: [], keys: {}
+        const terrain = generateTerrain();
+        // Place tanks on terrain - one on left third, one on right third
+        const p1x = 60 + Math.floor(Math.random() * (W / 3 - 100));
+        const p2x = W - 60 - Math.floor(Math.random() * (W / 3 - 100));
+        stateRef.current = {
+            terrain,
+            phase: 'aim', // aim, fire, aiAim, aiFire, explode, over
+            turn: 1, // 1=player, 2=AI
+            p1: { x: p1x, angle: 45, power: 50, hp: 100, maxHp: 100 },
+            p2: { x: p2x, angle: 135, power: 50, hp: 100, maxHp: 100 },
+            wind: (Math.random() - 0.5) * 0.08,
+            projectile: null,
+            explosion: null,
+            particles: [],
+            debris: [],
+            score: [0, 0],
+            round: 1,
+            message: 'Your turn! ← → angle, A/D power, SPACE fire',
+            messageTimer: 180,
+            shakeX: 0, shakeY: 0, shakeTimer: 0,
+            aiTimer: 0,
+            trailDots: [],
         };
-        setScore([0, 0]); setGameState('playing');
+        forceUpdate(n => n + 1);
+    };
+
+    const getTerrainY = (s, x) => {
+        const ix = Math.floor(Math.max(0, Math.min(W - 1, x)));
+        return H - s.terrain[ix];
+    };
+
+    const createExplosion = (s, x, y, radius) => {
+        // Destroy terrain in radius
+        for (let tx = Math.max(0, Math.floor(x - radius)); tx < Math.min(W, Math.ceil(x + radius)); tx++) {
+            const dist = Math.abs(tx - x);
+            const depth = Math.sqrt(Math.max(0, radius * radius - dist * dist));
+            const terrainSurface = H - s.terrain[tx];
+            // Only destroy terrain that's within the explosion radius vertically
+            const explosionTop = y - depth;
+            const explosionBottom = y + depth;
+            if (terrainSurface < explosionBottom && terrainSurface > explosionTop) {
+                // Lower the terrain (increase terrain height value = lower surface)
+                s.terrain[tx] = Math.max(20, s.terrain[tx] - depth * 1.2);
+            } else if (terrainSurface >= explosionBottom) {
+                // Explosion is inside the terrain - carve out
+                const carve = depth - Math.abs(terrainSurface - y);
+                if (carve > 0) s.terrain[tx] = Math.max(20, s.terrain[tx] - carve * 0.8);
+            }
+        }
+
+        // Particles
+        for (let i = 0; i < 40; i++) {
+            const angle = Math.random() * Math.PI * 2;
+            const speed = 2 + Math.random() * 8;
+            s.particles.push({
+                x, y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 2,
+                life: 30 + Math.floor(Math.random() * 20),
+                color: ['#ef4444', '#f97316', '#fbbf24', '#fff'][Math.floor(Math.random() * 4)],
+                size: 2 + Math.random() * 4
+            });
+        }
+        // Dirt/debris chunks
+        for (let i = 0; i < 20; i++) {
+            const angle = -Math.PI * Math.random();
+            const speed = 3 + Math.random() * 6;
+            s.debris.push({
+                x, y: y,
+                vx: Math.cos(angle) * speed,
+                vy: Math.sin(angle) * speed - 4,
+                life: 40 + Math.floor(Math.random() * 30),
+                color: ['#854d0e', '#92400e', '#78350f', '#451a03'][Math.floor(Math.random() * 4)],
+                size: 3 + Math.random() * 5,
+                vy2: 0.15 // gravity
+            });
+        }
+
+        s.explosion = { x, y, radius: 0, maxRadius: radius, timer: 0 };
+        s.shakeTimer = 12;
+    };
+
+    const fire = (s, player) => {
+        const tank = player === 1 ? s.p1 : s.p2;
+        const angleRad = tank.angle * Math.PI / 180;
+        const speed = tank.power * 0.14;
+        const tankY = getTerrainY(s, tank.x);
+        s.projectile = {
+            x: tank.x + Math.cos(angleRad) * 25,
+            y: tankY - 15 + Math.sin(-angleRad) * 25,
+            vx: Math.cos(angleRad) * speed,
+            vy: -Math.sin(angleRad) * speed,
+            owner: player
+        };
+        s.trailDots = [];
+        s.phase = player === 1 ? 'fire' : 'aiFire';
     };
 
     const loop = () => {
-        if (gameState !== 'playing') return;
-        const g = gameRef.current;
-        const { p1, p2, walls } = g;
+        const s = stateRef.current;
+        if (!s) { draw(); animRef.current = requestAnimationFrame(loop); return; }
 
-        // Player controls
-        if (g.keys['w'] || g.keys['ArrowUp']) { p1.x += Math.cos(p1.angle) * 3; p1.y += Math.sin(p1.angle) * 3; }
-        if (g.keys['s'] || g.keys['ArrowDown']) { p1.x -= Math.cos(p1.angle) * 2; p1.y -= Math.sin(p1.angle) * 2; }
-        if (g.keys['a'] || g.keys['ArrowLeft']) p1.angle -= 0.05;
-        if (g.keys['d'] || g.keys['ArrowRight']) p1.angle += 0.05;
-        p1.x = Math.max(20, Math.min(W - 20, p1.x)); p1.y = Math.max(20, Math.min(H - 20, p1.y));
-        if (p1.cooldown > 0) p1.cooldown--;
-        if (p2.cooldown > 0) p2.cooldown--;
+        // Screen shake
+        if (s.shakeTimer > 0) {
+            s.shakeTimer--;
+            s.shakeX = (Math.random() - 0.5) * s.shakeTimer * 1.2;
+            s.shakeY = (Math.random() - 0.5) * s.shakeTimer * 1.2;
+        } else { s.shakeX = 0; s.shakeY = 0; }
 
-        // Wall collision for player
-        walls.forEach(w => {
-            if (p1.x > w.x - 18 && p1.x < w.x + w.w + 18 && p1.y > w.y - 18 && p1.y < w.y + w.h + 18) {
-                const cx = w.x + w.w / 2, cy = w.y + w.h / 2;
-                const dx = p1.x - cx, dy = p1.y - cy;
-                if (Math.abs(dx / w.w) > Math.abs(dy / w.h)) p1.x += dx > 0 ? 3 : -3;
-                else p1.y += dy > 0 ? 3 : -3;
+        // AI aiming phase
+        if (s.phase === 'aiAim') {
+            s.aiTimer++;
+            if (s.aiTimer < 30) {
+                // AI "thinks" - adjusts angle and power toward player
+                const dx = s.p1.x - s.p2.x;
+                const dy = (getTerrainY(s, s.p1.x)) - (getTerrainY(s, s.p2.x));
+                const dist = Math.hypot(dx, dy);
+                // Calculate rough angle - account for gravity and wind
+                let targetAngle = Math.atan2(-dy - dist * 0.2, dx) * 180 / Math.PI;
+                targetAngle = Math.max(90, Math.min(170, targetAngle));
+                // Add some inaccuracy
+                targetAngle += (Math.random() - 0.5) * 15;
+                const targetPower = Math.min(95, Math.max(30, dist * 0.12 + 20 + (Math.random() - 0.5) * 20));
+                s.p2.angle += (targetAngle - s.p2.angle) * 0.08;
+                s.p2.power += (targetPower - s.p2.power) * 0.08;
             }
-        });
-
-        // AI behavior
-        p2.aiTimer++;
-        const dx = p1.x - p2.x, dy = p1.y - p2.y;
-        const angleToPlayer = Math.atan2(dy, dx);
-        // Rotate turret toward player
-        let tDiff = angleToPlayer - p2.turret;
-        while (tDiff > Math.PI) tDiff -= Math.PI * 2; while (tDiff < -Math.PI) tDiff += Math.PI * 2;
-        p2.turret += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 0.04);
-        // Move toward player but keep distance
-        const dist = Math.hypot(dx, dy);
-        if (dist > 200) { p2.angle += (angleToPlayer - p2.angle) * 0.03; p2.x += Math.cos(p2.angle) * 1.5; p2.y += Math.sin(p2.angle) * 1.5; }
-        else if (dist < 120) { p2.x -= Math.cos(angleToPlayer) * 1.5; p2.y -= Math.sin(angleToPlayer) * 1.5; }
-        else { p2.angle += 0.02; p2.x += Math.cos(p2.angle) * 0.8; p2.y += Math.sin(p2.angle) * 0.8; }
-        p2.x = Math.max(20, Math.min(W - 20, p2.x)); p2.y = Math.max(20, Math.min(H - 20, p2.y));
-        // AI shoot
-        if (Math.abs(tDiff) < 0.3 && p2.cooldown <= 0 && dist < 400) {
-            g.bullets.push({ x: p2.x + Math.cos(p2.turret) * 20, y: p2.y + Math.sin(p2.turret) * 20, dx: Math.cos(p2.turret) * 6, dy: Math.sin(p2.turret) * 6, owner: 2, life: 80 });
-            p2.cooldown = 40;
+            if (s.aiTimer >= 50) {
+                s.aiTimer = 0;
+                fire(s, 2);
+            }
         }
 
-        // Move bullets
-        g.bullets = g.bullets.filter(b => {
-            b.x += b.dx; b.y += b.dy; b.life--;
-            if (b.x < 0 || b.x > W || b.y < 0 || b.y > H || b.life <= 0) return false;
-            // Wall collision
-            for (const w of walls) {
-                if (b.x > w.x && b.x < w.x + w.w && b.y > w.y && b.y < w.y + w.h) {
-                    for (let i = 0; i < 4; i++) g.particles.push({ x: b.x, y: b.y, dx: (Math.random() - 0.5) * 4, dy: (Math.random() - 0.5) * 4, life: 10, color: '#fbbf24' });
-                    return false;
+        // Projectile physics
+        if (s.phase === 'fire' || s.phase === 'aiFire') {
+            const p = s.projectile;
+            if (p) {
+                // Trail
+                if (s.trailDots.length === 0 || Math.hypot(p.x - s.trailDots[s.trailDots.length-1].x, p.y - s.trailDots[s.trailDots.length-1].y) > 8) {
+                    s.trailDots.push({ x: p.x, y: p.y });
+                }
+                p.x += p.vx;
+                p.vy += 0.12; // gravity
+                p.vx += s.wind; // wind
+                p.y += p.vy;
+
+                // Hit terrain?
+                const terrainY = getTerrainY(s, p.x);
+                if (p.y >= terrainY) {
+                    const blastRadius = 35 + Math.random() * 15;
+                    createExplosion(s, p.x, terrainY, blastRadius);
+
+                    // Check damage to tanks
+                    [s.p1, s.p2].forEach((tank, ti) => {
+                        const tankY = getTerrainY(s, tank.x);
+                        const dist = Math.hypot(p.x - tank.x, terrainY - tankY);
+                        if (dist < blastRadius + 15) {
+                            const dmg = Math.round(Math.max(0, (1 - dist / (blastRadius + 15)) * 50 + 10));
+                            tank.hp = Math.max(0, tank.hp - dmg);
+                            s.message = `${ti === 0 ? 'You took' : 'AI took'} ${dmg} damage!`;
+                            s.messageTimer = 90;
+                        }
+                    });
+
+                    s.projectile = null;
+                    s.phase = 'explode';
+                }
+
+                // Out of bounds
+                if (p.x < -50 || p.x > W + 50 || p.y > H + 50) {
+                    s.projectile = null;
+                    s.message = 'Miss! Shot went out of bounds';
+                    s.messageTimer = 60;
+                    s.phase = 'explode';
                 }
             }
-            // Tank hit
-            const target = b.owner === 1 ? p2 : p1;
-            if (Math.hypot(b.x - target.x, b.y - target.y) < 18) {
-                target.hp--;
-                for (let i = 0; i < 8; i++) g.particles.push({ x: target.x, y: target.y, dx: (Math.random() - 0.5) * 6, dy: (Math.random() - 0.5) * 6, life: 15, color: b.owner === 1 ? '#ef4444' : '#4ade80' });
-                if (target.hp <= 0) {
-                    setScore(s => { const ns = b.owner === 1 ? [s[0] + 1, s[1]] : [s[0], s[1] + 1]; return ns; });
-                    target.hp = target.maxHp;
-                    target.x = b.owner === 1 ? W - 80 : 80; target.y = H / 2;
-                }
-                return false;
+        }
+
+        // Explosion animation
+        if (s.phase === 'explode') {
+            if (s.explosion) {
+                s.explosion.timer++;
+                s.explosion.radius = Math.min(s.explosion.maxRadius, s.explosion.radius + s.explosion.maxRadius * 0.15);
+                if (s.explosion.timer > 25) s.explosion = null;
             }
-            return true;
+            if (!s.explosion && s.shakeTimer <= 0) {
+                // Check win
+                if (s.p1.hp <= 0) {
+                    s.score[1]++;
+                    s.phase = 'over'; s.message = '💀 AI Wins the round!'; s.messageTimer = 999;
+                    addScore(s.score[0] * 100);
+                    forceUpdate(n => n + 1);
+                } else if (s.p2.hp <= 0) {
+                    s.score[0]++;
+                    s.phase = 'over'; s.message = '🎉 You Win the round!'; s.messageTimer = 999;
+                    addScore(s.score[0] * 100 + 200);
+                    forceUpdate(n => n + 1);
+                } else {
+                    // Switch turns
+                    if (s.turn === 1) {
+                        s.turn = 2;
+                        s.wind = (Math.random() - 0.5) * 0.08;
+                        s.phase = 'aiAim';
+                        s.message = 'AI is aiming...';
+                        s.messageTimer = 120;
+                    } else {
+                        s.turn = 1;
+                        s.wind = (Math.random() - 0.5) * 0.08;
+                        s.phase = 'aim';
+                        s.message = '← → angle, A/D power, SPACE fire';
+                        s.messageTimer = 120;
+                    }
+                }
+            }
+        }
+
+        // Update particles
+        s.particles = s.particles.filter(p => {
+            p.x += p.vx; p.y += p.vy; p.vy += 0.08; p.vx *= 0.99;
+            p.life--; p.size *= 0.97;
+            return p.life > 0;
+        });
+        s.debris = s.debris.filter(d => {
+            d.x += d.vx; d.y += d.vy; d.vy += d.vy2;
+            // Debris settles on terrain
+            const ty = getTerrainY(s, d.x);
+            if (d.y >= ty) { d.y = ty; d.vx = 0; d.vy = 0; d.life -= 3; }
+            d.life--;
+            return d.life > 0;
         });
 
-        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
-        draw();
-    };
+        if (s.messageTimer > 0) s.messageTimer--;
 
-    const shoot = () => {
-        const g = gameRef.current; if (!g || g.p1.cooldown > 0) return;
-        g.bullets.push({ x: g.p1.x + Math.cos(g.p1.angle) * 20, y: g.p1.y + Math.sin(g.p1.angle) * 20, dx: Math.cos(g.p1.angle) * 7, dy: Math.sin(g.p1.angle) * 7, owner: 1, life: 80 });
-        g.p1.cooldown = 25;
+        draw();
+        animRef.current = requestAnimationFrame(loop);
     };
 
     const draw = () => {
-        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#1a1f2e'; ctx.fillRect(0, 0, W, H);
-        // Grid
-        ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
-        for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
-        for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-        const g = gameRef.current; if (!g) return;
-        // Walls
-        g.walls.forEach(w => { ctx.fillStyle = '#475569'; ctx.fillRect(w.x, w.y, w.w, w.h); ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(w.x, w.y, w.w, 3); });
-        // Draw tank helper
-        const drawTank = (t, color, turretColor) => {
-            ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.angle);
-            ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-16, -12, 32, 24, 4); ctx.fill();
-            ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(-14, -14, 6, 28); ctx.fillRect(8, -14, 6, 28);
+        const ctx = canvasRef.current?.getContext('2d');
+        if (!ctx) return;
+        const s = stateRef.current;
+
+        ctx.save();
+
+        if (!s) {
+            // Idle screen
+            ctx.fillStyle = '#0a0f1e'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('💥 Scorched Earth', W/2, H/2 - 60);
+            ctx.font = '16px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Adjust angle and power to lob shells over the terrain', W/2, H/2 - 20);
+            ctx.fillText('Explosions destroy the ground — use craters for cover!', W/2, H/2 + 10);
+            ctx.fillText('Wind changes each turn', W/2, H/2 + 40);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('Press SPACE to start', W/2, H/2 + 80);
             ctx.restore();
-            ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.turret || t.angle);
-            ctx.fillStyle = turretColor; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
-            ctx.fillRect(0, -3, 22, 6); ctx.restore();
+            return;
+        }
+
+        // Screen shake
+        ctx.translate(s.shakeX, s.shakeY);
+
+        // Sky gradient
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, H);
+        skyGrad.addColorStop(0, '#0c1445');
+        skyGrad.addColorStop(0.5, '#1a237e');
+        skyGrad.addColorStop(1, '#283593');
+        ctx.fillStyle = skyGrad;
+        ctx.fillRect(0, 0, W, H);
+
+        // Stars
+        ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        for (let i = 0; i < 40; i++) {
+            const sx = (i * 137.5 + 42) % W;
+            const sy = (i * 97.3 + 13) % (H * 0.5);
+            ctx.fillRect(sx, sy, 1.5, 1.5);
+        }
+
+        // Terrain
+        ctx.beginPath();
+        ctx.moveTo(0, H);
+        for (let x = 0; x < W; x++) {
+            ctx.lineTo(x, H - s.terrain[x]);
+        }
+        ctx.lineTo(W, H);
+        ctx.closePath();
+        // Terrain gradient
+        const terrGrad = ctx.createLinearGradient(0, H * 0.3, 0, H);
+        terrGrad.addColorStop(0, '#4a7c3f');
+        terrGrad.addColorStop(0.15, '#3d6b35');
+        terrGrad.addColorStop(0.4, '#6b4423');
+        terrGrad.addColorStop(1, '#3e2723');
+        ctx.fillStyle = terrGrad;
+        ctx.fill();
+
+        // Terrain surface line
+        ctx.beginPath();
+        ctx.moveTo(0, H - s.terrain[0]);
+        for (let x = 1; x < W; x++) ctx.lineTo(x, H - s.terrain[x]);
+        ctx.strokeStyle = '#5a8a4f';
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // Draw tank helper
+        const drawTank = (tank, color, darkColor, label, isActive) => {
+            const tx = tank.x;
+            const ty = getTerrainY(s, tx);
+            // Tank body
+            ctx.fillStyle = darkColor;
+            ctx.beginPath(); ctx.roundRect(tx - 18, ty - 12, 36, 14, 4); ctx.fill();
+            ctx.fillStyle = color;
+            ctx.beginPath(); ctx.roundRect(tx - 14, ty - 18, 28, 10, 3); ctx.fill();
+            // Tracks
+            ctx.fillStyle = '#1a1a1a';
+            ctx.fillRect(tx - 20, ty - 2, 40, 5);
+            for (let i = 0; i < 5; i++) {
+                ctx.fillStyle = '#333';
+                ctx.beginPath(); ctx.arc(tx - 16 + i * 8, ty + 1, 3, 0, Math.PI * 2); ctx.fill();
+            }
+            // Barrel
+            const angleRad = tank.angle * Math.PI / 180;
+            const barrelLen = 28;
+            const bx = tx + Math.cos(angleRad) * barrelLen;
+            const by = ty - 15 - Math.sin(angleRad) * barrelLen;
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(tx, ty - 15); ctx.lineTo(bx, by); ctx.stroke();
+            ctx.lineWidth = 1;
+            // Muzzle tip
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(bx, by, 3, 0, Math.PI * 2); ctx.fill();
             // HP bar
-            ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(t.x - 18, t.y - 24, 36, 5);
-            ctx.fillStyle = t.hp > t.maxHp * 0.3 ? '#4ade80' : '#ef4444'; ctx.fillRect(t.x - 18, t.y - 24, 36 * (t.hp / t.maxHp), 5);
+            const hpW = 44;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(tx - hpW/2, ty - 32, hpW, 6);
+            const hpPct = tank.hp / tank.maxHp;
+            ctx.fillStyle = hpPct > 0.5 ? '#4ade80' : hpPct > 0.25 ? '#eab308' : '#ef4444';
+            ctx.fillRect(tx - hpW/2, ty - 32, hpW * hpPct, 6);
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 0.5;
+            ctx.strokeRect(tx - hpW/2, ty - 32, hpW, 6);
+            // Label
+            ctx.fillStyle = color; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(label, tx, ty - 38);
+            // HP text
+            ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif';
+            ctx.fillText(`${tank.hp}%`, tx, ty - 25);
+            // Active indicator
+            if (isActive && s.phase === 'aim') {
+                ctx.fillStyle = '#4ade80';
+                ctx.beginPath();
+                ctx.moveTo(tx - 5, ty - 50); ctx.lineTo(tx + 5, ty - 50); ctx.lineTo(tx, ty - 44);
+                ctx.closePath(); ctx.fill();
+            }
         };
-        drawTank(g.p1, '#22c55e', '#16a34a');
-        drawTank(g.p2, '#ef4444', '#dc2626');
-        // Bullets
-        g.bullets.forEach(b => { ctx.fillStyle = b.owner === 1 ? '#4ade80' : '#fbbf24'; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill(); });
-        ctx.shadowBlur = 0;
-        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 15; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+
+        drawTank(s.p1, '#4ade80', '#16a34a', 'YOU', s.turn === 1);
+        drawTank(s.p2, '#ef4444', '#dc2626', 'AI', s.turn === 2);
+
+        // Projectile trail
+        if (s.trailDots.length > 1) {
+            ctx.strokeStyle = 'rgba(255,255,255,0.15)';
+            ctx.lineWidth = 1;
+            ctx.setLineDash([3, 5]);
+            ctx.beginPath();
+            ctx.moveTo(s.trailDots[0].x, s.trailDots[0].y);
+            s.trailDots.forEach(d => ctx.lineTo(d.x, d.y));
+            ctx.stroke();
+            ctx.setLineDash([]);
+        }
+
+        // Projectile
+        if (s.projectile) {
+            const p = s.projectile;
+            ctx.fillStyle = '#fff';
+            ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 10;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // Smoke trail
+            ctx.fillStyle = 'rgba(255,200,50,0.3)';
+            ctx.beginPath(); ctx.arc(p.x - p.vx * 0.5, p.y - p.vy * 0.5, 4, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(255,150,50,0.15)';
+            ctx.beginPath(); ctx.arc(p.x - p.vx, p.y - p.vy, 3, 0, Math.PI * 2); ctx.fill();
+        }
+
+        // Explosion
+        if (s.explosion) {
+            const e = s.explosion;
+            const alpha = Math.max(0, 1 - e.timer / 25);
+            // Fireball
+            const grad = ctx.createRadialGradient(e.x, e.y, 0, e.x, e.y, e.radius);
+            grad.addColorStop(0, `rgba(255,255,200,${alpha})`);
+            grad.addColorStop(0.3, `rgba(255,150,50,${alpha * 0.8})`);
+            grad.addColorStop(0.6, `rgba(255,60,20,${alpha * 0.5})`);
+            grad.addColorStop(1, `rgba(100,20,0,0)`);
+            ctx.fillStyle = grad;
+            ctx.beginPath(); ctx.arc(e.x, e.y, e.radius, 0, Math.PI * 2); ctx.fill();
+            // Shockwave ring
+            if (e.timer < 15) {
+                ctx.strokeStyle = `rgba(255,200,100,${alpha * 0.5})`;
+                ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(e.x, e.y, e.radius * 1.3, 0, Math.PI * 2); ctx.stroke();
+            }
+        }
+
+        // Particles
+        s.particles.forEach(p => {
+            ctx.globalAlpha = Math.min(1, p.life / 15);
+            ctx.fillStyle = p.color;
+            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
+        });
         ctx.globalAlpha = 1;
+
+        // Debris
+        s.debris.forEach(d => {
+            ctx.globalAlpha = Math.min(1, d.life / 20);
+            ctx.fillStyle = d.color;
+            ctx.fillRect(d.x - d.size/2, d.y - d.size/2, d.size, d.size);
+        });
+        ctx.globalAlpha = 1;
+
         // HUD
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
-        ctx.fillStyle = '#4ade80'; ctx.fillText(`You: ${score[0]}`, 15, 25);
-        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right'; ctx.fillText(`AI: ${score[1]}`, W - 15, 25);
+        // Score
+        ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`You: ${s.score[0]}`, 15, 24);
+        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right';
+        ctx.fillText(`AI: ${s.score[1]}`, W - 15, 24);
+
+        // Wind indicator
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#fff'; ctx.font = '12px sans-serif';
+        ctx.fillText('Wind', W/2, 16);
+        const windStr = Math.abs(s.wind);
+        const windDir = s.wind > 0 ? '→' : '←';
+        const windBarW = 80;
+        ctx.fillStyle = 'rgba(0,0,0,0.4)';
+        ctx.fillRect(W/2 - windBarW/2, 22, windBarW, 8);
+        ctx.fillStyle = '#06b6d4';
+        if (s.wind > 0) ctx.fillRect(W/2, 22, windStr * windBarW * 6, 8);
+        else ctx.fillRect(W/2 + s.wind * windBarW * 6, 22, -s.wind * windBarW * 6, 8);
+        ctx.fillStyle = '#94a3b8'; ctx.font = '11px sans-serif';
+        ctx.fillText(`${windDir} ${(Math.abs(s.wind) * 100).toFixed(0)}%`, W/2, 44);
+
+        // Angle/Power display for active player
+        if (s.phase === 'aim') {
+            const tank = s.p1;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.beginPath(); ctx.roundRect(15, H - 55, 200, 45, 8); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left';
+            ctx.fillText(`Angle: ${Math.round(tank.angle)}°`, 25, H - 35);
+            ctx.fillText(`Power: ${Math.round(tank.power)}%`, 25, H - 18);
+            // Power bar
+            ctx.fillStyle = '#333'; ctx.fillRect(115, H - 45, 90, 10);
+            ctx.fillStyle = tank.power > 70 ? '#ef4444' : tank.power > 40 ? '#eab308' : '#4ade80';
+            ctx.fillRect(115, H - 45, 90 * (tank.power / 100), 10);
+            // Angle arc
+            ctx.fillStyle = '#333'; ctx.fillRect(115, H - 28, 90, 10);
+            ctx.fillStyle = '#3b82f6';
+            ctx.fillRect(115, H - 28, 90 * (tank.angle / 180), 10);
+        }
+
+        if (s.phase === 'aiAim') {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.beginPath(); ctx.roundRect(W - 215, H - 55, 200, 45, 8); ctx.fill();
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'right';
+            ctx.fillText(`AI Angle: ${Math.round(s.p2.angle)}°`, W - 25, H - 35);
+            ctx.fillText(`AI Power: ${Math.round(s.p2.power)}%`, W - 25, H - 18);
+        }
+
+        // Message
+        if (s.messageTimer > 0) {
+            ctx.fillStyle = 'rgba(0,0,0,0.5)';
+            const msgW = ctx.measureText(s.message).width + 30;
+            ctx.beginPath(); ctx.roundRect(W/2 - msgW/2, H - 85, msgW, 28, 6); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(s.message, W/2, H - 66);
+        }
+
+        // Round indicator
+        ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.font = '11px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`Round ${s.round}`, W/2, H - 8);
+
+        // Game over overlay
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.6)';
+            ctx.fillRect(0, 0, W, H);
+            ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillStyle = s.message.includes('You') ? '#4ade80' : '#ef4444';
+            ctx.fillText(s.message, W/2, H/2 - 20);
+            ctx.font = '16px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Press SPACE for new round', W/2, H/2 + 20);
+        }
+
+        ctx.restore();
     };
 
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score]);
+    // Input handling
     useEffect(() => {
-        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if (gameRef.current) gameRef.current.keys[e.key] = true; if (e.key === ' ') { if (gameState !== 'playing') init(); else shoot(); } };
-        const up = (e) => { if (gameRef.current) gameRef.current.keys[e.key] = false; };
-        window.addEventListener('keydown', down); window.addEventListener('keyup', up);
-        return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
-    }, [gameState]);
+        const handleKey = (e) => {
+            if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','a','d','w','s'].includes(e.key)) e.preventDefault();
+            const s = stateRef.current;
+            if (!s && e.key === ' ') { init(); return; }
+            if (!s) return;
+            if (s.phase === 'over' && e.key === ' ') {
+                // New round with same scores
+                const scores = [...s.score];
+                const round = s.round + 1;
+                init();
+                stateRef.current.score = scores;
+                stateRef.current.round = round;
+                return;
+            }
+            if (s.phase !== 'aim') return;
+            const tank = s.p1;
+            if (e.key === 'ArrowLeft') tank.angle = Math.min(170, tank.angle + 2);
+            if (e.key === 'ArrowRight') tank.angle = Math.max(10, tank.angle - 2);
+            if (e.key === 'ArrowUp') tank.angle = Math.min(170, tank.angle + 2);
+            if (e.key === 'ArrowDown') tank.angle = Math.max(10, tank.angle - 2);
+            if (e.key === 'a' || e.key === 'A') tank.power = Math.max(5, tank.power - 2);
+            if (e.key === 'd' || e.key === 'D') tank.power = Math.min(100, tank.power + 2);
+            if (e.key === 'w' || e.key === 'W') tank.power = Math.min(100, tank.power + 2);
+            if (e.key === 's' || e.key === 'S') tank.power = Math.max(5, tank.power - 2);
+            if (e.key === ' ') fire(s, 1);
+        };
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, []);
+
+    useEffect(() => {
+        animRef.current = requestAnimationFrame(loop);
+        return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
+    }, []);
 
     return (
-        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
-            <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
-            {gameState === 'idle' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                <div style={{fontSize:'56px'}}>🎯</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Tank Battle</div>
-                <div style={{color:'#94a3b8',marginTop:'8px'}}>WASD to move • SPACE to shoot</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div>
-            </div>}
+        <div>
+            <canvas ref={canvasRef} width={W} height={H}
+                style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',background:'#0a0f1e'}}/>
+            <div style={{marginTop:'8px',fontSize:'12px',color:'var(--text-muted)',textAlign:'center'}}>
+                ← → Adjust Angle • A/D Adjust Power • SPACE to Fire
+            </div>
         </div>
     );
 }
@@ -8063,163 +9154,7 @@ function ChessGame({ room, updateRoom, currentUser, addScore }) {
 }
 
 // WORD CHAIN - Take turns making words
-function WordChainGame({ room, updateRoom, currentUser, addScore }) {
-    const WORDS = ['apple','banana','cherry','dragon','eagle','falcon','grape','honey','island','jungle','koala','lemon','mango','nectar','ocean','pepper','quail','river','salmon','tiger','umbrella','violet','walnut','xenon','yacht','zebra','anchor','bridge','castle','delta','ember','forest','glacier','harbor','ivory','jasper','kitten','lantern','marble','noble','olive','prism','quartz','raven','silver','temple','unity','velvet','wonder','xylem','yarrow','zenith'];
-    const [chain, setChain] = useState([]);
-    const [input, setInput] = useState('');
-    const [message, setMessage] = useState('Start with any word!');
-    const [turn, setTurn] = useState('player');
-    const [score, setScore] = useState(0);
-    const [used, setUsed] = useState(new Set());
-    const [gameOver, setGameOver] = useState(false);
-
-    const submit = () => {
-        if (!input.trim() || turn !== 'player' || gameOver) return;
-        const word = input.trim().toLowerCase();
-        if (used.has(word)) { setMessage('Word already used!'); return; }
-        if (chain.length > 0) {
-            const lastWord = chain[chain.length - 1].word;
-            if (word[0] !== lastWord[lastWord.length - 1]) { setMessage(`Word must start with "${lastWord[lastWord.length - 1]}"`); return; }
-        }
-        if (word.length < 2) { setMessage('Word too short!'); return; }
-        const pts = word.length * 10;
-        setScore(s => s + pts);
-        setChain(c => [...c, { word, player: 'You' }]);
-        setUsed(u => new Set([...u, word]));
-        setInput('');
-        setTurn('ai');
-        setMessage('AI thinking...');
-        setTimeout(() => aiRespond(word), 600);
-    };
-
-    const aiRespond = (lastWord) => {
-        const lastChar = lastWord[lastWord.length - 1];
-        const options = WORDS.filter(w => w[0] === lastChar && !used.has(w));
-        if (options.length === 0) {
-            setMessage('AI can\'t think of a word! You win! 🎉');
-            setGameOver(true); addScore(score);
-            return;
-        }
-        const word = options[Math.floor(Math.random() * options.length)];
-        setChain(c => [...c, { word, player: 'AI' }]);
-        setUsed(u => new Set([...u, word]));
-        setTurn('player');
-        setMessage(`Your turn! Word must start with "${word[word.length - 1]}"`);
-    };
-
-    const reset = () => { setChain([]); setInput(''); setMessage('Start with any word!'); setTurn('player'); setScore(0); setUsed(new Set()); setGameOver(false); };
-
-    return (
-        <div style={{maxWidth:'500px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
-                <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>SCORE</span><div style={{fontSize:'24px',fontWeight:700}}>{score}</div></div>
-                <button onClick={reset} className="btn btn-secondary">New Game</button>
-            </div>
-            <div style={{marginBottom:'16px',padding:'10px',background:'var(--bg-input)',borderRadius:'8px',fontSize:'13px',fontWeight:600,textAlign:'center',color:gameOver?'#4ade80':'var(--text)'}}>{message}</div>
-            <div style={{maxHeight:'300px',overflowY:'auto',marginBottom:'16px',display:'flex',flexDirection:'column',gap:'6px'}}>
-                {chain.map((c, i) => (
-                    <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',padding:'8px 12px',background:c.player==='You'?'rgba(74,222,128,0.1)':'rgba(239,68,68,0.1)',borderRadius:'8px',borderLeft:`3px solid ${c.player==='You'?'#4ade80':'#ef4444'}`}}>
-                        <span style={{fontSize:'11px',fontWeight:600,color:c.player==='You'?'#4ade80':'#ef4444',minWidth:'30px'}}>{c.player}</span>
-                        <span style={{fontWeight:600,fontSize:'16px'}}>{c.word}</span>
-                        {i < chain.length - 1 && <span style={{marginLeft:'auto',fontSize:'11px',color:'var(--text-muted)'}}>→ {c.word[c.word.length-1]}</span>}
-                    </div>
-                ))}
-            </div>
-            {!gameOver && <div style={{display:'flex',gap:'8px'}}>
-                <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} disabled={turn !== 'player'} placeholder={turn === 'player' ? 'Type a word...' : 'Waiting for AI...'} className="form-input" style={{flex:1}} autoFocus/>
-                <button onClick={submit} disabled={turn !== 'player'} className="btn btn-primary">Send</button>
-            </div>}
-        </div>
-    );
-}
-
 // TRIVIA - Quiz game
-function TriviaGame({ room, updateRoom, currentUser, addScore }) {
-    const QUESTIONS = [
-        { q: 'What planet is known as the Red Planet?', a: ['Mars', 'Venus', 'Jupiter', 'Saturn'], correct: 0 },
-        { q: 'What is the largest ocean on Earth?', a: ['Atlantic', 'Indian', 'Pacific', 'Arctic'], correct: 2 },
-        { q: 'How many bones are in the human body?', a: ['186', '206', '226', '246'], correct: 1 },
-        { q: 'What year did the Titanic sink?', a: ['1905', '1912', '1918', '1920'], correct: 1 },
-        { q: 'What gas do plants absorb from the atmosphere?', a: ['Oxygen', 'Nitrogen', 'Carbon Dioxide', 'Hydrogen'], correct: 2 },
-        { q: 'Which country has the most time zones?', a: ['Russia', 'USA', 'China', 'France'], correct: 3 },
-        { q: 'What is the hardest natural substance?', a: ['Gold', 'Iron', 'Diamond', 'Platinum'], correct: 2 },
-        { q: 'How many hearts does an octopus have?', a: ['1', '2', '3', '4'], correct: 2 },
-        { q: 'What is the smallest country in the world?', a: ['Monaco', 'Vatican City', 'San Marino', 'Liechtenstein'], correct: 1 },
-        { q: 'Which element has the symbol Au?', a: ['Silver', 'Gold', 'Aluminum', 'Argon'], correct: 1 },
-        { q: 'What is the longest river in the world?', a: ['Amazon', 'Nile', 'Mississippi', 'Yangtze'], correct: 1 },
-        { q: 'How many players are on a soccer team?', a: ['9', '10', '11', '12'], correct: 2 },
-        { q: 'What is the speed of light (approx)?', a: ['186,000 mi/s', '286,000 mi/s', '156,000 mi/s', '216,000 mi/s'], correct: 0 },
-        { q: 'Which planet has the most moons?', a: ['Jupiter', 'Saturn', 'Uranus', 'Neptune'], correct: 1 },
-        { q: 'What year was the first iPhone released?', a: ['2005', '2006', '2007', '2008'], correct: 2 },
-    ];
-    const [questions] = useState(() => [...QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 10));
-    const [current, setCurrent] = useState(0);
-    const [score, setScore] = useState(0);
-    const [answered, setAnswered] = useState(null);
-    const [streak, setStreak] = useState(0);
-    const [done, setDone] = useState(false);
-    const [timeLeft, setTimeLeft] = useState(15);
-
-    useEffect(() => {
-        if (done || answered !== null) return;
-        if (timeLeft <= 0) { handleAnswer(-1); return; }
-        const t = setTimeout(() => setTimeLeft(tl => tl - 1), 1000);
-        return () => clearTimeout(t);
-    }, [timeLeft, done, answered]);
-
-    const handleAnswer = (idx) => {
-        if (answered !== null || done) return;
-        setAnswered(idx);
-        if (idx === questions[current].correct) {
-            const pts = 100 + streak * 25 + timeLeft * 5;
-            setScore(s => s + pts); setStreak(s => s + 1);
-        } else { setStreak(0); }
-        setTimeout(() => {
-            if (current + 1 >= questions.length) { setDone(true); addScore(score); }
-            else { setCurrent(c => c + 1); setAnswered(null); setTimeLeft(15); }
-        }, 1500);
-    };
-
-    const reset = () => { setCurrent(0); setScore(0); setAnswered(null); setStreak(0); setDone(false); setTimeLeft(15); };
-
-    if (done) return (
-        <div style={{textAlign:'center',padding:'40px'}}>
-            <div style={{fontSize:'56px',marginBottom:'16px'}}>🏆</div>
-            <div style={{fontSize:'32px',fontWeight:700}}>{score} points</div>
-            <div style={{color:'var(--text-muted)',marginTop:'8px'}}>{questions.length} questions answered</div>
-            <button onClick={reset} className="btn btn-primary" style={{marginTop:'20px'}}>Play Again</button>
-        </div>
-    );
-
-    const q = questions[current];
-    return (
-        <div style={{maxWidth:'550px'}}>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
-                <div style={{display:'flex',gap:'20px'}}>
-                    <div><span style={{fontSize:'10px',color:'var(--text-muted)'}}>SCORE</span><div style={{fontSize:'20px',fontWeight:700}}>{score}</div></div>
-                    {streak > 1 && <div><span style={{fontSize:'10px',color:'var(--amber)'}}>STREAK</span><div style={{fontSize:'20px',fontWeight:700,color:'var(--amber)'}}>{streak}🔥</div></div>}
-                </div>
-                <div style={{fontSize:'13px',color:'var(--text-muted)'}}>Q{current + 1}/{questions.length}</div>
-            </div>
-            <div style={{height:'6px',background:'var(--bg-input)',borderRadius:'3px',marginBottom:'16px',overflow:'hidden'}}>
-                <div style={{height:'100%',width:`${(timeLeft/15)*100}%`,background:timeLeft<=5?'var(--red)':'var(--primary)',transition:'width 1s linear',borderRadius:'3px'}}/>
-            </div>
-            <div style={{fontSize:'10px',color:timeLeft<=5?'var(--red)':'var(--text-muted)',textAlign:'right',marginBottom:'8px',marginTop:'-10px'}}>{timeLeft}s</div>
-            <div className="card" style={{padding:'24px',marginBottom:'16px'}}>
-                <div style={{fontSize:'18px',fontWeight:600,lineHeight:1.4}}>{q.q}</div>
-            </div>
-            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
-                {q.a.map((a, i) => {
-                    let bg = 'var(--bg-card)';
-                    if (answered !== null) { if (i === q.correct) bg = 'rgba(74,222,128,0.2)'; else if (i === answered) bg = 'rgba(239,68,68,0.2)'; }
-                    return <div key={i} onClick={() => handleAnswer(i)} style={{padding:'16px',background:bg,border:`2px solid ${answered!==null?(i===q.correct?'#4ade80':i===answered?'#ef4444':'var(--border)'):'var(--border)'}`,borderRadius:'10px',cursor:answered===null?'pointer':'default',fontWeight:500,fontSize:'14px',textAlign:'center',transition:'all 0.2s'}}>{a}</div>;
-                })}
-            </div>
-        </div>
-    );
-}
-
-// TYPE RACE - Race against AI typist
 function TypeRaceGame({ room, updateRoom, currentUser, addScore }) {
     const sentences = [
         'The quick brown fox jumps over the lazy dog near the old mill',
