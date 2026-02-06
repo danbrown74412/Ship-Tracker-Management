@@ -5583,15 +5583,16 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
 
 // ==================== SINGLE PLAYER GAMES ====================
 
-// SNAKE
+// SNAKE - Bigger, progressive speed
 function SnakeGameInner({ addScore, currentUser }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState(0);
-    const gameRef = useRef({ snake: [], food: null, direction: 'right', nextDirection: 'right' });
-    const GRID = 20, SIZE = 400, CELL = SIZE / GRID;
+    const [level, setLevel] = useState(1);
+    const gameRef = useRef({ snake: [], food: null, direction: 'right', nextDirection: 'right', bonus: null });
+    const GRID = 25, SIZE = 600, CELL = SIZE / GRID;
     
-    const init = () => { gameRef.current = { snake: [{x:10,y:10},{x:9,y:10},{x:8,y:10}], food: spawn([{x:10,y:10}]), direction: 'right', nextDirection: 'right' }; setScore(0); setGameState('playing'); };
+    const init = () => { gameRef.current = { snake: [{x:12,y:12},{x:11,y:12},{x:10,y:12}], food: spawn([{x:12,y:12}]), direction: 'right', nextDirection: 'right', bonus: null }; setScore(0); setLevel(1); setGameState('playing'); };
     const spawn = (snake) => { let f; do { f = {x:Math.floor(Math.random()*GRID),y:Math.floor(Math.random()*GRID)}; } while(snake.some(s=>s.x===f.x&&s.y===f.y)); return f; };
     
     const loop = useCallback(() => {
@@ -5602,24 +5603,63 @@ function SnakeGameInner({ addScore, currentUser }) {
         if (nextDirection === 'up') head.y--; else if (nextDirection === 'down') head.y++; else if (nextDirection === 'left') head.x--; else head.x++;
         if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID || snake.some(s => s.x === head.x && s.y === head.y)) { setGameState('over'); addScore(score); return; }
         const newSnake = [head, ...snake];
-        if (head.x === food.x && head.y === food.y) { setScore(s => s + 10); gameRef.current.food = spawn(newSnake); } else newSnake.pop();
+        if (head.x === food.x && head.y === food.y) { 
+            setScore(s => { const ns = s + 10 * level; setLevel(Math.floor(ns / 100) + 1); return ns; }); 
+            gameRef.current.food = spawn(newSnake);
+            if (Math.random() < 0.3) gameRef.current.bonus = { ...spawn(newSnake), timer: 100 };
+        } else newSnake.pop();
+        if (gameRef.current.bonus) {
+            if (head.x === gameRef.current.bonus.x && head.y === gameRef.current.bonus.y) {
+                setScore(s => s + 50 * level); gameRef.current.bonus = null;
+            } else {
+                gameRef.current.bonus.timer--;
+                if (gameRef.current.bonus.timer <= 0) gameRef.current.bonus = null;
+            }
+        }
         gameRef.current.snake = newSnake;
         draw();
-    }, [gameState, score]);
+    }, [gameState, score, level]);
     
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, SIZE, SIZE);
-        const { snake, food } = gameRef.current;
+        // Background grid
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, SIZE, SIZE);
+        for (let x = 0; x < GRID; x++) for (let y = 0; y < GRID; y++) {
+            if ((x + y) % 2 === 0) { ctx.fillStyle = '#131d33'; ctx.fillRect(x*CELL, y*CELL, CELL, CELL); }
+        }
+        const { snake, food, bonus } = gameRef.current;
+        // Food with glow
+        ctx.shadowColor = '#ff6b6b'; ctx.shadowBlur = 15;
         ctx.fillStyle = '#ff6b6b'; ctx.beginPath(); ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2); ctx.fill();
-        snake.forEach((s, i) => { ctx.fillStyle = i === 0 ? '#4ade80' : '#22c55e'; ctx.fillRect(s.x*CELL+1, s.y*CELL+1, CELL-2, CELL-2); });
+        // Bonus
+        if (bonus) {
+            ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 20;
+            ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(bonus.x*CELL+CELL/2, bonus.y*CELL+CELL/2, CELL/2-1, 0, Math.PI*2); ctx.fill();
+        }
+        ctx.shadowBlur = 0;
+        // Snake with gradient body
+        snake.forEach((s, i) => { 
+            const hue = 142; const light = Math.max(30, 60 - i * 2);
+            ctx.fillStyle = i === 0 ? '#4ade80' : `hsl(${hue}, 70%, ${light}%)`; 
+            const r = 4; const x = s.x*CELL+1; const y = s.y*CELL+1; const w = CELL-2; const h = CELL-2;
+            ctx.beginPath(); ctx.roundRect(x, y, w, h, r); ctx.fill();
+        });
+        // Eyes on head
+        const h = snake[0];
+        ctx.fillStyle = '#000';
+        const dir = gameRef.current.direction;
+        if (dir === 'right') { ctx.fillRect(h.x*CELL+CELL-8, h.y*CELL+4, 3, 3); ctx.fillRect(h.x*CELL+CELL-8, h.y*CELL+CELL-7, 3, 3); }
+        else if (dir === 'left') { ctx.fillRect(h.x*CELL+5, h.y*CELL+4, 3, 3); ctx.fillRect(h.x*CELL+5, h.y*CELL+CELL-7, 3, 3); }
+        else if (dir === 'up') { ctx.fillRect(h.x*CELL+4, h.y*CELL+5, 3, 3); ctx.fillRect(h.x*CELL+CELL-7, h.y*CELL+5, 3, 3); }
+        else { ctx.fillRect(h.x*CELL+4, h.y*CELL+CELL-8, 3, 3); ctx.fillRect(h.x*CELL+CELL-7, h.y*CELL+CELL-8, 3, 3); }
     };
     
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 100); return () => clearInterval(i); } }, [gameState, loop]);
+    useEffect(() => { if (gameState === 'playing') { const speed = Math.max(50, 110 - level * 8); const i = setInterval(loop, speed); return () => clearInterval(i); } }, [gameState, loop, level]);
     useEffect(() => { draw(); }, []);
     useEffect(() => {
         const handleKey = (e) => {
-            if (gameState !== 'playing' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); init(); return; }
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d',' ','Enter'].includes(e.key)) e.preventDefault();
+            if (gameState !== 'playing' && (e.key === ' ' || e.key === 'Enter')) { init(); return; }
             const d = gameRef.current.direction;
             if ((e.key === 'ArrowUp' || e.key === 'w') && d !== 'down') gameRef.current.nextDirection = 'up';
             else if ((e.key === 'ArrowDown' || e.key === 's') && d !== 'up') gameRef.current.nextDirection = 'down';
@@ -5630,351 +5670,883 @@ function SnakeGameInner({ addScore, currentUser }) {
     }, [gameState]);
     
     return (
-        <div style={{position:'relative',width:SIZE,height:SIZE,borderRadius:'12px',overflow:'hidden'}}>
+        <div style={{position:'relative',width:SIZE,borderRadius:'12px',overflow:'hidden',border:'2px solid var(--border)'}}>
             <canvas ref={canvasRef} width={SIZE} height={SIZE}/>
-            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                {gameState === 'idle' && <><div style={{fontSize:'48px'}}>🐍</div><div style={{marginTop:'16px'}}>Press SPACE to start</div></>}
-                {gameState === 'over' && <><div style={{fontSize:'24px',color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'48px',fontWeight:700}}>{score}</div><div style={{marginTop:'16px'}}>Press SPACE to retry</div></>}
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'64px',marginBottom:'16px'}}>🐍</div><div style={{fontSize:'24px',fontWeight:700}}>Snake</div><div style={{marginTop:'8px',color:'#94a3b8'}}>Press SPACE to start</div><div style={{marginTop:'4px',fontSize:'12px',color:'#64748b'}}>Arrow keys or WASD to move</div></>}
+                {gameState === 'over' && <><div style={{fontSize:'20px',color:'#ff6b6b',marginBottom:'8px'}}>Game Over!</div><div style={{fontSize:'56px',fontWeight:700}}>{score}</div><div style={{color:'#94a3b8',marginTop:'4px'}}>Level {level}</div><div style={{marginTop:'16px',color:'#64748b'}}>Press SPACE to retry</div></>}
             </div>}
-            {gameState === 'playing' && <div style={{position:'absolute',top:'10px',left:'10px',color:'#fff',fontSize:'20px',fontWeight:700}}>{score}</div>}
+            {gameState === 'playing' && <div style={{position:'absolute',top:'12px',left:'12px',display:'flex',gap:'24px'}}>
+                <div><div style={{fontSize:'10px',color:'#64748b',letterSpacing:'1px'}}>SCORE</div><div style={{fontSize:'24px',fontWeight:700,color:'#fff'}}>{score}</div></div>
+                <div><div style={{fontSize:'10px',color:'#64748b',letterSpacing:'1px'}}>LEVEL</div><div style={{fontSize:'24px',fontWeight:700,color:'#4ade80'}}>{level}</div></div>
+            </div>}
         </div>
     );
 }
 
-// TETRIS
+// TETRIS - Bigger, better visuals
 function TetrisGame({ addScore }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState(0);
     const [level, setLevel] = useState(1);
+    const [lines, setLines] = useState(0);
     const gameRef = useRef({ board: [], piece: null, x: 0, y: 0, rotation: 0 });
-    const COLS = 10, ROWS = 20, CELL = 24;
+    const COLS = 10, ROWS = 20, CELL = 30;
     const PIECES = [[[1,1,1,1]],[[1,1],[1,1]],[[0,1,0],[1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[0,1,1],[1,1,0]],[[1,1,0],[0,1,1]]];
     const COLORS = ['#00f0f0','#f0f000','#a000f0','#f0a000','#0000f0','#00f000','#f00000'];
     
     const init = () => {
         gameRef.current = { board: Array(ROWS).fill(null).map(() => Array(COLS).fill(0)), piece: null, x: 0, y: 0, rotation: 0, color: 0 };
-        spawnPiece(); setScore(0); setLevel(1); setGameState('playing');
+        spawnPiece(); setScore(0); setLevel(1); setLines(0); setGameState('playing');
     };
-    
     const spawnPiece = () => {
         const idx = Math.floor(Math.random() * PIECES.length);
         gameRef.current.piece = PIECES[idx]; gameRef.current.color = idx;
-        gameRef.current.x = Math.floor(COLS / 2) - 1; gameRef.current.y = 0; gameRef.current.rotation = 0;
+        gameRef.current.x = Math.floor(COLS / 2) - 1; gameRef.current.y = 0;
         if (collides()) { setGameState('over'); addScore(score); }
     };
-    
     const rotate = (piece) => piece[0].map((_, i) => piece.map(row => row[i]).reverse());
-    
     const collides = (px = gameRef.current.x, py = gameRef.current.y, pp = gameRef.current.piece) => {
         for (let r = 0; r < pp.length; r++) for (let c = 0; c < pp[r].length; c++) if (pp[r][c]) {
             const nx = px + c, ny = py + r;
             if (nx < 0 || nx >= COLS || ny >= ROWS || (ny >= 0 && gameRef.current.board[ny][nx])) return true;
-        }
-        return false;
+        } return false;
     };
-    
     const merge = () => {
         const { piece, x, y, board, color } = gameRef.current;
         for (let r = 0; r < piece.length; r++) for (let c = 0; c < piece[r].length; c++) if (piece[r][c] && y + r >= 0) board[y + r][x + c] = color + 1;
         let cleared = 0;
         for (let r = ROWS - 1; r >= 0; r--) if (board[r].every(c => c)) { board.splice(r, 1); board.unshift(Array(COLS).fill(0)); cleared++; r++; }
-        if (cleared) { setScore(s => s + cleared * 100 * level); setLevel(l => Math.min(10, Math.floor(score / 1000) + 1)); }
+        if (cleared) { 
+            const pts = [0, 100, 300, 500, 800][cleared] * level;
+            setScore(s => s + pts); setLines(l => { const nl = l + cleared; setLevel(Math.floor(nl / 10) + 1); return nl; }); 
+        }
         spawnPiece();
     };
-    
     const move = (dx, dy) => { if (!collides(gameRef.current.x + dx, gameRef.current.y + dy)) { gameRef.current.x += dx; gameRef.current.y += dy; return true; } return false; };
     const drop = () => { while (move(0, 1)); merge(); };
     const rotatePiece = () => { const r = rotate(gameRef.current.piece); if (!collides(gameRef.current.x, gameRef.current.y, r)) gameRef.current.piece = r; };
     
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL);
+        // Grid lines
+        ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 0.5;
+        for (let x = 0; x <= COLS; x++) { ctx.beginPath(); ctx.moveTo(x*CELL, 0); ctx.lineTo(x*CELL, ROWS*CELL); ctx.stroke(); }
+        for (let y = 0; y <= ROWS; y++) { ctx.beginPath(); ctx.moveTo(0, y*CELL); ctx.lineTo(COLS*CELL, y*CELL); ctx.stroke(); }
         const { board, piece, x, y, color } = gameRef.current;
-        board.forEach((row, r) => row.forEach((c, col) => { if (c) { ctx.fillStyle = COLORS[c - 1]; ctx.fillRect(col * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2); } }));
-        if (piece) piece.forEach((row, r) => row.forEach((c, col) => { if (c) { ctx.fillStyle = COLORS[color]; ctx.fillRect((x + col) * CELL + 1, (y + r) * CELL + 1, CELL - 2, CELL - 2); } }));
+        board.forEach((row, r) => row.forEach((c, col) => { if (c) { ctx.fillStyle = COLORS[c-1]; ctx.fillRect(col*CELL+1, r*CELL+1, CELL-2, CELL-2); ctx.fillStyle = 'rgba(255,255,255,0.15)'; ctx.fillRect(col*CELL+1, r*CELL+1, CELL-2, 4); } }));
+        if (piece) {
+            // Ghost piece
+            let gy = y; while (!collides(x, gy + 1, piece)) gy++;
+            piece.forEach((row, r) => row.forEach((c, col) => { if (c) { ctx.fillStyle = 'rgba(255,255,255,0.08)'; ctx.fillRect((x+col)*CELL+1, (gy+r)*CELL+1, CELL-2, CELL-2); } }));
+            // Active piece
+            piece.forEach((row, r) => row.forEach((c, col) => { if (c) { ctx.fillStyle = COLORS[color]; ctx.fillRect((x+col)*CELL+1, (y+r)*CELL+1, CELL-2, CELL-2); ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.fillRect((x+col)*CELL+1, (y+r)*CELL+1, CELL-2, 4); } }));
+        }
     };
     
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(() => { if (!move(0, 1)) merge(); draw(); }, Math.max(100, 500 - level * 40)); return () => clearInterval(i); } }, [gameState, level]);
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(() => { if (!move(0, 1)) merge(); draw(); }, Math.max(80, 500 - level * 40)); return () => clearInterval(i); } }, [gameState, level]);
     useEffect(() => { draw(); }, []);
     useEffect(() => {
         const handleKey = (e) => {
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
             if (gameState !== 'playing') { if (e.key === ' ') init(); return; }
-            if (e.key === 'ArrowLeft') move(-1, 0);
-            else if (e.key === 'ArrowRight') move(1, 0);
-            else if (e.key === 'ArrowDown') move(0, 1);
-            else if (e.key === 'ArrowUp') rotatePiece();
-            else if (e.key === ' ') drop();
-            draw();
+            if (e.key === 'ArrowLeft') move(-1, 0); else if (e.key === 'ArrowRight') move(1, 0); else if (e.key === 'ArrowDown') move(0, 1); else if (e.key === 'ArrowUp') rotatePiece(); else if (e.key === ' ') drop(); draw();
         };
         window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
     }, [gameState]);
     
     return (
-        <div style={{display:'flex',gap:'24px'}}>
-            <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
+        <div style={{display:'flex',gap:'24px',alignItems:'flex-start'}}>
+            <div style={{position:'relative',borderRadius:'8px',overflow:'hidden',border:'2px solid var(--border)'}}>
                 <canvas ref={canvasRef} width={COLS * CELL} height={ROWS * CELL}/>
-                {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                    {gameState === 'idle' && <><div style={{fontSize:'32px'}}>🧱</div><div>Press SPACE</div></>}
-                    {gameState === 'over' && <><div style={{color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div><div>Press SPACE</div></>}
+                {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                    {gameState === 'idle' && <><div style={{fontSize:'48px'}}>🧱</div><div style={{fontSize:'20px',fontWeight:700,marginTop:'8px'}}>Tetris</div><div style={{color:'#94a3b8',marginTop:'4px'}}>Press SPACE</div></>}
+                    {gameState === 'over' && <><div style={{color:'#ff6b6b',fontSize:'18px'}}>Game Over!</div><div style={{fontSize:'40px',fontWeight:700,marginTop:'8px'}}>{score}</div><div style={{color:'#94a3b8'}}>Press SPACE</div></>}
                 </div>}
             </div>
-            <div style={{color:'var(--text)'}}>
-                <div style={{fontSize:'12px',color:'var(--text-muted)'}}>SCORE</div>
-                <div style={{fontSize:'24px',fontWeight:700}}>{score}</div>
-                <div style={{fontSize:'12px',color:'var(--text-muted)',marginTop:'12px'}}>LEVEL</div>
-                <div style={{fontSize:'24px',fontWeight:700}}>{level}</div>
-                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'24px'}}>← → Move<br/>↑ Rotate<br/>↓ Soft drop<br/>Space Hard drop</div>
+            <div style={{color:'var(--text)',minWidth:'120px'}}>
+                <div style={{marginBottom:'20px'}}><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>SCORE</div><div style={{fontSize:'28px',fontWeight:700}}>{score}</div></div>
+                <div style={{marginBottom:'20px'}}><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>LEVEL</div><div style={{fontSize:'28px',fontWeight:700,color:'var(--primary)'}}>{level}</div></div>
+                <div style={{marginBottom:'20px'}}><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>LINES</div><div style={{fontSize:'28px',fontWeight:700}}>{lines}</div></div>
+                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'24px',lineHeight:1.8}}>← → Move<br/>↑ Rotate<br/>↓ Soft drop<br/>Space Hard drop</div>
             </div>
         </div>
     );
 }
 
-// BREAKOUT
+// BREAKOUT - Full rewrite with levels, power-ups, bigger screen
 function BreakoutGame({ addScore }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState(0);
-    const W = 480, H = 400;
-    const gameRef = useRef({ paddle: W/2, ball: {x:W/2,y:H-40,dx:4,dy:-4}, bricks: [] });
-    
-    const init = () => {
+    const [level, setLevel] = useState(1);
+    const [lives, setLives] = useState(3);
+    const [activePowerUp, setActivePowerUp] = useState(null);
+    const W = 700, H = 550;
+    const gameRef = useRef(null);
+
+    const POWERUP_TYPES = [
+        { type: 'wide', color: '#22c55e', label: 'W', desc: 'Wide Paddle' },
+        { type: 'multi', color: '#3b82f6', label: 'M', desc: 'Multi Ball' },
+        { type: 'fire', color: '#ef4444', label: 'F', desc: 'Fire Ball' },
+        { type: 'slow', color: '#a855f7', label: 'S', desc: 'Slow Ball' },
+        { type: 'life', color: '#ec4899', label: '+', desc: 'Extra Life' },
+    ];
+
+    const buildLevel = (lvl) => {
         const bricks = [];
-        for (let r = 0; r < 5; r++) for (let c = 0; c < 10; c++) bricks.push({x:c*46+8,y:r*20+30,w:42,h:16,hit:false});
-        gameRef.current = { paddle: W/2, ball: {x:W/2,y:H-40,dx:4*(Math.random()>0.5?1:-1),dy:-4}, bricks };
-        setScore(0); setGameState('playing');
+        const rows = Math.min(4 + Math.floor(lvl / 2), 8);
+        const cols = Math.min(10 + Math.floor(lvl / 3), 14);
+        const bw = Math.floor((W - 20) / cols) - 4;
+        const offsetX = (W - cols * (bw + 4)) / 2 + 2;
+        for (let r = 0; r < rows; r++) {
+            for (let c = 0; c < cols; c++) {
+                let hp = 1;
+                if (lvl >= 3 && r < 2) hp = 2;
+                if (lvl >= 5 && r === 0) hp = 3;
+                if (lvl >= 7 && Math.random() < 0.15) hp = 4; // steel blocks
+                const hasPowerUp = Math.random() < 0.12;
+                const powerUp = hasPowerUp ? POWERUP_TYPES[Math.floor(Math.random() * POWERUP_TYPES.length)] : null;
+                bricks.push({ x: offsetX + c * (bw + 4), y: r * 24 + 45, w: bw, h: 20, hp, maxHp: hp, hit: false, powerUp });
+            }
+        }
+        return bricks;
     };
-    
+
+    const initLevel = (lvl, keepScore = false) => {
+        const baseSpeed = Math.min(4 + lvl * 0.3, 7);
+        const angle = (Math.random() * 60 + 60) * Math.PI / 180;
+        const dir = Math.random() > 0.5 ? 1 : -1;
+        gameRef.current = {
+            paddle: W / 2, paddleW: 70,
+            balls: [{ x: W / 2, y: H - 45, dx: Math.cos(angle) * baseSpeed * dir, dy: -Math.sin(angle) * baseSpeed }],
+            bricks: buildLevel(lvl),
+            powerUps: [], // falling power-ups
+            effects: [], // visual particles
+            fireBall: false,
+            baseSpeed
+        };
+        if (!keepScore) { setScore(0); setLives(3); }
+        setLevel(lvl);
+        setActivePowerUp(null);
+        setGameState('playing');
+    };
+
+    const init = () => initLevel(1);
+
     const loop = () => {
         if (gameState !== 'playing') return;
-        const { paddle, ball, bricks } = gameRef.current;
-        ball.x += ball.dx; ball.y += ball.dy;
-        if (ball.x <= 5 || ball.x >= W-5) ball.dx *= -1;
-        if (ball.y <= 5) ball.dy *= -1;
-        if (ball.y >= H-20 && ball.x > paddle-40 && ball.x < paddle+40) { ball.dy = -Math.abs(ball.dy); ball.dx = (ball.x - paddle) / 10; }
-        if (ball.y > H) { setGameState('over'); addScore(score); return; }
-        bricks.forEach(b => { if (!b.hit && ball.x > b.x && ball.x < b.x+b.w && ball.y > b.y && ball.y < b.y+b.h) { b.hit = true; ball.dy *= -1; setScore(s => s + 10); } });
-        if (bricks.every(b => b.hit)) { setGameState('won'); addScore(score + 500); }
+        const g = gameRef.current;
+
+        // Move balls
+        g.balls = g.balls.filter(ball => {
+            ball.x += ball.dx; ball.y += ball.dy;
+            // Wall bounces
+            if (ball.x <= 6) { ball.x = 6; ball.dx = Math.abs(ball.dx); }
+            if (ball.x >= W - 6) { ball.x = W - 6; ball.dx = -Math.abs(ball.dx); }
+            if (ball.y <= 6) { ball.y = 6; ball.dy = Math.abs(ball.dy); }
+            // Paddle bounce
+            if (ball.y >= H - 28 && ball.y <= H - 18 && ball.x > g.paddle - g.paddleW / 2 - 6 && ball.x < g.paddle + g.paddleW / 2 + 6) {
+                ball.dy = -Math.abs(ball.dy);
+                ball.dx = (ball.x - g.paddle) / (g.paddleW / 2) * g.baseSpeed;
+                // Add particle effect
+                for (let i = 0; i < 5; i++) g.effects.push({ x: ball.x, y: ball.y, dx: (Math.random() - 0.5) * 4, dy: -Math.random() * 3, life: 15, color: '#4ade80' });
+            }
+            // Out of bounds
+            if (ball.y > H + 10) return false;
+            // Brick collision
+            g.bricks.forEach(b => {
+                if (b.hit) return;
+                if (ball.x > b.x - 4 && ball.x < b.x + b.w + 4 && ball.y > b.y - 4 && ball.y < b.y + b.h + 4) {
+                    b.hp--;
+                    if (b.hp <= 0) {
+                        b.hit = true;
+                        setScore(s => s + 10 * level * b.maxHp);
+                        // Particles
+                        for (let i = 0; i < 8; i++) g.effects.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, dx: (Math.random() - 0.5) * 6, dy: (Math.random() - 0.5) * 6, life: 20, color: `hsl(${b.y * 3}, 80%, 60%)` });
+                        // Drop power-up
+                        if (b.powerUp) g.powerUps.push({ x: b.x + b.w / 2, y: b.y + b.h / 2, ...b.powerUp, dy: 2 });
+                    } else {
+                        for (let i = 0; i < 3; i++) g.effects.push({ x: ball.x, y: ball.y, dx: (Math.random() - 0.5) * 3, dy: (Math.random() - 0.5) * 3, life: 10, color: '#fff' });
+                    }
+                    if (!g.fireBall) {
+                        // Determine bounce direction
+                        const cx = b.x + b.w / 2, cy = b.y + b.h / 2;
+                        const dx = ball.x - cx, dy = ball.y - cy;
+                        if (Math.abs(dx / b.w) > Math.abs(dy / b.h)) ball.dx = dx > 0 ? Math.abs(ball.dx) : -Math.abs(ball.dx);
+                        else ball.dy = dy > 0 ? Math.abs(ball.dy) : -Math.abs(ball.dy);
+                    }
+                }
+            });
+            return true;
+        });
+
+        // Move power-ups
+        g.powerUps = g.powerUps.filter(p => {
+            p.y += p.dy;
+            if (p.y > H) return false;
+            if (p.y > H - 28 && p.x > g.paddle - g.paddleW / 2 - 10 && p.x < g.paddle + g.paddleW / 2 + 10) {
+                applyPowerUp(p.type);
+                return false;
+            }
+            return true;
+        });
+
+        // Update particles
+        g.effects = g.effects.filter(e => { e.x += e.dx; e.y += e.dy; e.life--; return e.life > 0; });
+
+        // Check ball loss
+        if (g.balls.length === 0) {
+            setLives(l => {
+                if (l <= 1) { setGameState('over'); addScore(score); return 0; }
+                // Respawn ball
+                const angle = (Math.random() * 60 + 60) * Math.PI / 180;
+                g.balls = [{ x: g.paddle, y: H - 45, dx: Math.cos(angle) * g.baseSpeed * (Math.random() > 0.5 ? 1 : -1), dy: -Math.sin(angle) * g.baseSpeed }];
+                g.paddleW = 70;
+                g.fireBall = false;
+                setActivePowerUp(null);
+                return l - 1;
+            });
+        }
+
+        // Check level complete
+        if (g.bricks.every(b => b.hit)) {
+            const nextLvl = level + 1;
+            setScore(s => s + 500 * level); // Level clear bonus
+            setTimeout(() => initLevel(nextLvl, true), 500);
+            setGameState('levelup');
+            return;
+        }
+
         draw();
     };
-    
+
+    const applyPowerUp = (type) => {
+        const g = gameRef.current;
+        setActivePowerUp(type);
+        if (type === 'wide') { g.paddleW = 120; setTimeout(() => { if (gameRef.current) gameRef.current.paddleW = 70; setActivePowerUp(null); }, 8000); }
+        else if (type === 'multi') {
+            const newBalls = [];
+            g.balls.forEach(b => {
+                newBalls.push({ ...b, dx: b.dx + 1.5, dy: b.dy });
+                newBalls.push({ ...b, dx: b.dx - 1.5, dy: b.dy });
+            });
+            g.balls = [...g.balls, ...newBalls];
+            setTimeout(() => setActivePowerUp(null), 1000);
+        }
+        else if (type === 'fire') { g.fireBall = true; setTimeout(() => { if (gameRef.current) gameRef.current.fireBall = false; setActivePowerUp(null); }, 6000); }
+        else if (type === 'slow') {
+            g.balls.forEach(b => { b.dx *= 0.6; b.dy *= 0.6; });
+            setTimeout(() => { if (gameRef.current) gameRef.current.balls.forEach(b => { b.dx /= 0.6; b.dy /= 0.6; }); setActivePowerUp(null); }, 5000);
+        }
+        else if (type === 'life') { setLives(l => l + 1); setActivePowerUp(null); }
+    };
+
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
-        const { paddle, ball, bricks } = gameRef.current;
-        ctx.fillStyle = '#4ade80'; ctx.fillRect(paddle - 40, H - 15, 80, 10);
-        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 6, 0, Math.PI*2); ctx.fill();
-        bricks.forEach(b => { if (!b.hit) { ctx.fillStyle = `hsl(${b.y*2}, 70%, 50%)`; ctx.fillRect(b.x, b.y, b.w, b.h); } });
+        // Background
+        ctx.fillStyle = '#0a0f1e'; ctx.fillRect(0, 0, W, H);
+        // Stars
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        for (let i = 0; i < 30; i++) { ctx.fillRect((i * 47 + 13) % W, (i * 31 + 7) % H, 1, 1); }
+        const g = gameRef.current; if (!g) return;
+
+        // Bricks
+        g.bricks.forEach(b => {
+            if (b.hit) return;
+            const hue = (b.y - 45) * 3.5;
+            const lightness = b.hp === 1 ? 50 : b.hp === 2 ? 40 : b.hp === 3 ? 30 : 20;
+            ctx.fillStyle = b.hp === 4 ? '#64748b' : `hsl(${hue}, 80%, ${lightness}%)`;
+            ctx.beginPath(); ctx.roundRect(b.x, b.y, b.w, b.h, 3); ctx.fill();
+            // Shine
+            ctx.fillStyle = `rgba(255,255,255,${b.hp === 4 ? 0.3 : 0.15})`;
+            ctx.fillRect(b.x + 2, b.y + 1, b.w - 4, 4);
+            // HP indicator for multi-hit
+            if (b.maxHp > 1 && b.hp > 1) {
+                ctx.fillStyle = 'rgba(255,255,255,0.7)'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText(b.hp, b.x + b.w / 2, b.y + b.h / 2 + 4);
+            }
+            // Power-up indicator
+            if (b.powerUp) {
+                ctx.fillStyle = b.powerUp.color; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('★', b.x + b.w / 2, b.y + b.h - 3);
+            }
+        });
+
+        // Power-ups falling
+        g.powerUps.forEach(p => {
+            ctx.fillStyle = p.color; ctx.shadowColor = p.color; ctx.shadowBlur = 10;
+            ctx.beginPath(); ctx.roundRect(p.x - 12, p.y - 8, 24, 16, 4); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(p.label, p.x, p.y + 4);
+        });
+
+        // Paddle
+        const pw = g.paddleW;
+        const gradient = ctx.createLinearGradient(g.paddle - pw / 2, H - 25, g.paddle + pw / 2, H - 15);
+        gradient.addColorStop(0, '#16a34a'); gradient.addColorStop(0.5, '#4ade80'); gradient.addColorStop(1, '#16a34a');
+        ctx.fillStyle = gradient;
+        ctx.beginPath(); ctx.roundRect(g.paddle - pw / 2, H - 25, pw, 12, 6); ctx.fill();
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        ctx.fillRect(g.paddle - pw / 2 + 4, H - 24, pw - 8, 3);
+
+        // Balls
+        g.balls.forEach(ball => {
+            if (g.fireBall) { ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 15; ctx.fillStyle = '#ef4444'; }
+            else { ctx.shadowColor = '#fff'; ctx.shadowBlur = 8; ctx.fillStyle = '#fff'; }
+            ctx.beginPath(); ctx.arc(ball.x, ball.y, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // Trail
+            if (g.fireBall) { for (let i = 1; i <= 3; i++) { ctx.fillStyle = `rgba(239,68,68,${0.3 / i})`; ctx.beginPath(); ctx.arc(ball.x - ball.dx * i * 0.5, ball.y - ball.dy * i * 0.5, 6 - i, 0, Math.PI * 2); ctx.fill(); } }
+        });
+
+        // Particles
+        g.effects.forEach(e => {
+            ctx.fillStyle = e.color; ctx.globalAlpha = e.life / 20;
+            ctx.fillRect(e.x - 2, e.y - 2, 4, 4);
+        });
+        ctx.globalAlpha = 1;
+
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${score}`, 10, 22);
+        ctx.textAlign = 'center';
+        ctx.fillText(`Level ${level}`, W / 2, 22);
+        ctx.textAlign = 'right';
+        ctx.fillText('❤️'.repeat(lives), W - 10, 22);
     };
-    
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState]);
+
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score, level, lives]);
+    useEffect(() => { if (gameState === 'levelup') { draw(); const t = setTimeout(() => {}, 500); return () => clearTimeout(t); } }, [gameState]);
     useEffect(() => { draw(); }, []);
     useEffect(() => {
-        const move = (e) => { if (gameState === 'playing') { const rect = canvasRef.current.getBoundingClientRect(); gameRef.current.paddle = Math.max(40, Math.min(W-40, e.clientX - rect.left)); } };
+        const move = (e) => { if (gameState === 'playing' && gameRef.current) { const rect = canvasRef.current?.getBoundingClientRect(); if (rect) gameRef.current.paddle = Math.max(40, Math.min(W - 40, e.clientX - rect.left)); } };
         const click = () => { if (gameState !== 'playing') init(); };
         window.addEventListener('mousemove', move); window.addEventListener('click', click);
         return () => { window.removeEventListener('mousemove', move); window.removeEventListener('click', click); };
     }, [gameState]);
-    
+
     return (
-        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
-            <canvas ref={canvasRef} width={W} height={H} style={{cursor:'none'}}/>
-            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                {gameState === 'idle' && <><div style={{fontSize:'32px'}}>🧱</div><div>Click to start</div></>}
-                {gameState === 'over' && <><div style={{color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
-                {gameState === 'won' && <><div style={{color:'#4ade80'}}>You Win!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
+        <div>
+            <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+                <canvas ref={canvasRef} width={W} height={H} style={{cursor: gameState === 'playing' ? 'none' : 'pointer', display: 'block'}}/>
+                {gameState === 'idle' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.88)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                    <div style={{fontSize:'56px',marginBottom:'12px'}}>🧱</div>
+                    <div style={{fontSize:'28px',fontWeight:700}}>Brick Breaker</div>
+                    <div style={{color:'#94a3b8',marginTop:'8px'}}>Click anywhere to start</div>
+                    <div style={{marginTop:'24px',display:'flex',gap:'12px',flexWrap:'wrap',justifyContent:'center'}}>
+                        {POWERUP_TYPES.map(p => <div key={p.type} style={{display:'flex',alignItems:'center',gap:'6px',background:'rgba(255,255,255,0.08)',padding:'6px 12px',borderRadius:'20px',fontSize:'12px'}}>
+                            <span style={{color:p.color,fontWeight:700}}>{p.label}</span> <span style={{color:'#94a3b8'}}>{p.desc}</span>
+                        </div>)}
+                    </div>
+                </div>}
+                {gameState === 'over' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.88)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                    <div style={{color:'#ff6b6b',fontSize:'20px'}}>Game Over!</div>
+                    <div style={{fontSize:'48px',fontWeight:700,marginTop:'8px'}}>{score}</div>
+                    <div style={{color:'#94a3b8'}}>Reached Level {level}</div>
+                    <div style={{marginTop:'16px',color:'#64748b'}}>Click to play again</div>
+                </div>}
+                {gameState === 'levelup' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.75)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                    <div style={{fontSize:'32px',fontWeight:700,color:'#4ade80'}}>Level {level} Complete!</div>
+                    <div style={{color:'#94a3b8',marginTop:'8px'}}>+{500 * level} bonus</div>
+                </div>}
+            </div>
+            {activePowerUp && <div style={{marginTop:'8px',padding:'6px 16px',background:'rgba(79,195,247,0.1)',border:'1px solid var(--blue)',borderRadius:'8px',fontSize:'13px',textAlign:'center',color:'var(--blue)'}}>
+                ⚡ {POWERUP_TYPES.find(p => p.type === activePowerUp)?.desc || activePowerUp} Active
             </div>}
-            {gameState === 'playing' && <div style={{position:'absolute',top:'5px',right:'10px',color:'#fff',fontSize:'16px',fontWeight:700}}>{score}</div>}
+            <div style={{marginTop:'8px',fontSize:'12px',color:'var(--text-muted)'}}>Move mouse to control paddle • Break all bricks to advance</div>
         </div>
     );
 }
 
-// SPACE INVADERS
+// SPACE INVADERS - Progressive waves, power-ups, bigger screen
 function SpaceInvadersGame({ addScore }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState(0);
-    const W = 400, H = 500;
-    const gameRef = useRef({ player: W/2, bullets: [], aliens: [], alienBullets: [], dir: 1 });
+    const [wave, setWave] = useState(1);
+    const [lives, setLives] = useState(3);
+    const [shield, setShield] = useState(false);
+    const W = 650, H = 550;
+    const gameRef = useRef(null);
     
-    const init = () => {
+    const ENEMY_TYPES = [
+        { color: '#a855f7', points: 10, hp: 1 },  // basic
+        { color: '#3b82f6', points: 25, hp: 2 },  // medium
+        { color: '#ef4444', points: 50, hp: 3 },  // tough
+        { color: '#fbbf24', points: 100, hp: 1, fast: true }, // fast
+    ];
+
+    const buildWave = (w) => {
         const aliens = [];
-        for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) aliens.push({x:c*45+40,y:r*35+40,alive:true});
-        gameRef.current = { player: W/2, bullets: [], aliens, alienBullets: [], dir: 1 };
-        setScore(0); setGameState('playing');
+        const rows = Math.min(3 + Math.floor(w / 2), 6);
+        const cols = Math.min(7 + Math.floor(w / 3), 11);
+        for (let r = 0; r < rows; r++) {
+            const typeIdx = r === 0 && w >= 3 ? 2 : r < 2 && w >= 2 ? 1 : w >= 5 && Math.random() < 0.2 ? 3 : 0;
+            for (let c = 0; c < cols; c++) {
+                aliens.push({ x: c * 50 + 50, y: r * 40 + 50, alive: true, type: typeIdx, hp: ENEMY_TYPES[typeIdx].hp, frame: 0 });
+            }
+        }
+        return aliens;
     };
+
+    const initWave = (w, keepState = false) => {
+        const speed = Math.min(0.5 + w * 0.15, 2.5);
+        gameRef.current = {
+            player: W / 2, bullets: [], aliens: buildWave(w), alienBullets: [],
+            dir: 1, speed, dropPowerUps: [], particles: [],
+            shieldActive: false, rapidFire: false, lastShot: 0
+        };
+        if (!keepState) { setScore(0); setLives(3); }
+        setWave(w); setShield(false); setGameState('playing');
+    };
+
+    const init = () => initWave(1);
     
     const loop = () => {
         if (gameState !== 'playing') return;
         const g = gameRef.current;
-        g.bullets = g.bullets.filter(b => { b.y -= 8; return b.y > 0; });
-        g.alienBullets = g.alienBullets.filter(b => { b.y += 4; return b.y < H; });
+        const now = Date.now();
+        
+        // Move bullets
+        g.bullets = g.bullets.filter(b => { b.y -= 10; return b.y > 0; });
+        g.alienBullets = g.alienBullets.filter(b => { b.y += 4 + wave * 0.3; return b.y < H; });
+        
+        // Move aliens
         const liveAliens = g.aliens.filter(a => a.alive);
-        if (liveAliens.length === 0) { setGameState('won'); addScore(score + 1000); return; }
+        if (liveAliens.length === 0) {
+            const nextWave = wave + 1;
+            setScore(s => s + 1000 * wave);
+            setTimeout(() => initWave(nextWave, true), 800);
+            setGameState('waveup');
+            return;
+        }
+        
         const minX = Math.min(...liveAliens.map(a => a.x)), maxX = Math.max(...liveAliens.map(a => a.x));
-        if ((g.dir > 0 && maxX > W - 40) || (g.dir < 0 && minX < 20)) { g.dir *= -1; g.aliens.forEach(a => a.y += 20); }
-        g.aliens.forEach(a => a.x += g.dir * 0.5);
-        if (Math.random() < 0.02 && liveAliens.length) { const a = liveAliens[Math.floor(Math.random() * liveAliens.length)]; g.alienBullets.push({x:a.x+12,y:a.y+20}); }
-        g.bullets.forEach(b => { g.aliens.forEach(a => { if (a.alive && b.x > a.x && b.x < a.x+24 && b.y > a.y && b.y < a.y+20) { a.alive = false; b.y = -10; setScore(s => s + 25); } }); });
-        if (g.alienBullets.some(b => b.x > g.player-15 && b.x < g.player+15 && b.y > H-35)) { setGameState('over'); addScore(score); return; }
-        if (liveAliens.some(a => a.y > H - 80)) { setGameState('over'); addScore(score); return; }
+        if ((g.dir > 0 && maxX > W - 45) || (g.dir < 0 && minX < 25)) {
+            g.dir *= -1; g.aliens.forEach(a => a.y += 15);
+        }
+        g.aliens.forEach(a => { a.x += g.dir * g.speed; a.frame++; });
+        
+        // Alien shooting
+        if (Math.random() < 0.015 + wave * 0.005 && liveAliens.length) {
+            const a = liveAliens[Math.floor(Math.random() * liveAliens.length)];
+            g.alienBullets.push({ x: a.x + 12, y: a.y + 24 });
+        }
+        
+        // Bullet-alien collision
+        g.bullets.forEach(b => {
+            g.aliens.forEach(a => {
+                if (a.alive && b.x > a.x - 2 && b.x < a.x + 28 && b.y > a.y - 2 && b.y < a.y + 24) {
+                    a.hp--;
+                    if (a.hp <= 0) {
+                        a.alive = false;
+                        setScore(s => s + ENEMY_TYPES[a.type].points * wave);
+                        // Particles
+                        for (let i = 0; i < 6; i++) g.particles.push({ x: a.x + 12, y: a.y + 12, dx: (Math.random() - 0.5) * 5, dy: (Math.random() - 0.5) * 5, life: 15, color: ENEMY_TYPES[a.type].color });
+                        // Power-up drop
+                        if (Math.random() < 0.08) {
+                            const types = ['shield', 'rapid', 'bomb'];
+                            g.dropPowerUps.push({ x: a.x + 12, y: a.y, type: types[Math.floor(Math.random() * types.length)], dy: 2 });
+                        }
+                    }
+                    b.y = -10;
+                }
+            });
+        });
+        
+        // Player hit check
+        const playerHit = g.alienBullets.some(b => b.x > g.player - 18 && b.x < g.player + 18 && b.y > H - 40 && b.y < H - 15);
+        const alienReached = liveAliens.some(a => a.y > H - 80);
+        
+        if (playerHit && !g.shieldActive) {
+            g.alienBullets = g.alienBullets.filter(b => !(b.x > g.player - 18 && b.x < g.player + 18 && b.y > H - 40));
+            for (let i = 0; i < 10; i++) g.particles.push({ x: g.player, y: H - 30, dx: (Math.random() - 0.5) * 6, dy: (Math.random() - 0.5) * 6, life: 20, color: '#4ade80' });
+            setLives(l => {
+                if (l <= 1) { setGameState('over'); addScore(score); return 0; }
+                return l - 1;
+            });
+        } else if (playerHit && g.shieldActive) {
+            g.alienBullets = g.alienBullets.filter(b => !(b.x > g.player - 18 && b.x < g.player + 18 && b.y > H - 40));
+            g.shieldActive = false; setShield(false);
+        }
+        
+        if (alienReached) { setGameState('over'); addScore(score); return; }
+        
+        // Power-up collection
+        g.dropPowerUps = g.dropPowerUps.filter(p => {
+            p.y += p.dy;
+            if (p.y > H) return false;
+            if (p.y > H - 40 && p.x > g.player - 20 && p.x < g.player + 20) {
+                if (p.type === 'shield') { g.shieldActive = true; setShield(true); setTimeout(() => { if (gameRef.current) gameRef.current.shieldActive = false; setShield(false); }, 8000); }
+                else if (p.type === 'rapid') { g.rapidFire = true; setTimeout(() => { if (gameRef.current) gameRef.current.rapidFire = false; }, 5000); }
+                else if (p.type === 'bomb') { g.aliens.filter(a => a.alive).slice(0, 5).forEach(a => { a.alive = false; setScore(s => s + ENEMY_TYPES[a.type].points); for (let i = 0; i < 4; i++) g.particles.push({ x: a.x + 12, y: a.y + 12, dx: (Math.random() - 0.5) * 4, dy: (Math.random() - 0.5) * 4, life: 15, color: '#fbbf24' }); }); }
+                return false;
+            }
+            return true;
+        });
+
+        // Particles
+        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
+        
         draw();
     };
     
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, W, H);
-        const g = gameRef.current;
-        ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.moveTo(g.player,H-35); ctx.lineTo(g.player-15,H-15); ctx.lineTo(g.player+15,H-15); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#fff'; g.bullets.forEach(b => ctx.fillRect(b.x-2,b.y,4,10));
-        ctx.fillStyle = '#ff6b6b'; g.alienBullets.forEach(b => ctx.fillRect(b.x-2,b.y,4,10));
-        g.aliens.forEach(a => { if (a.alive) { ctx.fillStyle = '#a855f7'; ctx.fillRect(a.x,a.y,24,20); ctx.fillStyle = '#fff'; ctx.fillRect(a.x+4,a.y+6,4,4); ctx.fillRect(a.x+16,a.y+6,4,4); } });
+        // Starfield background
+        ctx.fillStyle = '#070b16'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(255,255,255,0.2)';
+        for (let i = 0; i < 50; i++) ctx.fillRect((i * 53 + 7) % W, (i * 37 + 13) % H, 1, 1);
+        
+        const g = gameRef.current; if (!g) return;
+        
+        // Player ship
+        ctx.fillStyle = '#4ade80';
+        ctx.beginPath(); ctx.moveTo(g.player, H - 40); ctx.lineTo(g.player - 18, H - 18); ctx.lineTo(g.player - 8, H - 22); ctx.lineTo(g.player, H - 15); ctx.lineTo(g.player + 8, H - 22); ctx.lineTo(g.player + 18, H - 18); ctx.closePath(); ctx.fill();
+        // Engine glow
+        ctx.fillStyle = '#22c55e'; ctx.fillRect(g.player - 4, H - 14, 8, 4);
+        // Shield
+        if (g.shieldActive) {
+            ctx.strokeStyle = 'rgba(59,130,246,0.6)'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.arc(g.player, H - 28, 25, 0, Math.PI * 2); ctx.stroke();
+        }
+        
+        // Bullets
+        ctx.fillStyle = '#4ade80'; ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 5;
+        g.bullets.forEach(b => ctx.fillRect(b.x - 2, b.y, 4, 12));
+        ctx.shadowBlur = 0;
+        
+        ctx.fillStyle = '#ef4444'; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 5;
+        g.alienBullets.forEach(b => ctx.fillRect(b.x - 2, b.y, 4, 10));
+        ctx.shadowBlur = 0;
+        
+        // Aliens
+        g.aliens.forEach(a => {
+            if (!a.alive) return;
+            const t = ENEMY_TYPES[a.type];
+            ctx.fillStyle = t.color;
+            // Body
+            ctx.beginPath(); ctx.roundRect(a.x + 2, a.y + 2, 22, 18, 4); ctx.fill();
+            // Eyes
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(a.x + 6, a.y + 8, 4, 4);
+            ctx.fillRect(a.x + 16, a.y + 8, 4, 4);
+            // Legs that animate
+            const legOffset = Math.sin(a.frame * 0.1) * 2;
+            ctx.fillStyle = t.color;
+            ctx.fillRect(a.x + 4, a.y + 20, 3, 4 + legOffset);
+            ctx.fillRect(a.x + 19, a.y + 20, 3, 4 - legOffset);
+            // HP bar for multi-hit
+            if (t.hp > 1 && a.hp < t.hp) {
+                ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(a.x + 2, a.y - 4, 22, 3);
+                ctx.fillStyle = t.color; ctx.fillRect(a.x + 2, a.y - 4, 22 * (a.hp / t.hp), 3);
+            }
+        });
+        
+        // Falling power-ups
+        g.dropPowerUps.forEach(p => {
+            const colors = { shield: '#3b82f6', rapid: '#fbbf24', bomb: '#ef4444' };
+            const labels = { shield: '🛡', rapid: '⚡', bomb: '💣' };
+            ctx.fillStyle = colors[p.type]; ctx.shadowColor = colors[p.type]; ctx.shadowBlur = 8;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 10, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.font = '12px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(labels[p.type], p.x, p.y + 4);
+        });
+        
+        // Particles
+        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 20; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${score}`, 12, 22);
+        ctx.textAlign = 'center'; ctx.fillText(`Wave ${wave}`, W / 2, 22);
+        ctx.textAlign = 'right'; ctx.fillText('❤️'.repeat(lives), W - 12, 22);
     };
     
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 33); return () => clearInterval(i); } }, [gameState]);
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 33); return () => clearInterval(i); } }, [gameState, score, wave, lives]);
     useEffect(() => { draw(); }, []);
     useEffect(() => {
         const handleKey = (e) => {
+            if (['ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
             if (gameState !== 'playing') { if (e.key === ' ') init(); return; }
-            if (e.key === 'ArrowLeft') gameRef.current.player = Math.max(20, gameRef.current.player - 15);
-            else if (e.key === 'ArrowRight') gameRef.current.player = Math.min(W-20, gameRef.current.player + 15);
-            else if (e.key === ' ') gameRef.current.bullets.push({x:gameRef.current.player,y:H-40});
+            const g = gameRef.current; if (!g) return;
+            if (e.key === 'ArrowLeft') g.player = Math.max(22, g.player - 18);
+            else if (e.key === 'ArrowRight') g.player = Math.min(W - 22, g.player + 18);
+            else if (e.key === ' ') {
+                const now = Date.now();
+                const cooldown = g.rapidFire ? 100 : 250;
+                if (now - g.lastShot > cooldown) {
+                    g.bullets.push({ x: g.player, y: H - 45 });
+                    g.lastShot = now;
+                }
+            }
         };
         window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
     }, [gameState]);
     
     return (
-        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
-            <canvas ref={canvasRef} width={W} height={H}/>
-            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                {gameState === 'idle' && <><div style={{fontSize:'32px'}}>👾</div><div>Press SPACE</div></>}
-                {gameState === 'over' && <><div style={{color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
-                {gameState === 'won' && <><div style={{color:'#4ade80'}}>Victory!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
+        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
+            {(gameState === 'idle' || gameState === 'over' || gameState === 'waveup') && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>👾</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Space Invaders</div><div style={{color:'#94a3b8',marginTop:'8px'}}>← → to move • SPACE to shoot</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div></>}
+                {gameState === 'over' && <><div style={{color:'#ff6b6b',fontSize:'20px'}}>Game Over!</div><div style={{fontSize:'48px',fontWeight:700,marginTop:'8px'}}>{score}</div><div style={{color:'#94a3b8'}}>Reached Wave {wave}</div><div style={{marginTop:'12px',color:'#64748b'}}>Press SPACE to retry</div></>}
+                {gameState === 'waveup' && <><div style={{fontSize:'32px',fontWeight:700,color:'#4ade80'}}>Wave {wave} Complete!</div><div style={{color:'#94a3b8',marginTop:'8px'}}>+{1000 * wave} bonus</div><div style={{marginTop:'4px',color:'#64748b'}}>Next wave incoming...</div></>}
             </div>}
-            {gameState === 'playing' && <div style={{position:'absolute',top:'5px',left:'10px',color:'#fff',fontWeight:700}}>{score}</div>}
         </div>
     );
 }
 
-// ASTEROIDS
+// ASTEROIDS - Progressive waves, bigger screen
 function AsteroidsGame({ addScore }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState(0);
-    const W = 500, H = 500;
-    const gameRef = useRef({ ship: {x:W/2,y:H/2,angle:0,dx:0,dy:0}, bullets: [], asteroids: [], keys: {} });
+    const [wave, setWave] = useState(1);
+    const [lives, setLives] = useState(3);
+    const W = 650, H = 550;
+    const gameRef = useRef(null);
     
-    const init = () => {
-        const asteroids = Array(5).fill(0).map(() => ({x:Math.random()*W,y:Math.random()*H,dx:(Math.random()-0.5)*2,dy:(Math.random()-0.5)*2,r:30+Math.random()*20}));
-        gameRef.current = { ship: {x:W/2,y:H/2,angle:-Math.PI/2,dx:0,dy:0}, bullets: [], asteroids, keys: {} };
-        setScore(0); setGameState('playing');
+    const spawnAsteroids = (w) => Array(3 + w).fill(0).map(() => ({x:Math.random()*W,y:Math.random()*H,dx:(Math.random()-0.5)*(1.5+w*0.3),dy:(Math.random()-0.5)*(1.5+w*0.3),r:30+Math.random()*20,verts:Array(8).fill(0).map(()=>0.7+Math.random()*0.6)}));
+
+    const initWave = (w, keepState = false) => {
+        gameRef.current = { ship: {x:W/2,y:H/2,angle:-Math.PI/2,dx:0,dy:0}, bullets: [], asteroids: spawnAsteroids(w), keys: {}, particles: [], invincible: 30 };
+        if (!keepState) { setScore(0); setLives(3); }
+        setWave(w); setGameState('playing');
     };
+    const init = () => initWave(1);
     
     const loop = () => {
         if (gameState !== 'playing') return;
         const g = gameRef.current, s = g.ship;
-        if (g.keys['ArrowLeft']) s.angle -= 0.08;
-        if (g.keys['ArrowRight']) s.angle += 0.08;
-        if (g.keys['ArrowUp']) { s.dx += Math.cos(s.angle) * 0.15; s.dy += Math.sin(s.angle) * 0.15; }
+        if (g.invincible > 0) g.invincible--;
+        if (g.keys['ArrowLeft'] || g.keys['a']) s.angle -= 0.07;
+        if (g.keys['ArrowRight'] || g.keys['d']) s.angle += 0.07;
+        if (g.keys['ArrowUp'] || g.keys['w']) { s.dx += Math.cos(s.angle) * 0.15; s.dy += Math.sin(s.angle) * 0.15; g.particles.push({x:s.x-Math.cos(s.angle)*12,y:s.y-Math.sin(s.angle)*12,dx:(Math.random()-0.5)*2-Math.cos(s.angle)*2,dy:(Math.random()-0.5)*2-Math.sin(s.angle)*2,life:10,color:'#fbbf24'}); }
         s.x = (s.x + s.dx + W) % W; s.y = (s.y + s.dy + H) % H;
         s.dx *= 0.99; s.dy *= 0.99;
         g.bullets = g.bullets.filter(b => { b.x += b.dx; b.y += b.dy; b.life--; return b.life > 0; });
         g.asteroids.forEach(a => { a.x = (a.x + a.dx + W) % W; a.y = (a.y + a.dy + H) % H; });
-        g.bullets.forEach(b => { g.asteroids.forEach((a, i) => { if (Math.hypot(b.x-a.x,b.y-a.y) < a.r) { b.life = 0; setScore(sc => sc + Math.round(100/a.r*10)); if (a.r > 15) { g.asteroids.push({x:a.x,y:a.y,dx:(Math.random()-0.5)*3,dy:(Math.random()-0.5)*3,r:a.r/2}); g.asteroids.push({x:a.x,y:a.y,dx:(Math.random()-0.5)*3,dy:(Math.random()-0.5)*3,r:a.r/2}); } g.asteroids.splice(i, 1); } }); });
-        if (g.asteroids.some(a => Math.hypot(s.x-a.x,s.y-a.y) < a.r + 10)) { setGameState('over'); addScore(score); return; }
-        if (g.asteroids.length === 0) { for (let i = 0; i < 7; i++) g.asteroids.push({x:Math.random()*W,y:Math.random()*H,dx:(Math.random()-0.5)*3,dy:(Math.random()-0.5)*3,r:30+Math.random()*20}); }
+        
+        g.bullets.forEach(b => {
+            for (let i = g.asteroids.length - 1; i >= 0; i--) {
+                const a = g.asteroids[i];
+                if (Math.hypot(b.x - a.x, b.y - a.y) < a.r) {
+                    b.life = 0;
+                    const pts = Math.round(100 / a.r * 10) * wave;
+                    setScore(sc => sc + pts);
+                    for (let j = 0; j < 6; j++) g.particles.push({x:a.x,y:a.y,dx:(Math.random()-0.5)*5,dy:(Math.random()-0.5)*5,life:15,color:'#94a3b8'});
+                    if (a.r > 15) {
+                        const spd = 1.5 + wave * 0.2;
+                        g.asteroids.push({x:a.x,y:a.y,dx:(Math.random()-0.5)*spd*2,dy:(Math.random()-0.5)*spd*2,r:a.r/2,verts:Array(8).fill(0).map(()=>0.7+Math.random()*0.6)});
+                        g.asteroids.push({x:a.x,y:a.y,dx:(Math.random()-0.5)*spd*2,dy:(Math.random()-0.5)*spd*2,r:a.r/2,verts:Array(8).fill(0).map(()=>0.7+Math.random()*0.6)});
+                    }
+                    g.asteroids.splice(i, 1);
+                    break;
+                }
+            }
+        });
+
+        // Ship collision
+        if (g.invincible <= 0 && g.asteroids.some(a => Math.hypot(s.x - a.x, s.y - a.y) < a.r + 10)) {
+            for (let i = 0; i < 15; i++) g.particles.push({x:s.x,y:s.y,dx:(Math.random()-0.5)*6,dy:(Math.random()-0.5)*6,life:25,color:'#4ade80'});
+            setLives(l => {
+                if (l <= 1) { setGameState('over'); addScore(score); return 0; }
+                s.x = W / 2; s.y = H / 2; s.dx = 0; s.dy = 0; g.invincible = 60;
+                return l - 1;
+            });
+        }
+        
+        // Wave clear
+        if (g.asteroids.length === 0) {
+            const nextWave = wave + 1;
+            setScore(s => s + 500 * wave);
+            setTimeout(() => initWave(nextWave, true), 800);
+            setGameState('waveup');
+            return;
+        }
+        
+        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
         draw();
     };
     
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, W, H);
-        const g = gameRef.current, s = g.ship;
-        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.angle + Math.PI/2);
-        ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(-10, 10); ctx.lineTo(10, 10); ctx.closePath(); ctx.stroke(); ctx.restore();
-        ctx.fillStyle = '#fff'; g.bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI*2); ctx.fill(); });
-        ctx.strokeStyle = '#888'; ctx.lineWidth = 2; g.asteroids.forEach(a => { ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.stroke(); });
+        ctx.fillStyle = '#070b16'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = 'rgba(255,255,255,0.15)';
+        for (let i = 0; i < 60; i++) ctx.fillRect((i * 47 + 13) % W, (i * 31 + 7) % H, 1, 1);
+        
+        const g = gameRef.current; if (!g) return;
+        const s = g.ship;
+        
+        // Ship
+        if (g.invincible <= 0 || Math.floor(g.invincible / 3) % 2 === 0) {
+            ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.angle + Math.PI / 2);
+            ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2;
+            ctx.beginPath(); ctx.moveTo(0, -16); ctx.lineTo(-11, 12); ctx.lineTo(0, 6); ctx.lineTo(11, 12); ctx.closePath(); ctx.stroke();
+            ctx.restore();
+        }
+        
+        // Bullets
+        ctx.fillStyle = '#4ade80'; ctx.shadowColor = '#4ade80'; ctx.shadowBlur = 6;
+        g.bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill(); });
+        ctx.shadowBlur = 0;
+        
+        // Asteroids with vertices for irregular shape
+        ctx.strokeStyle = '#94a3b8'; ctx.lineWidth = 2;
+        g.asteroids.forEach(a => {
+            ctx.beginPath();
+            for (let i = 0; i < a.verts.length; i++) {
+                const angle = (i / a.verts.length) * Math.PI * 2;
+                const r = a.r * a.verts[i];
+                const px = a.x + Math.cos(angle) * r, py = a.y + Math.sin(angle) * r;
+                if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+            }
+            ctx.closePath(); ctx.stroke();
+        });
+        
+        // Particles
+        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 25; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`Score: ${score}`, 12, 22);
+        ctx.textAlign = 'center'; ctx.fillText(`Wave ${wave}`, W / 2, 22);
+        ctx.textAlign = 'right'; ctx.fillText('❤️'.repeat(lives), W - 12, 22);
     };
     
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState]);
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score, wave, lives]);
     useEffect(() => { draw(); }, []);
     useEffect(() => {
-        const down = (e) => { gameRef.current.keys[e.key] = true; if (e.key === ' ') { if (gameState !== 'playing') init(); else { const s = gameRef.current.ship; gameRef.current.bullets.push({x:s.x,y:s.y,dx:Math.cos(s.angle)*8,dy:Math.sin(s.angle)*8,life:50}); } } };
-        const up = (e) => { gameRef.current.keys[e.key] = false; };
+        const down = (e) => {
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','w','a','s','d'].includes(e.key)) e.preventDefault();
+            if (gameRef.current) gameRef.current.keys[e.key] = true;
+            if (e.key === ' ') {
+                if (gameState !== 'playing') init();
+                else if (gameRef.current) { const s = gameRef.current.ship; gameRef.current.bullets.push({x:s.x,y:s.y,dx:Math.cos(s.angle)*8,dy:Math.sin(s.angle)*8,life:50}); }
+            }
+        };
+        const up = (e) => { if (gameRef.current) gameRef.current.keys[e.key] = false; };
         window.addEventListener('keydown', down); window.addEventListener('keyup', up);
         return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
     }, [gameState]);
     
     return (
-        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
-            <canvas ref={canvasRef} width={W} height={H}/>
-            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                <div style={{fontSize:'32px'}}>☄️</div><div>{gameState === 'over' ? `Game Over! ${score}` : 'Press SPACE'}</div>
+        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
+            {(gameState !== 'playing') && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>☄️</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Asteroids</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to move • SPACE to shoot</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div></>}
+                {gameState === 'over' && <><div style={{color:'#ff6b6b',fontSize:'20px'}}>Game Over!</div><div style={{fontSize:'48px',fontWeight:700,marginTop:'8px'}}>{score}</div><div style={{color:'#94a3b8'}}>Reached Wave {wave}</div><div style={{marginTop:'12px',color:'#64748b'}}>Press SPACE to retry</div></>}
+                {gameState === 'waveup' && <><div style={{fontSize:'32px',fontWeight:700,color:'#4ade80'}}>Wave {wave} Clear!</div><div style={{color:'#94a3b8',marginTop:'8px'}}>+{500*wave} bonus</div></>}
             </div>}
-            {gameState === 'playing' && <div style={{position:'absolute',top:'5px',left:'10px',color:'#fff',fontWeight:700}}>{score}</div>}
         </div>
     );
 }
 
-// FLAPPY BIRD
+// FLAPPY BIRD - Bigger, progressive difficulty
 function FlappyBirdGame({ addScore }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState(0);
-    const W = 400, H = 600;
-    const gameRef = useRef({ bird: {y:H/2,v:0}, pipes: [], frame: 0 });
+    const W = 500, H = 650;
+    const gameRef = useRef({ bird: {y:H/2,v:0,r:0}, pipes: [], frame: 0, particles: [] });
     
-    const init = () => { gameRef.current = { bird: {y:H/2,v:0}, pipes: [], frame: 0 }; setScore(0); setGameState('playing'); };
+    const init = () => { gameRef.current = { bird: {y:H/2,v:0,r:0}, pipes: [], frame: 0, particles: [] }; setScore(0); setGameState('playing'); };
     
     const loop = () => {
         if (gameState !== 'playing') return;
         const g = gameRef.current;
-        g.bird.v += 0.5; g.bird.y += g.bird.v;
+        g.bird.v += 0.45; g.bird.y += g.bird.v;
+        g.bird.r = Math.min(g.bird.v * 3, 70);
         g.frame++;
-        if (g.frame % 90 === 0) { const gap = 150, top = 50 + Math.random() * (H - 200 - gap); g.pipes.push({x:W,top,bottom:top+gap,passed:false}); }
-        g.pipes = g.pipes.filter(p => { p.x -= 3; return p.x > -60; });
-        g.pipes.forEach(p => { if (!p.passed && p.x < 50) { p.passed = true; setScore(s => s + 1); } });
-        const hit = g.bird.y < 0 || g.bird.y > H - 30 || g.pipes.some(p => p.x < 80 && p.x > 20 && (g.bird.y < p.top || g.bird.y > p.bottom - 30));
+        // Progressive: gap shrinks, speed increases
+        const gap = Math.max(120, 160 - score * 2);
+        const speed = Math.min(3.5 + score * 0.05, 6);
+        if (g.frame % Math.max(60, 90 - score * 2) === 0) {
+            const top = 60 + Math.random() * (H - 180 - gap);
+            g.pipes.push({x:W,top,bottom:top+gap,passed:false,color:`hsl(${Math.random()*60+100}, 60%, 35%)`});
+        }
+        g.pipes = g.pipes.filter(p => { p.x -= speed; return p.x > -65; });
+        g.pipes.forEach(p => { if (!p.passed && p.x < 55) { p.passed = true; setScore(s => s + 1); g.particles.push(...Array(5).fill(0).map(() => ({x:65,y:g.bird.y,dx:(Math.random()-0.5)*4,dy:(Math.random()-0.5)*4,life:15,color:'#fbbf24'}))); } });
+        const hit = g.bird.y < 0 || g.bird.y > H - 30 || g.pipes.some(p => p.x < 85 && p.x > 15 && (g.bird.y < p.top || g.bird.y > p.bottom - 30));
         if (hit) { setGameState('over'); addScore(score); return; }
+        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
         draw();
     };
     
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#87ceeb'; ctx.fillRect(0, 0, W, H);
+        // Sky gradient
+        const grad = ctx.createLinearGradient(0, 0, 0, H);
+        grad.addColorStop(0, '#87ceeb'); grad.addColorStop(0.7, '#c3e8f7'); grad.addColorStop(1, '#228b22');
+        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
+        // Ground
         ctx.fillStyle = '#228b22'; ctx.fillRect(0, H - 50, W, 50);
+        ctx.fillStyle = '#1a7a1a'; ctx.fillRect(0, H - 50, W, 5);
+        
         const g = gameRef.current;
-        ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(50, g.bird.y, 15, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(55, g.bird.y - 3, 5, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(57, g.bird.y - 3, 2, 0, Math.PI*2); ctx.fill();
-        ctx.fillStyle = '#ff6b00'; ctx.beginPath(); ctx.moveTo(65, g.bird.y); ctx.lineTo(75, g.bird.y + 3); ctx.lineTo(65, g.bird.y + 6); ctx.closePath(); ctx.fill();
-        ctx.fillStyle = '#2d8b2d'; g.pipes.forEach(p => { ctx.fillRect(p.x, 0, 50, p.top); ctx.fillRect(p.x, p.bottom, 50, H - p.bottom); ctx.fillRect(p.x - 5, p.top - 20, 60, 20); ctx.fillRect(p.x - 5, p.bottom, 60, 20); });
+        // Pipes
+        g.pipes.forEach(p => {
+            ctx.fillStyle = p.color || '#2d8b2d';
+            ctx.fillRect(p.x, 0, 52, p.top); ctx.fillRect(p.x, p.bottom, 52, H - p.bottom);
+            // Pipe caps
+            ctx.fillStyle = '#1f6b1f';
+            ctx.fillRect(p.x - 4, p.top - 22, 60, 22);
+            ctx.fillRect(p.x - 4, p.bottom, 60, 22);
+            // Highlights
+            ctx.fillStyle = 'rgba(255,255,255,0.12)';
+            ctx.fillRect(p.x + 4, 0, 8, p.top);
+            ctx.fillRect(p.x + 4, p.bottom, 8, H - p.bottom);
+        });
+        // Bird
+        ctx.save(); ctx.translate(55, g.bird.y); ctx.rotate(g.bird.r * Math.PI / 180);
+        ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.ellipse(0, 0, 18, 14, 0, 0, Math.PI * 2); ctx.fill();
+        // Wing
+        ctx.fillStyle = '#f59e0b'; ctx.beginPath(); ctx.ellipse(-8, 4, 10, 6, -0.3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(7, -4, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(9, -4, 3, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#ff6b00'; ctx.beginPath(); ctx.moveTo(18, 0); ctx.lineTo(28, 3); ctx.lineTo(18, 6); ctx.closePath(); ctx.fill();
+        ctx.restore();
+        
+        // Particles
+        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 15; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+        
+        // Score
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 52px sans-serif'; ctx.textAlign = 'center'; ctx.strokeStyle = 'rgba(0,0,0,0.3)'; ctx.lineWidth = 4;
+        ctx.strokeText(score, W / 2, 70); ctx.fillText(score, W / 2, 70);
     };
     
-    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState]);
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score]);
     useEffect(() => { draw(); }, []);
     useEffect(() => {
-        const flap = (e) => { if (e.key === ' ' || e.type === 'click') { if (gameState !== 'playing') init(); else gameRef.current.bird.v = -8; } };
+        const flap = (e) => { if (e.key === ' ' || e.type === 'click') { e.preventDefault(); if (gameState !== 'playing') init(); else gameRef.current.bird.v = -7.5; } };
         window.addEventListener('keydown', flap); canvasRef.current?.addEventListener('click', flap);
         return () => { window.removeEventListener('keydown', flap); };
     }, [gameState]);
     
     return (
-        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
-            <canvas ref={canvasRef} width={W} height={H}/>
+        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{display:'block',cursor:'pointer'}}/>
             {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                <div style={{fontSize:'48px'}}>🐦</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div><div>Click or SPACE to {gameState === 'over' ? 'retry' : 'start'}</div>
+                {gameState === 'idle' && <><div style={{fontSize:'64px'}}>🐦</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Flappy Bird</div><div style={{color:'#ddd',marginTop:'8px'}}>Click or press SPACE to flap</div></>}
+                {gameState === 'over' && <><div style={{color:'#ff6b6b',fontSize:'20px'}}>Game Over!</div><div style={{fontSize:'56px',fontWeight:700,marginTop:'8px'}}>{score}</div><div style={{marginTop:'12px',color:'#ddd'}}>Click to retry</div></>}
             </div>}
-            {gameState === 'playing' && <div style={{position:'absolute',top:'20px',left:'50%',transform:'translateX(-50%)',color:'#fff',fontSize:'48px',fontWeight:700,textShadow:'2px 2px #000'}}>{score}</div>}
         </div>
     );
 }
 
-// 2048
+// 2048 - Bigger tiles
 function Game2048({ addScore }) {
     const [board, setBoard] = useState(Array(16).fill(0));
     const [score, setScore] = useState(0);
     const [gameOver, setGameOver] = useState(false);
+    const [best, setBest] = useState(0);
     
     const init = () => { const b = Array(16).fill(0); addTile(b); addTile(b); setBoard(b); setScore(0); setGameOver(false); };
     const addTile = (b) => { const empty = b.map((v,i) => v === 0 ? i : -1).filter(i => i >= 0); if (empty.length) b[empty[Math.floor(Math.random()*empty.length)]] = Math.random() < 0.9 ? 2 : 4; };
@@ -5987,7 +6559,6 @@ function Game2048({ addScore }) {
         const setRow = (r, arr) => { for (let i = 0; i < 4; i++) b[r*4+i] = arr[i]; };
         const getCol = (c) => [b[c],b[c+4],b[c+8],b[c+12]];
         const setCol = (c, arr) => { for (let i = 0; i < 4; i++) b[c+i*4] = arr[i]; };
-        
         for (let i = 0; i < 4; i++) {
             let line, newLine;
             if (dir === 'left') { line = getRow(i); newLine = slide(line); setRow(i, newLine); }
@@ -5996,99 +6567,112 @@ function Game2048({ addScore }) {
             else if (dir === 'down') { line = getCol(i).reverse(); newLine = slide(line).reverse(); setCol(i, newLine); }
             if (JSON.stringify(line) !== JSON.stringify(newLine)) moved = true;
         }
-        
-        if (moved) { addTile(b); setBoard(b); setScore(s => s + pts); }
+        if (moved) { addTile(b); setBoard(b); setScore(s => { const ns = s + pts; setBest(prev => Math.max(prev, ns)); return ns; }); }
         const canMove = b.some((v,i) => v === 0 || (i % 4 < 3 && v === b[i+1]) || (i < 12 && v === b[i+4]));
         if (!canMove) { setGameOver(true); addScore(score + pts); }
     };
     
     useEffect(() => { init(); }, []);
     useEffect(() => {
-        const handleKey = (e) => { if (e.key === 'ArrowLeft') move('left'); else if (e.key === 'ArrowRight') move('right'); else if (e.key === 'ArrowUp') move('up'); else if (e.key === 'ArrowDown') move('down'); };
+        const handleKey = (e) => { if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)) { e.preventDefault(); if (e.key === 'ArrowLeft') move('left'); else if (e.key === 'ArrowRight') move('right'); else if (e.key === 'ArrowUp') move('up'); else if (e.key === 'ArrowDown') move('down'); } };
         window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
     });
     
-    const colors = {0:'#cdc1b4',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};
+    const colors = {0:'#cdc1b4',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e',4096:'#3c3a32',8192:'#3c3a32'};
     
     return (
         <div>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px'}}>
-                <div><div style={{fontSize:'11px',color:'var(--text-muted)'}}>SCORE</div><div style={{fontSize:'24px',fontWeight:700}}>{score}</div></div>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
+                <div style={{display:'flex',gap:'24px'}}>
+                    <div><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>SCORE</div><div style={{fontSize:'28px',fontWeight:700}}>{score}</div></div>
+                    <div><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>BEST</div><div style={{fontSize:'28px',fontWeight:700,color:'var(--primary)'}}>{best}</div></div>
+                </div>
                 <button onClick={init} className="btn btn-secondary">New Game</button>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,80px)',gap:'8px',background:'#bbada0',padding:'8px',borderRadius:'8px'}}>
-                {board.map((v, i) => <div key={i} style={{width:'80px',height:'80px',background:colors[v]||'#3c3a32',borderRadius:'4px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:v>99?'24px':'32px',fontWeight:700,color:v<=4?'#776e65':'#f9f6f2'}}>{v||''}</div>)}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,90px)',gap:'10px',background:'#bbada0',padding:'10px',borderRadius:'10px'}}>
+                {board.map((v, i) => <div key={i} style={{width:'90px',height:'90px',background:colors[v]||'#3c3a32',borderRadius:'6px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:v>999?'22px':v>99?'28px':'36px',fontWeight:700,color:v<=4?'#776e65':'#f9f6f2',transition:'all 0.1s'}}>{v||''}</div>)}
             </div>
-            {gameOver && <div style={{marginTop:'16px',textAlign:'center',color:'#ff6b6b',fontWeight:700}}>Game Over! Final: {score}</div>}
+            {gameOver && <div style={{marginTop:'16px',textAlign:'center',color:'#ff6b6b',fontWeight:700,fontSize:'18px'}}>Game Over! Final: {score}</div>}
         </div>
     );
 }
 
-// MINESWEEPER
+// MINESWEEPER - Bigger
 function MinesweeperGame({ addScore }) {
+    const ROWS = 12, COLS = 14, MINES = 25;
     const [board, setBoard] = useState([]);
     const [revealed, setRevealed] = useState([]);
     const [flags, setFlags] = useState([]);
     const [gameOver, setGameOver] = useState(false);
     const [won, setWon] = useState(false);
     const [time, setTime] = useState(0);
-    const ROWS = 9, COLS = 9, MINES = 10;
     
     const init = () => {
-        const b = Array(ROWS*COLS).fill(0);
-        let placed = 0;
-        while (placed < MINES) { const i = Math.floor(Math.random()*ROWS*COLS); if (b[i] !== -1) { b[i] = -1; placed++; } }
-        for (let i = 0; i < ROWS*COLS; i++) if (b[i] !== -1) { let c = 0; const neighbors = getNeighbors(i); neighbors.forEach(n => { if (b[n] === -1) c++; }); b[i] = c; }
+        const b = Array(ROWS * COLS).fill(0);
+        const positions = Array(ROWS*COLS).fill(0).map((_,i)=>i).sort(()=>Math.random()-0.5).slice(0, MINES);
+        positions.forEach(p => b[p] = -1);
+        for (let i = 0; i < b.length; i++) if (b[i] !== -1) {
+            const r = Math.floor(i/COLS), c = i%COLS;
+            let count = 0;
+            for (let dr=-1;dr<=1;dr++) for (let dc=-1;dc<=1;dc++) { const nr=r+dr,nc=c+dc; if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&b[nr*COLS+nc]===-1) count++; }
+            b[i] = count;
+        }
         setBoard(b); setRevealed(Array(ROWS*COLS).fill(false)); setFlags(Array(ROWS*COLS).fill(false)); setGameOver(false); setWon(false); setTime(0);
     };
     
-    const getNeighbors = (i) => {
-        const r = Math.floor(i/COLS), c = i%COLS, n = [];
-        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) { const nr = r+dr, nc = c+dc; if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) n.push(nr*COLS+nc); }
-        return n;
-    };
-    
-    const reveal = (i) => {
-        if (gameOver || won || revealed[i] || flags[i]) return;
-        const r = [...revealed]; r[i] = true;
-        if (board[i] === -1) { setRevealed(board.map(() => true)); setGameOver(true); return; }
-        if (board[i] === 0) { const stack = [i]; while (stack.length) { const curr = stack.pop(); getNeighbors(curr).forEach(n => { if (!r[n] && board[n] !== -1) { r[n] = true; if (board[n] === 0) stack.push(n); } }); } }
-        setRevealed(r);
-        if (r.filter((v,i) => !v).length === MINES) { setWon(true); addScore(Math.max(1, 1000 - time * 2)); }
-    };
-    
-    const flag = (e, i) => { e.preventDefault(); if (gameOver || won || revealed[i]) return; const f = [...flags]; f[i] = !f[i]; setFlags(f); };
-    
     useEffect(() => { init(); }, []);
-    useEffect(() => { if (!gameOver && !won && revealed.some(r => r)) { const t = setInterval(() => setTime(s => s + 1), 1000); return () => clearInterval(t); } }, [gameOver, won, revealed]);
+    useEffect(() => { if (!gameOver && !won && revealed.some(r => r)) { const t = setInterval(() => setTime(t => t + 1), 1000); return () => clearInterval(t); } }, [gameOver, won, revealed]);
     
-    const colors = ['','#0000ff','#008000','#ff0000','#000080','#800000','#008080','#000','#808080'];
+    const reveal = (idx) => {
+        if (gameOver || won || revealed[idx] || flags[idx]) return;
+        const r = [...revealed]; r[idx] = true;
+        if (board[idx] === -1) { setRevealed(board.map(() => true)); setGameOver(true); addScore(0); return; }
+        if (board[idx] === 0) {
+            const queue = [idx];
+            while (queue.length) {
+                const curr = queue.shift();
+                const row = Math.floor(curr/COLS), col = curr%COLS;
+                for (let dr=-1;dr<=1;dr++) for (let dc=-1;dc<=1;dc++) {
+                    const nr=row+dr,nc=col+dc,ni=nr*COLS+nc;
+                    if(nr>=0&&nr<ROWS&&nc>=0&&nc<COLS&&!r[ni]) { r[ni] = true; if(board[ni]===0) queue.push(ni); }
+                }
+            }
+        }
+        setRevealed(r);
+        if (r.filter((v,i)=>!v).length === MINES) { setWon(true); addScore(Math.max(1, 2000 - time * 3)); }
+    };
+    const flag = (e, idx) => { e.preventDefault(); if (!revealed[idx] && !gameOver && !won) { const f = [...flags]; f[idx] = !f[idx]; setFlags(f); } };
+    
+    const numColors = {1:'#2563eb',2:'#16a34a',3:'#dc2626',4:'#7c3aed',5:'#b91c1c',6:'#0891b2',7:'#374151',8:'#94a3b8'};
     
     return (
         <div>
             <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px',alignItems:'center'}}>
-                <div style={{fontSize:'20px'}}>💣 {MINES - flags.filter(f=>f).length}</div>
-                <button onClick={init} className="btn btn-secondary">New</button>
-                <div style={{fontSize:'20px'}}>⏱️ {time}</div>
+                <div style={{display:'flex',gap:'20px'}}>
+                    <div>💣 {MINES - flags.filter(f=>f).length}</div>
+                    <div>⏱️ {time}s</div>
+                </div>
+                <button onClick={init} className="btn btn-secondary">New Game</button>
             </div>
-            <div style={{display:'grid',gridTemplateColumns:`repeat(${COLS},32px)`,gap:'2px',background:'#999',padding:'4px',borderRadius:'4px'}}>
-                {board.map((v, i) => <div key={i} onClick={() => reveal(i)} onContextMenu={e => flag(e, i)} style={{width:'32px',height:'32px',background:revealed[i]?'#ddd':'#bbb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',fontWeight:700,color:colors[v]||'#000',cursor:'pointer',borderRadius:'2px',boxShadow:revealed[i]?'none':'inset 2px 2px #fff, inset -2px -2px #888'}}>
+            <div style={{display:'grid',gridTemplateColumns:`repeat(${COLS},34px)`,gap:'2px',background:'#64748b',padding:'4px',borderRadius:'6px'}}>
+                {board.map((v, i) => <div key={i} onClick={() => reveal(i)} onContextMenu={e => flag(e, i)} style={{width:'34px',height:'34px',background:revealed[i]?(v===-1?'#fecaca':'#e2e8f0'):'#94a3b8',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',fontWeight:700,color:numColors[v]||'#000',cursor:'pointer',borderRadius:'3px',boxShadow:revealed[i]?'none':'inset 2px 2px rgba(255,255,255,0.3), inset -2px -2px rgba(0,0,0,0.2)',transition:'all 0.1s'}}>
                     {revealed[i] ? (v === -1 ? '💣' : v || '') : flags[i] ? '🚩' : ''}
                 </div>)}
             </div>
-            {(gameOver || won) && <div style={{marginTop:'12px',textAlign:'center',fontWeight:700,color:won?'#4ade80':'#ff6b6b'}}>{won ? `You win! ${Math.max(1, 1000 - time * 2)} pts` : 'Game Over!'}</div>}
+            {(gameOver || won) && <div style={{marginTop:'12px',textAlign:'center',fontWeight:700,fontSize:'16px',color:won?'#4ade80':'#ff6b6b'}}>{won ? `You win! ${Math.max(1, 2000 - time * 3)} pts` : 'Game Over!'}</div>}
         </div>
     );
 }
 
-// Simple placeholder components for remaining games
+// Puzzle & Quick games - keep mostly same but improved
 function SudokuGame({ addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🔠</div><div style={{marginTop:'16px'}}>Sudoku - Coming Soon!</div></div>; }
+
 function MemoryGame({ addScore }) {
     const [cards, setCards] = useState([]);
     const [flipped, setFlipped] = useState([]);
     const [matched, setMatched] = useState([]);
     const [moves, setMoves] = useState(0);
-    const emojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'];
+    const emojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼','🐨','🦁','🐸','🐙'];
     
     const init = () => { const deck = [...emojis,...emojis].sort(() => Math.random() - 0.5); setCards(deck); setFlipped([]); setMatched([]); setMoves(0); };
     useEffect(() => { init(); }, []);
@@ -6099,23 +6683,27 @@ function MemoryGame({ addScore }) {
         setFlipped(newFlipped);
         if (newFlipped.length === 2) {
             setMoves(m => m + 1);
-            if (cards[newFlipped[0]] === cards[newFlipped[1]]) { setMatched(m => [...m, ...newFlipped]); setFlipped([]); if (matched.length + 2 === cards.length) addScore(Math.max(1, 500 - moves * 5)); }
-            else setTimeout(() => setFlipped([]), 1000);
+            if (cards[newFlipped[0]] === cards[newFlipped[1]]) { setMatched(m => [...m, ...newFlipped]); setFlipped([]); if (matched.length + 2 === cards.length) addScore(Math.max(1, 1000 - moves * 5)); }
+            else setTimeout(() => setFlipped([]), 800);
         }
     };
     
     return (
         <div>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}><div>Moves: {moves}</div><button onClick={init} className="btn btn-secondary">Reset</button></div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(4,70px)',gap:'8px'}}>
-                {cards.map((c, i) => <div key={i} onClick={() => flip(i)} style={{width:'70px',height:'70px',background:flipped.includes(i)||matched.includes(i)?'#4ade80':'#3b82f6',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'32px',cursor:'pointer'}}>{flipped.includes(i)||matched.includes(i)?c:'?'}</div>)}
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
+                <div style={{display:'flex',gap:'20px'}}><div style={{fontWeight:600}}>Moves: {moves}</div><div style={{color:'var(--text-muted)'}}>Pairs: {matched.length/2}/{emojis.length}</div></div>
+                <button onClick={init} className="btn btn-secondary">Reset</button>
             </div>
-            {matched.length === cards.length && <div style={{marginTop:'12px',textAlign:'center',color:'#4ade80',fontWeight:700}}>You won in {moves} moves!</div>}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(6,75px)',gap:'8px'}}>
+                {cards.map((c, i) => <div key={i} onClick={() => flip(i)} style={{width:'75px',height:'75px',background:matched.includes(i)?'#166534':flipped.includes(i)?'#4ade80':'#3b82f6',borderRadius:'10px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'36px',cursor:'pointer',transition:'all 0.2s',transform:flipped.includes(i)||matched.includes(i)?'rotateY(0)':'rotateY(180deg)',boxShadow:'0 2px 8px rgba(0,0,0,0.2)'}}>{flipped.includes(i)||matched.includes(i)?c:'?'}</div>)}
+            </div>
+            {matched.length === cards.length && <div style={{marginTop:'16px',textAlign:'center',color:'#4ade80',fontWeight:700,fontSize:'18px'}}>🎉 You won in {moves} moves!</div>}
         </div>
     );
 }
+
 function WordleGame({ addScore }) {
-    const words = ['REACT','SNAKE','GAMES','SHIPS','NAVAL','FLEET','TRACK','PARTS'];
+    const words = ['REACT','SNAKE','GAMES','SHIPS','NAVAL','FLEET','TRACK','PARTS','SOLVE','BRICK','POWER','SPACE','LEVEL','SCORE','RADAR'];
     const [target] = useState(words[Math.floor(Math.random()*words.length)]);
     const [guesses, setGuesses] = useState([]);
     const [current, setCurrent] = useState('');
@@ -6139,26 +6727,23 @@ function WordleGame({ addScore }) {
         window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
     });
     
-    const getColor = (letter, i, word) => {
-        if (target[i] === letter) return '#538d4e';
-        if (target.includes(letter)) return '#b59f3b';
-        return '#3a3a3c';
-    };
+    const getColor = (letter, i) => { if (target[i] === letter) return '#538d4e'; if (target.includes(letter)) return '#b59f3b'; return '#3a3a3c'; };
     
     return (
         <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
-            {[...guesses, ...(guesses.length < 6 && !won ? [current.padEnd(5)] : [])].map((g, gi) => (
+            {[...guesses, ...(guesses.length < 6 && !won ? [current.padEnd(5)] : []),...Array(Math.max(0, 6 - guesses.length - (won ? 0 : 1))).fill('     ')].slice(0,6).map((g, gi) => (
                 <div key={gi} style={{display:'flex',gap:'6px'}}>
-                    {g.split('').map((l, li) => <div key={li} style={{width:'50px',height:'50px',background:gi<guesses.length?getColor(l,li,g):'#3a3a3c',border:'2px solid #555',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'24px',fontWeight:700,color:'#fff'}}>{l !== ' ' ? l : ''}</div>)}
+                    {g.split('').map((l, li) => <div key={li} style={{width:'56px',height:'56px',background:gi<guesses.length?getColor(l,li):'var(--bg-input)',border:'2px solid '+(gi<guesses.length?'transparent':'var(--border)'),display:'flex',alignItems:'center',justifyContent:'center',fontSize:'26px',fontWeight:700,color:'#fff',borderRadius:'4px',transition:'all 0.2s'}}>{l !== ' ' ? l : ''}</div>)}
                 </div>
             ))}
-            {won && <div style={{color:'#4ade80',fontWeight:700,marginTop:'12px'}}>🎉 You got it!</div>}
-            {!won && guesses.length >= 6 && <div style={{color:'#ff6b6b',marginTop:'12px'}}>The word was: {target}</div>}
+            {won && <div style={{color:'#4ade80',fontWeight:700,marginTop:'16px',fontSize:'18px'}}>🎉 You got it in {guesses.length}!</div>}
+            {!won && guesses.length >= 6 && <div style={{color:'#ff6b6b',marginTop:'16px',fontSize:'16px'}}>The word was: <strong>{target}</strong></div>}
         </div>
     );
 }
+
 function TypingGame({ addScore }) {
-    const sentences = ['The quick brown fox jumps over the lazy dog','Ship tracker helps manage fleet operations','React makes building user interfaces easy'];
+    const sentences = ['The quick brown fox jumps over the lazy dog','Ship tracker helps manage fleet operations efficiently','React makes building modern user interfaces easy','Naval operations require constant monitoring and readiness','The best way to predict the future is to create it'];
     const [text] = useState(sentences[Math.floor(Math.random()*sentences.length)]);
     const [input, setInput] = useState('');
     const [started, setStarted] = useState(false);
@@ -6168,46 +6753,59 @@ function TypingGame({ addScore }) {
     const handleInput = (e) => {
         if (!started) { setStarted(true); setStartTime(Date.now()); }
         setInput(e.target.value);
-        if (e.target.value === text) {
-            const mins = (Date.now() - startTime) / 60000;
-            const w = Math.round(text.split(' ').length / mins);
-            setWpm(w); addScore(w);
-        }
+        if (e.target.value === text) { const mins = (Date.now() - startTime) / 60000; const w = Math.round(text.split(' ').length / mins); setWpm(w); addScore(w); }
     };
     
     return (
-        <div style={{maxWidth:'500px'}}>
-            <div style={{padding:'16px',background:'var(--bg-input)',borderRadius:'8px',marginBottom:'16px',fontSize:'18px',lineHeight:1.6}}>
-                {text.split('').map((c, i) => <span key={i} style={{color:i<input.length?(input[i]===c?'#4ade80':'#ff6b6b'):'var(--text)'}}>{c}</span>)}
+        <div style={{maxWidth:'600px'}}>
+            <div style={{padding:'20px',background:'var(--bg-input)',borderRadius:'10px',marginBottom:'16px',fontSize:'20px',lineHeight:1.8,border:'1px solid var(--border)'}}>
+                {text.split('').map((c, i) => <span key={i} style={{color:i<input.length?(input[i]===c?'#4ade80':'#ff6b6b'):'var(--text)',background:i===input.length?'rgba(74,222,128,0.2)':'transparent',borderRadius:'2px'}}>{c}</span>)}
             </div>
-            <input value={input} onChange={handleInput} disabled={wpm>0} placeholder="Start typing..." style={{width:'100%',padding:'12px',fontSize:'16px'}} autoFocus/>
-            {wpm > 0 && <div style={{marginTop:'16px',textAlign:'center'}}><div style={{fontSize:'48px',fontWeight:700,color:'#4ade80'}}>{wpm}</div><div>Words per minute!</div></div>}
+            <input value={input} onChange={handleInput} disabled={wpm>0} placeholder="Start typing..." className="form-input" style={{fontSize:'18px',padding:'14px'}} autoFocus/>
+            {wpm > 0 && <div style={{marginTop:'20px',textAlign:'center'}}><div style={{fontSize:'56px',fontWeight:700,color:'#4ade80'}}>{wpm}</div><div style={{color:'var(--text-muted)',fontSize:'16px'}}>Words per minute!</div></div>}
         </div>
     );
 }
+
 function ReactionGame({ addScore }) {
     const [state, setState] = useState('waiting');
     const [startTime, setStartTime] = useState(0);
     const [result, setResult] = useState(0);
+    const [results, setResults] = useState([]);
     
     const start = () => { setState('ready'); setTimeout(() => { setStartTime(Date.now()); setState('go'); }, 1000 + Math.random() * 3000); };
     const click = () => {
         if (state === 'waiting') start();
         else if (state === 'ready') { setState('early'); setTimeout(() => setState('waiting'), 1000); }
-        else if (state === 'go') { const ms = Date.now() - startTime; setResult(ms); setState('done'); addScore(Math.max(1, 500 - ms)); }
+        else if (state === 'go') { const ms = Date.now() - startTime; setResult(ms); setResults(r => [...r, ms]); setState('done'); addScore(Math.max(1, 500 - ms)); }
         else if (state === 'done' || state === 'early') setState('waiting');
     };
     
     const colors = {waiting:'#3b82f6',ready:'#ef4444',go:'#22c55e',early:'#ef4444',done:'#3b82f6'};
-    const text = {waiting:'Click to start',ready:'Wait for green...',go:'CLICK NOW!',early:'Too early!',done:`${result}ms - Click to retry`};
+    const text = {waiting:'Click to start',ready:'Wait for green...',go:'CLICK NOW!',early:'Too early! Click to retry',done:`${result}ms`};
+    const avg = results.length ? Math.round(results.reduce((a,b)=>a+b,0)/results.length) : 0;
     
-    return <div onClick={click} style={{width:'400px',height:'300px',background:colors[state],borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#fff',fontSize:'24px',fontWeight:700}}>{text[state]}</div>;
+    return (
+        <div>
+            <div onClick={click} style={{width:'500px',height:'350px',background:colors[state],borderRadius:'14px',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#fff',fontSize:'28px',fontWeight:700,transition:'background 0.15s',userSelect:'none'}}>
+                <div>{text[state]}</div>
+                {state === 'done' && <div style={{fontSize:'14px',fontWeight:400,marginTop:'8px'}}>Click to try again</div>}
+            </div>
+            {results.length > 0 && <div style={{marginTop:'12px',display:'flex',gap:'20px',fontSize:'14px',color:'var(--text-muted)'}}>
+                <span>Best: {Math.min(...results)}ms</span>
+                <span>Average: {avg}ms</span>
+                <span>Attempts: {results.length}</span>
+            </div>}
+        </div>
+    );
 }
+
 function SimonGame({ addScore }) {
     const [sequence, setSequence] = useState([]);
     const [playerSeq, setPlayerSeq] = useState([]);
     const [playing, setPlaying] = useState(false);
     const [showing, setShowing] = useState(-1);
+    const [best, setBest] = useState(0);
     const colors = ['#ef4444','#22c55e','#3b82f6','#eab308'];
     
     const start = () => { const s = [Math.floor(Math.random()*4)]; setSequence(s); setPlayerSeq([]); showSequence(s); };
@@ -6215,51 +6813,62 @@ function SimonGame({ addScore }) {
     const press = (i) => {
         if (!playing) return;
         const newSeq = [...playerSeq, i];
-        if (sequence[newSeq.length-1] !== i) { addScore((sequence.length-1)*10); setPlaying(false); setSequence([]); setPlayerSeq([]); return; }
+        if (sequence[newSeq.length-1] !== i) { const sc = (sequence.length-1)*10; addScore(sc); setBest(b => Math.max(b, sequence.length-1)); setPlaying(false); setSequence([]); setPlayerSeq([]); return; }
         setPlayerSeq(newSeq);
-        if (newSeq.length === sequence.length) { const next = [...sequence, Math.floor(Math.random()*4)]; setSequence(next); setPlayerSeq([]); setTimeout(() => showSequence(next), 1000); }
+        if (newSeq.length === sequence.length) { const next = [...sequence, Math.floor(Math.random()*4)]; setSequence(next); setPlayerSeq([]); setTimeout(() => showSequence(next), 800); }
     };
     
     return (
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
-            <div>Score: {sequence.length ? sequence.length - 1 : 0}</div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(2,100px)',gap:'8px'}}>
-                {colors.map((c, i) => <div key={i} onClick={() => press(i)} style={{width:'100px',height:'100px',background:c,opacity:showing===i?1:0.6,borderRadius:'8px',cursor:'pointer'}}/>)}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px'}}>
+            <div style={{display:'flex',gap:'24px'}}>
+                <div><span style={{color:'var(--text-muted)',fontSize:'12px'}}>ROUND</span><div style={{fontSize:'24px',fontWeight:700}}>{sequence.length ? sequence.length : 0}</div></div>
+                <div><span style={{color:'var(--text-muted)',fontSize:'12px'}}>BEST</span><div style={{fontSize:'24px',fontWeight:700,color:'var(--primary)'}}>{best}</div></div>
             </div>
-            {!sequence.length && <button onClick={start} className="btn btn-primary">Start</button>}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(2,120px)',gap:'10px'}}>
+                {colors.map((c, i) => <div key={i} onClick={() => press(i)} style={{width:'120px',height:'120px',background:c,opacity:showing===i?1:0.5,borderRadius:'12px',cursor:'pointer',transition:'all 0.15s',transform:showing===i?'scale(1.05)':'scale(1)',boxShadow:showing===i?`0 0 20px ${c}`:'none'}}/>)}
+            </div>
+            {!sequence.length && <button onClick={start} className="btn btn-primary" style={{padding:'12px 32px',fontSize:'14px'}}>Start Game</button>}
+            {!playing && sequence.length > 0 && <div style={{color:'var(--text-muted)',fontSize:'14px'}}>Watch the sequence...</div>}
         </div>
     );
 }
+
 function WhackAMoleGame({ addScore }) {
     const [moles, setMoles] = useState(Array(9).fill(false));
     const [score, setScore] = useState(0);
     const [playing, setPlaying] = useState(false);
     const [timeLeft, setTimeLeft] = useState(30);
+    const [combo, setCombo] = useState(0);
     
-    const start = () => { setScore(0); setTimeLeft(30); setPlaying(true); };
-    const whack = (i) => { if (moles[i]) { setScore(s => s + 1); const m = [...moles]; m[i] = false; setMoles(m); } };
+    const start = () => { setScore(0); setTimeLeft(30); setPlaying(true); setCombo(0); };
+    const whack = (i) => { if (moles[i]) { setCombo(c => c + 1); setScore(s => s + 1 + Math.floor(combo / 3)); const m = [...moles]; m[i] = false; setMoles(m); } else { setCombo(0); } };
     
     useEffect(() => {
         if (!playing) return;
-        const moleTimer = setInterval(() => { const m = Array(9).fill(false); m[Math.floor(Math.random()*9)] = true; setMoles(m); }, 800);
+        const speed = Math.max(400, 800 - score * 10);
+        const moleTimer = setInterval(() => { const m = Array(9).fill(false); const count = Math.min(3, 1 + Math.floor(score / 10)); for (let i = 0; i < count; i++) m[Math.floor(Math.random()*9)] = true; setMoles(m); }, speed);
         const gameTimer = setInterval(() => setTimeLeft(t => { if (t <= 1) { setPlaying(false); addScore(score); return 0; } return t - 1; }), 1000);
         return () => { clearInterval(moleTimer); clearInterval(gameTimer); };
-    }, [playing, score]);
+    }, [playing, score, combo]);
     
     return (
-        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
-            <div style={{display:'flex',gap:'24px'}}><div>Score: {score}</div><div>Time: {timeLeft}s</div></div>
-            <div style={{display:'grid',gridTemplateColumns:'repeat(3,80px)',gap:'8px'}}>
-                {moles.map((up, i) => <div key={i} onClick={() => whack(i)} style={{width:'80px',height:'80px',background:'#8b4513',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'40px',cursor:'pointer'}}>{up ? '🐹' : ''}</div>)}
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'20px'}}>
+            <div style={{display:'flex',gap:'32px',fontSize:'16px'}}>
+                <div><span style={{color:'var(--text-muted)',fontSize:'11px'}}>SCORE</span><div style={{fontSize:'28px',fontWeight:700}}>{score}</div></div>
+                <div><span style={{color:'var(--text-muted)',fontSize:'11px'}}>TIME</span><div style={{fontSize:'28px',fontWeight:700,color:timeLeft<=5?'var(--red)':'var(--text)'}}>{timeLeft}s</div></div>
+                {combo >= 3 && <div><span style={{color:'var(--amber)',fontSize:'11px'}}>COMBO</span><div style={{fontSize:'28px',fontWeight:700,color:'var(--amber)'}}>{combo}x</div></div>}
             </div>
-            {!playing && <button onClick={start} className="btn btn-primary">{timeLeft === 0 ? 'Play Again' : 'Start'}</button>}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,100px)',gap:'12px'}}>
+                {moles.map((up, i) => <div key={i} onClick={() => whack(i)} style={{width:'100px',height:'100px',background:'#92400e',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'50px',cursor:'pointer',transition:'all 0.1s',boxShadow:'inset 0 -4px 8px rgba(0,0,0,0.3)',transform:up?'scale(1.1)':'scale(1)'}}>{up ? '🐹' : ''}</div>)}
+            </div>
+            {!playing && <button onClick={start} className="btn btn-primary" style={{padding:'12px 32px',fontSize:'14px'}}>{timeLeft === 0 ? `Play Again (Score: ${score})` : 'Start Game'}</button>}
         </div>
     );
 }
 
 // ==================== MULTIPLAYER GAMES ====================
 
-// BEER PONG
+// BEER PONG - same as before
 function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
     const canvasRef = useRef(null);
     const [power, setPower] = useState(0);
@@ -6268,78 +6877,30 @@ function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
     const [dragStart, setDragStart] = useState(null);
     const [ball, setBall] = useState(null);
     const [cups, setCups] = useState([1,1,1,1,1,1,1,1,1,1]);
-    const [turn, setTurn] = useState(0);
     const [scores, setScores] = useState([0, 0]);
-    const W = 400, H = 500;
+    const W = 500, H = 600;
     
     useEffect(() => { draw(); }, [cups, ball, power, angle, dragging]);
     
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        // Table
         ctx.fillStyle = '#1a472a'; ctx.fillRect(0, 0, W, H);
         ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(10, 10, W-20, H-20);
         ctx.beginPath(); ctx.moveTo(10, H/2); ctx.lineTo(W-10, H/2); ctx.stroke();
-        
-        // Cups (triangle formation at top)
-        const cupPositions = [[W/2,80],[W/2-30,120],[W/2+30,120],[W/2-60,160],[W/2,160],[W/2+60,160],[W/2-90,200],[W/2-30,200],[W/2+30,200],[W/2+90,200]];
+        const cupPositions = [[W/2,100],[W/2-35,145],[W/2+35,145],[W/2-70,190],[W/2,190],[W/2+70,190],[W/2-105,235],[W/2-35,235],[W/2+35,235],[W/2+105,235]];
         cupPositions.forEach((pos, i) => {
-            if (cups[i]) {
-                ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 20, 0, Math.PI*2); ctx.fill();
-                ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 12, 0, Math.PI*2); ctx.fill();
-            }
+            if (cups[i]) { ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 24, 0, Math.PI*2); ctx.fill(); ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 15, 0, Math.PI*2); ctx.fill(); }
         });
-        
-        // Ball at bottom
         if (!ball) {
-            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(W/2, H-50, 10, 0, Math.PI*2); ctx.fill();
-            // Aim line
-            if (dragging) {
-                ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([5,5]);
-                ctx.beginPath(); ctx.moveTo(W/2, H-50);
-                const rad = (90 - angle) * Math.PI / 180;
-                ctx.lineTo(W/2 + Math.cos(rad) * power * 2, H-50 - Math.sin(rad) * power * 2);
-                ctx.stroke(); ctx.setLineDash([]);
-            }
-        } else {
-            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 10, 0, Math.PI*2); ctx.fill();
-        }
-        
-        // Power meter
-        ctx.fillStyle = '#333'; ctx.fillRect(20, H-30, 100, 15);
-        ctx.fillStyle = power > 70 ? '#ef4444' : power > 40 ? '#eab308' : '#22c55e';
-        ctx.fillRect(20, H-30, power, 15);
-        ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.fillText(`Power: ${Math.round(power)}%`, 25, H-19);
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(W/2, H-60, 12, 0, Math.PI*2); ctx.fill();
+            if (dragging) { ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([5,5]); ctx.beginPath(); ctx.moveTo(W/2, H-60); const rad = (90 - angle) * Math.PI / 180; ctx.lineTo(W/2 + Math.cos(rad) * power * 2, H-60 - Math.sin(rad) * power * 2); ctx.stroke(); ctx.setLineDash([]); }
+        } else { ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 12, 0, Math.PI*2); ctx.fill(); }
+        ctx.fillStyle = '#333'; ctx.fillRect(20, H-35, 120, 18); ctx.fillStyle = power > 70 ? '#ef4444' : power > 40 ? '#eab308' : '#22c55e'; ctx.fillRect(20, H-35, power * 1.2, 18);
     };
     
-    const handleMouseDown = (e) => {
-        if (ball) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
-        setDragging(true);
-    };
-    
-    const handleMouseMove = (e) => {
-        if (!dragging || !dragStart) return;
-        const rect = canvasRef.current.getBoundingClientRect();
-        const x = e.clientX - rect.left, y = e.clientY - rect.top;
-        const dx = dragStart.x - x, dy = dragStart.y - y;
-        setPower(Math.min(100, Math.hypot(dx, dy)));
-        setAngle(Math.max(20, Math.min(80, Math.atan2(dy, dx) * 180 / Math.PI)));
-    };
-    
-    const handleMouseUp = () => {
-        if (!dragging) return;
-        setDragging(false);
-        if (power > 10) throwBall();
-    };
-    
-    const throwBall = () => {
-        const rad = (90 - angle) * Math.PI / 180;
-        const vx = Math.cos(rad) * power * 0.08;
-        const vy = -Math.sin(rad) * power * 0.12;
-        setBall({ x: W/2, y: H-50, vx, vy });
-    };
+    const handleMouseDown = (e) => { if (ball) return; const rect = canvasRef.current.getBoundingClientRect(); setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top }); setDragging(true); };
+    const handleMouseMove = (e) => { if (!dragging || !dragStart) return; const rect = canvasRef.current.getBoundingClientRect(); const x = e.clientX - rect.left, y = e.clientY - rect.top; const dx = dragStart.x - x, dy = dragStart.y - y; setPower(Math.min(100, Math.hypot(dx, dy))); setAngle(Math.max(20, Math.min(80, Math.atan2(dy, dx) * 180 / Math.PI))); };
+    const handleMouseUp = () => { if (!dragging) return; setDragging(false); if (power > 10) { const rad = (90 - angle) * Math.PI / 180; setBall({ x: W/2, y: H-60, vx: Math.cos(rad) * power * 0.08, vy: -Math.sin(rad) * power * 0.12 }); } };
     
     useEffect(() => {
         if (!ball) return;
@@ -6347,22 +6908,9 @@ function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
             setBall(b => {
                 if (!b) return null;
                 const newB = { ...b, x: b.x + b.vx, y: b.y + b.vy, vy: b.vy + 0.3 };
-                
-                // Check cup collisions
-                const cupPositions = [[W/2,80],[W/2-30,120],[W/2+30,120],[W/2-60,160],[W/2,160],[W/2+60,160],[W/2-90,200],[W/2-30,200],[W/2+30,200],[W/2+90,200]];
-                cupPositions.forEach((pos, i) => {
-                    if (cups[i] && Math.hypot(newB.x - pos[0], newB.y - pos[1]) < 25) {
-                        setCups(c => { const nc = [...c]; nc[i] = 0; return nc; });
-                        setScores(s => [s[0] + 1, s[1]]);
-                        toast('🎯 Cup hit!', 'success');
-                    }
-                });
-                
-                // Out of bounds
-                if (newB.y > H || newB.x < 0 || newB.x > W || newB.y < 0) {
-                    setPower(0);
-                    return null;
-                }
+                const cupPositions = [[W/2,100],[W/2-35,145],[W/2+35,145],[W/2-70,190],[W/2,190],[W/2+70,190],[W/2-105,235],[W/2-35,235],[W/2+35,235],[W/2+105,235]];
+                cupPositions.forEach((pos, i) => { if (cups[i] && Math.hypot(newB.x - pos[0], newB.y - pos[1]) < 28) { setCups(c => { const nc = [...c]; nc[i] = 0; return nc; }); setScores(s => [s[0] + 1, s[1]]); toast('🎯 Cup hit!', 'success'); } });
+                if (newB.y > H || newB.x < 0 || newB.x > W || newB.y < 0) { setPower(0); return null; }
                 return newB;
             });
         }, 16);
@@ -6373,66 +6921,68 @@ function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
     
     return (
         <div>
-            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}>
-                <div>Cups Hit: {scores[0]}/10</div>
-                <button onClick={reset} className="btn btn-secondary">Reset</button>
-            </div>
-            <canvas ref={canvasRef} width={W} height={H} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{borderRadius:'8px',cursor:'crosshair'}}/>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}><div style={{fontWeight:600}}>Cups Hit: {scores[0]}/10</div><button onClick={reset} className="btn btn-secondary">Reset</button></div>
+            <canvas ref={canvasRef} width={W} height={H} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{borderRadius:'10px',cursor:'crosshair',border:'2px solid var(--border)',display:'block'}}/>
             <div style={{marginTop:'8px',fontSize:'12px',color:'var(--text-muted)'}}>Click and drag back to aim, release to throw!</div>
-            {cups.every(c => !c) && <div style={{marginTop:'12px',textAlign:'center',color:'#4ade80',fontWeight:700}}>🎉 You cleared the table!</div>}
+            {cups.every(c => !c) && <div style={{marginTop:'12px',textAlign:'center',color:'#4ade80',fontWeight:700,fontSize:'18px'}}>🎉 You cleared the table!</div>}
         </div>
     );
 }
 
-// Placeholder multiplayer games - would need full implementation for real-time sync
+// PONG - Bigger
 function PongGame({ room, updateRoom, currentUser, addScore }) {
     const canvasRef = useRef(null);
     const [score, setScore] = useState([0, 0]);
-    const gameRef = useRef({ p1: 200, p2: 200, ball: {x:300,y:200,dx:4,dy:2} });
-    const W = 600, H = 400;
+    const gameRef = useRef({ p1: 250, p2: 250, ball: {x:375,y:250,dx:5,dy:3} });
+    const W = 750, H = 500;
     
     const loop = () => {
         const g = gameRef.current;
         g.ball.x += g.ball.dx; g.ball.y += g.ball.dy;
         if (g.ball.y <= 5 || g.ball.y >= H-5) g.ball.dy *= -1;
-        if (g.ball.x <= 25 && g.ball.y > g.p1-40 && g.ball.y < g.p1+40) g.ball.dx = Math.abs(g.ball.dx);
-        if (g.ball.x >= W-25 && g.ball.y > g.p2-40 && g.ball.y < g.p2+40) g.ball.dx = -Math.abs(g.ball.dx);
-        if (g.ball.x < 0) { setScore(s => [s[0], s[1]+1]); g.ball = {x:300,y:200,dx:4,dy:2}; }
-        if (g.ball.x > W) { setScore(s => [s[0]+1, s[1]]); g.ball = {x:300,y:200,dx:-4,dy:2}; }
-        // Simple AI for P2
-        if (g.ball.x > W/2) g.p2 += (g.ball.y - g.p2) * 0.1;
+        if (g.ball.x <= 30 && g.ball.y > g.p1-50 && g.ball.y < g.p1+50) { g.ball.dx = Math.abs(g.ball.dx) * 1.02; g.ball.dy += (g.ball.y - g.p1) * 0.05; }
+        if (g.ball.x >= W-30 && g.ball.y > g.p2-50 && g.ball.y < g.p2+50) { g.ball.dx = -Math.abs(g.ball.dx) * 1.02; g.ball.dy += (g.ball.y - g.p2) * 0.05; }
+        if (g.ball.x < 0) { setScore(s => [s[0], s[1]+1]); g.ball = {x:375,y:250,dx:5,dy:3}; }
+        if (g.ball.x > W) { setScore(s => [s[0]+1, s[1]]); g.ball = {x:375,y:250,dx:-5,dy:3}; }
+        if (g.ball.x > W/2) g.p2 += (g.ball.y - g.p2) * 0.08;
         draw();
     };
     
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
-        ctx.setLineDash([10,10]); ctx.strokeStyle = '#333'; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
+        ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
+        ctx.setLineDash([10,10]); ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
         const g = gameRef.current;
-        ctx.fillStyle = '#fff'; ctx.fillRect(10, g.p1-40, 10, 80); ctx.fillRect(W-20, g.p2-40, 10, 80);
-        ctx.beginPath(); ctx.arc(g.ball.x, g.ball.y, 8, 0, Math.PI*2); ctx.fill();
-        ctx.font = '48px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(score[0], W/4, 60); ctx.fillText(score[1], W*3/4, 60);
+        ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.roundRect(12, g.p1-50, 12, 100, 6); ctx.fill();
+        ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.roundRect(W-24, g.p2-50, 12, 100, 6); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
+        ctx.beginPath(); ctx.arc(g.ball.x, g.ball.y, 10, 0, Math.PI*2); ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.font = 'bold 56px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.textAlign = 'center';
+        ctx.fillText(score[0], W/4, 70); ctx.fillText(score[1], W*3/4, 70);
     };
     
     useEffect(() => { const i = setInterval(loop, 16); return () => clearInterval(i); }, []);
     useEffect(() => {
-        const move = (e) => { const rect = canvasRef.current?.getBoundingClientRect(); if (rect) gameRef.current.p1 = Math.max(40, Math.min(H-40, e.clientY - rect.top)); };
+        const move = (e) => { const rect = canvasRef.current?.getBoundingClientRect(); if (rect) gameRef.current.p1 = Math.max(50, Math.min(H-50, e.clientY - rect.top)); };
         window.addEventListener('mousemove', move); return () => window.removeEventListener('mousemove', move);
     }, []);
     
-    return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'8px'}}/>;
+    return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block'}}/>;
 }
 
-function TanksGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🎯</div><div style={{marginTop:'16px'}}>Tank Battle - Coming Soon!</div></div>; }
-function TronGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🏍️</div><div style={{marginTop:'16px'}}>Tron - Coming Soon!</div></div>; }
-function RacingGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🏎️</div><div style={{marginTop:'16px'}}>Racing - Coming Soon!</div></div>; }
-function SumoGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🤼</div><div style={{marginTop:'16px'}}>Sumo - Coming Soon!</div></div>; }
-function BattleshipGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🚢</div><div style={{marginTop:'16px'}}>Battleship - Coming Soon!</div></div>; }
-function ChessGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>♟️</div><div style={{marginTop:'16px'}}>Chess - Coming Soon!</div></div>; }
-function CheckersGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🔴</div><div style={{marginTop:'16px'}}>Checkers - Coming Soon!</div></div>; }
-function WordChainGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🔤</div><div style={{marginTop:'16px'}}>Word Chain - Coming Soon!</div></div>; }
-function TriviaGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>❓</div><div style={{marginTop:'16px'}}>Trivia - Coming Soon!</div></div>; }
-function TypeRaceGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🏁</div><div style={{marginTop:'16px'}}>Type Race - Coming Soon!</div></div>; }
+// Placeholder multiplayer games
+function TanksGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🎯</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Tank Battle</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function TronGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🏍️</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Tron</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function RacingGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🏎️</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Racing</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function SumoGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🤼</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Sumo</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function BattleshipGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🚢</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Battleship</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function ChessGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>♟️</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Chess</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function CheckersGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🔴</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Checkers</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function WordChainGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🔤</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Word Chain</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function TriviaGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>❓</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Trivia</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+function TypeRaceGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🏁</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Type Race</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+
 
 ReactDOM.createRoot(document.getElementById('root')).render(<AuthWrapper/>);
 </script>
