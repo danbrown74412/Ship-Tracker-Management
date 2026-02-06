@@ -5354,6 +5354,8 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
     const [activeGame, setActiveGame] = useState(null);
     const [activeRoom, setActiveRoom] = useState(null);
     const [showLeaderboard, setShowLeaderboard] = useState(false);
+    const [joinCode, setJoinCode] = useState('');
+    const [showJoin, setShowJoin] = useState(false);
     
     const games = [
         // Single Player - Arcade
@@ -5508,10 +5510,6 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
             </div>
         );
     }
-    
-    // Join room modal state
-    const [joinCode, setJoinCode] = useState('');
-    const [showJoin, setShowJoin] = useState(false);
     
     return (
         <div className="page active">
