@@ -979,7 +979,8 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
     const [parts, setParts] = useFirestore('parts', []);
     const [activityLog, setActivityLog] = useFirestore('activityLog', defaultActivityLog);
     const [suggestions, setSuggestions] = useFirestore('suggestions', []);
-    const [snakeLeaderboard, setSnakeLeaderboard] = useFirestore('snakeLeaderboard', []);
+    const [gameLeaderboards, setGameLeaderboards] = useFirestore('gameLeaderboards', []);
+    const [gameRooms, setGameRooms] = useFirestore('gameRooms', []);
     const [onlineUsers, setOnlineUsers] = useState([]);
     // Local-only settings (not shared)
     const [toasts, setToasts] = useState([]);
@@ -1100,7 +1101,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
         { id: 6, label: 'Parts', icon: 'parts' }, { id: 7, label: 'Email Status', icon: 'email', badge: overdueShips },
         { id: 8, label: 'Data / Import', icon: 'settings' },
         ...(isAdmin ? [{ id: 10, label: 'Suggestions', icon: 'issues', badge: suggestions.filter(s => s.status === 'new').length }] : []),
-        { id: 11, label: 'Snake Game', icon: 'star' },
+        { id: 11, label: 'Games', icon: 'star' },
     ];
     const sections = [{ title: 'Overview', items: [0, 1] }, { title: 'Ships', items: [2] }, { title: 'Equipment', items: [4, 5, 6] }, { title: 'Comms', items: [7] }, { title: 'System', items: isAdmin ? [8, 10] : [8] }, { title: 'Fun', items: [11] }];
 
@@ -1192,7 +1193,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
                 {page === 7 && <EmailStatus ships={ships} setShips={setShips} issues={issues} toast={toast} logActivity={logActivity}/>}
                 {page === 8 && <DataSettings ships={ships} setShips={setShips} issues={issues} setIssues={setIssues} dailyChecks={dailyChecks} setDailyChecks={setDailyChecks} installs={installs} setInstalls={setInstalls} parts={parts} setParts={setParts} activityLog={activityLog} setActivityLog={setActivityLog} toast={toast} backupSettings={backupSettings} setBackupSettings={setBackupSettings} downloadBackup={downloadBackup}/>}
                 {page === 10 && isAdmin && <Suggestions suggestions={suggestions} setSuggestions={setSuggestions} toast={toast}/>}
-                {page === 11 && <SnakeGame leaderboard={snakeLeaderboard} setLeaderboard={setSnakeLeaderboard} currentUser={currentUser} toast={toast}/>}
+                {page === 11 && <GamesHub leaderboards={gameLeaderboards} setLeaderboards={setGameLeaderboards} gameRooms={gameRooms} setGameRooms={setGameRooms} currentUser={currentUser} onlineUsers={onlineUsers} toast={toast}/>}
             </main>
             <Toast toasts={toasts} remove={id => setToasts(t => t.filter(x => x.id !== id))}/>
             
@@ -5348,339 +5349,1092 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
     );
 }
 
-// Snake Game Component
-function SnakeGame({ leaderboard, setLeaderboard, currentUser, toast }) {
-    const canvasRef = useRef(null);
-    const [gameState, setGameState] = useState('idle'); // idle, playing, paused, gameOver
-    const [score, setScore] = useState(0);
-    const [highScore, setHighScore] = useState(0);
-    const [speed, setSpeed] = useState(100);
-    const gameRef = useRef({ snake: [], food: null, direction: 'right', nextDirection: 'right' });
+// ==================== GAMES HUB ====================
+function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, currentUser, onlineUsers, toast }) {
+    const [activeGame, setActiveGame] = useState(null);
+    const [activeRoom, setActiveRoom] = useState(null);
+    const [showLeaderboard, setShowLeaderboard] = useState(false);
     
-    const GRID_SIZE = 20;
-    const CANVAS_SIZE = 400;
-    const CELL_SIZE = CANVAS_SIZE / GRID_SIZE;
+    const games = [
+        // Single Player - Arcade
+        { id: 'snake', name: 'Snake', emoji: '🐍', category: 'Arcade', multiplayer: false, desc: 'Classic snake - eat food, grow longer' },
+        { id: 'tetris', name: 'Tetris', emoji: '🧱', category: 'Arcade', multiplayer: false, desc: 'Stack blocks, clear lines' },
+        { id: 'breakout', name: 'Breakout', emoji: '🧱', category: 'Arcade', multiplayer: false, desc: 'Paddle and ball, break bricks' },
+        { id: 'spaceinvaders', name: 'Space Invaders', emoji: '👾', category: 'Arcade', multiplayer: false, desc: 'Shoot descending aliens' },
+        { id: 'asteroids', name: 'Asteroids', emoji: '☄️', category: 'Arcade', multiplayer: false, desc: 'Rotate and shoot rocks' },
+        { id: 'flappybird', name: 'Flappy Bird', emoji: '🐦', category: 'Arcade', multiplayer: false, desc: 'Tap to fly through pipes' },
+        // Single Player - Puzzle
+        { id: '2048', name: '2048', emoji: '🔢', category: 'Puzzle', multiplayer: false, desc: 'Slide tiles, combine numbers' },
+        { id: 'minesweeper', name: 'Minesweeper', emoji: '💣', category: 'Puzzle', multiplayer: false, desc: 'Flag mines, clear the board' },
+        { id: 'sudoku', name: 'Sudoku', emoji: '🔠', category: 'Puzzle', multiplayer: false, desc: 'Fill the grid with numbers' },
+        { id: 'memory', name: 'Memory Match', emoji: '🃏', category: 'Puzzle', multiplayer: false, desc: 'Flip cards, find pairs' },
+        { id: 'wordle', name: 'Wordle', emoji: '📝', category: 'Puzzle', multiplayer: false, desc: 'Guess the 5-letter word' },
+        // Single Player - Quick
+        { id: 'typing', name: 'Typing Test', emoji: '⌨️', category: 'Quick Play', multiplayer: false, desc: 'Test your typing speed' },
+        { id: 'reaction', name: 'Reaction Time', emoji: '⚡', category: 'Quick Play', multiplayer: false, desc: 'Click when color changes' },
+        { id: 'simon', name: 'Simon Says', emoji: '🔴', category: 'Quick Play', multiplayer: false, desc: 'Memory pattern game' },
+        { id: 'whackamole', name: 'Whack-a-Mole', emoji: '🔨', category: 'Quick Play', multiplayer: false, desc: 'Hit the moles fast' },
+        // Multiplayer - Real-time
+        { id: 'beerpong', name: 'Beer Pong', emoji: '🍺', category: 'Multiplayer', multiplayer: true, desc: 'Pull back, aim, throw!' },
+        { id: 'pong', name: 'Pong', emoji: '🏓', category: 'Multiplayer', multiplayer: true, desc: '1v1 paddle battle' },
+        { id: 'tanks', name: 'Tank Battle', emoji: '🎯', category: 'Multiplayer', multiplayer: true, desc: 'Move and shoot' },
+        { id: 'tron', name: 'Tron', emoji: '🏍️', category: 'Multiplayer', multiplayer: true, desc: 'Light bikes, leave trails' },
+        { id: 'racing', name: 'Racing', emoji: '🏎️', category: 'Multiplayer', multiplayer: true, desc: 'Race to the finish' },
+        { id: 'sumo', name: 'Sumo', emoji: '🤼', category: 'Multiplayer', multiplayer: true, desc: 'Push opponent out' },
+        // Multiplayer - Turn-based
+        { id: 'battleship', name: 'Battleship', emoji: '🚢', category: 'Multiplayer', multiplayer: true, desc: 'Find and sink ships' },
+        { id: 'chess', name: 'Chess', emoji: '♟️', category: 'Multiplayer', multiplayer: true, desc: 'Classic strategy' },
+        { id: 'checkers', name: 'Checkers', emoji: '🔴', category: 'Multiplayer', multiplayer: true, desc: 'Jump and capture' },
+        { id: 'wordchain', name: 'Word Chain', emoji: '🔤', category: 'Multiplayer', multiplayer: true, desc: 'Build words in turns' },
+        // Multiplayer - Party
+        { id: 'trivia', name: 'Trivia', emoji: '❓', category: 'Multiplayer', multiplayer: true, desc: 'Answer questions fast' },
+        { id: 'typerace', name: 'Type Race', emoji: '🏁', category: 'Multiplayer', multiplayer: true, desc: 'Type faster than others' },
+    ];
     
-    // Get user's high score
+    const categories = ['Arcade', 'Puzzle', 'Quick Play', 'Multiplayer'];
+    
+    const getLeaderboard = (gameId) => leaderboards.filter(l => l.gameId === gameId).sort((a, b) => b.score - a.score).slice(0, 10);
+    
+    const addScore = (gameId, score) => {
+        if (!currentUser?.username || score <= 0) return;
+        const entry = { id: 'GL' + Date.now(), gameId, username: currentUser.username, score, date: new Date().toISOString() };
+        setLeaderboards(prev => [...prev, entry]);
+        const userBest = leaderboards.filter(l => l.gameId === gameId && l.username === currentUser.username).sort((a, b) => b.score - a.score)[0];
+        if (!userBest || score > userBest.score) toast(`🏆 New personal best: ${score}!`, 'success');
+    };
+    
+    // Room management for multiplayer
+    const createRoom = (gameId) => {
+        const code = Math.random().toString(36).substring(2, 6).toUpperCase();
+        const room = { id: code, gameId, host: currentUser.username, players: [currentUser.username], state: 'waiting', created: Date.now(), gameState: null };
+        setGameRooms(prev => [...prev, room]);
+        setActiveRoom(code);
+        setActiveGame(gameId);
+        toast(`Room ${code} created!`, 'success');
+    };
+    
+    const joinRoom = (code) => {
+        const room = gameRooms.find(r => r.id === code.toUpperCase());
+        if (!room) { toast('Room not found', 'error'); return; }
+        if (room.players.length >= 2) { toast('Room is full', 'error'); return; }
+        if (!room.players.includes(currentUser.username)) {
+            setGameRooms(prev => prev.map(r => r.id === room.id ? { ...r, players: [...r.players, currentUser.username] } : r));
+        }
+        setActiveRoom(room.id);
+        setActiveGame(room.gameId);
+    };
+    
+    const leaveRoom = () => {
+        if (activeRoom) {
+            setGameRooms(prev => prev.map(r => r.id === activeRoom ? { ...r, players: r.players.filter(p => p !== currentUser.username) } : r).filter(r => r.players.length > 0));
+        }
+        setActiveRoom(null);
+        setActiveGame(null);
+    };
+    
+    const updateRoomState = (newState) => {
+        if (!activeRoom) return;
+        setGameRooms(prev => prev.map(r => r.id === activeRoom ? { ...r, gameState: newState, lastUpdate: Date.now() } : r));
+    };
+    
+    const currentRoom = gameRooms.find(r => r.id === activeRoom);
+    
+    // Clean up old rooms
     useEffect(() => {
-        const userBest = leaderboard.filter(e => e.username === currentUser?.username).sort((a, b) => b.score - a.score)[0];
-        if (userBest) setHighScore(userBest.score);
-    }, [leaderboard, currentUser]);
-    
-    const initGame = () => {
-        const snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
-        const food = spawnFood(snake);
-        gameRef.current = { snake, food, direction: 'right', nextDirection: 'right' };
-        setScore(0);
-        setGameState('playing');
-    };
-    
-    const spawnFood = (snake) => {
-        let food;
-        do {
-            food = { x: Math.floor(Math.random() * GRID_SIZE), y: Math.floor(Math.random() * GRID_SIZE) };
-        } while (snake.some(seg => seg.x === food.x && seg.y === food.y));
-        return food;
-    };
-    
-    const gameLoop = useCallback(() => {
-        if (gameState !== 'playing') return;
-        
-        const { snake, food, nextDirection } = gameRef.current;
-        gameRef.current.direction = nextDirection;
-        
-        const head = { ...snake[0] };
-        switch (nextDirection) {
-            case 'up': head.y--; break;
-            case 'down': head.y++; break;
-            case 'left': head.x--; break;
-            case 'right': head.x++; break;
-        }
-        
-        // Wall collision
-        if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
-            endGame();
-            return;
-        }
-        
-        // Self collision
-        if (snake.some(seg => seg.x === head.x && seg.y === head.y)) {
-            endGame();
-            return;
-        }
-        
-        const newSnake = [head, ...snake];
-        
-        // Eat food
-        if (head.x === food.x && head.y === food.y) {
-            setScore(s => s + 10);
-            gameRef.current.food = spawnFood(newSnake);
-        } else {
-            newSnake.pop();
-        }
-        
-        gameRef.current.snake = newSnake;
-        draw();
-    }, [gameState]);
-    
-    const endGame = () => {
-        setGameState('gameOver');
-        const finalScore = score + (gameRef.current.snake.length - 3) * 10;
-        
-        if (finalScore > 0 && currentUser?.username) {
-            const entry = {
-                id: 'SL' + Date.now(),
-                username: currentUser.username,
-                score: finalScore,
-                date: new Date().toISOString()
-            };
-            setLeaderboard(prev => [...prev, entry].sort((a, b) => b.score - a.score).slice(0, 50));
-            
-            if (finalScore > highScore) {
-                setHighScore(finalScore);
-                toast(`🏆 New personal best: ${finalScore}!`, 'success');
-            }
-        }
-    };
-    
-    const draw = useCallback(() => {
-        const canvas = canvasRef.current;
-        if (!canvas) return;
-        const ctx = canvas.getContext('2d');
-        
-        // Clear
-        ctx.fillStyle = '#1a1a2e';
-        ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
-        
-        // Grid
-        ctx.strokeStyle = '#2a2a4e';
-        ctx.lineWidth = 0.5;
-        for (let i = 0; i <= GRID_SIZE; i++) {
-            ctx.beginPath();
-            ctx.moveTo(i * CELL_SIZE, 0);
-            ctx.lineTo(i * CELL_SIZE, CANVAS_SIZE);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(0, i * CELL_SIZE);
-            ctx.lineTo(CANVAS_SIZE, i * CELL_SIZE);
-            ctx.stroke();
-        }
-        
-        const { snake, food } = gameRef.current;
-        
-        // Food
-        if (food) {
-            ctx.fillStyle = '#ff6b6b';
-            ctx.beginPath();
-            ctx.arc(food.x * CELL_SIZE + CELL_SIZE / 2, food.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2 - 2, 0, Math.PI * 2);
-            ctx.fill();
-        }
-        
-        // Snake
-        snake.forEach((seg, i) => {
-            const gradient = ctx.createLinearGradient(seg.x * CELL_SIZE, seg.y * CELL_SIZE, (seg.x + 1) * CELL_SIZE, (seg.y + 1) * CELL_SIZE);
-            if (i === 0) {
-                gradient.addColorStop(0, '#4ade80');
-                gradient.addColorStop(1, '#22c55e');
-            } else {
-                gradient.addColorStop(0, '#22c55e');
-                gradient.addColorStop(1, '#16a34a');
-            }
-            ctx.fillStyle = gradient;
-            ctx.fillRect(seg.x * CELL_SIZE + 1, seg.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
-            
-            // Eyes on head
-            if (i === 0) {
-                ctx.fillStyle = '#fff';
-                const eyeSize = 3;
-                const { direction } = gameRef.current;
-                let eye1, eye2;
-                if (direction === 'right') { eye1 = { x: 14, y: 5 }; eye2 = { x: 14, y: 13 }; }
-                else if (direction === 'left') { eye1 = { x: 4, y: 5 }; eye2 = { x: 4, y: 13 }; }
-                else if (direction === 'up') { eye1 = { x: 5, y: 4 }; eye2 = { x: 13, y: 4 }; }
-                else { eye1 = { x: 5, y: 14 }; eye2 = { x: 13, y: 14 }; }
-                ctx.beginPath();
-                ctx.arc(seg.x * CELL_SIZE + eye1.x, seg.y * CELL_SIZE + eye1.y, eyeSize, 0, Math.PI * 2);
-                ctx.arc(seg.x * CELL_SIZE + eye2.x, seg.y * CELL_SIZE + eye2.y, eyeSize, 0, Math.PI * 2);
-                ctx.fill();
-            }
-        });
+        const old = Date.now() - 30 * 60 * 1000;
+        setGameRooms(prev => prev.filter(r => r.created > old || r.state === 'playing'));
     }, []);
     
-    // Game loop
-    useEffect(() => {
-        if (gameState !== 'playing') return;
-        const interval = setInterval(gameLoop, speed);
-        return () => clearInterval(interval);
-    }, [gameState, gameLoop, speed]);
+    if (activeGame) {
+        const game = games.find(g => g.id === activeGame);
+        return (
+            <div className="page active">
+                <div className="page-header">
+                    <div className="page-header-left">
+                        <button onClick={leaveRoom} className="btn btn-secondary" style={{marginRight:'12px'}}>← Back</button>
+                        <h1 className="page-title">{game.emoji} {game.name}</h1>
+                    </div>
+                    <button onClick={() => setShowLeaderboard(!showLeaderboard)} className="btn btn-secondary">🏆 Leaderboard</button>
+                </div>
+                
+                <div style={{display:'grid',gridTemplateColumns: showLeaderboard ? '1fr 280px' : '1fr',gap:'24px'}}>
+                    <div>
+                        {activeGame === 'snake' && <SnakeGameInner addScore={(s) => addScore('snake', s)} currentUser={currentUser}/>}
+                        {activeGame === 'tetris' && <TetrisGame addScore={(s) => addScore('tetris', s)} currentUser={currentUser}/>}
+                        {activeGame === 'breakout' && <BreakoutGame addScore={(s) => addScore('breakout', s)} currentUser={currentUser}/>}
+                        {activeGame === 'spaceinvaders' && <SpaceInvadersGame addScore={(s) => addScore('spaceinvaders', s)} currentUser={currentUser}/>}
+                        {activeGame === 'asteroids' && <AsteroidsGame addScore={(s) => addScore('asteroids', s)} currentUser={currentUser}/>}
+                        {activeGame === 'flappybird' && <FlappyBirdGame addScore={(s) => addScore('flappybird', s)} currentUser={currentUser}/>}
+                        {activeGame === '2048' && <Game2048 addScore={(s) => addScore('2048', s)} currentUser={currentUser}/>}
+                        {activeGame === 'minesweeper' && <MinesweeperGame addScore={(s) => addScore('minesweeper', s)} currentUser={currentUser}/>}
+                        {activeGame === 'sudoku' && <SudokuGame addScore={(s) => addScore('sudoku', s)} currentUser={currentUser}/>}
+                        {activeGame === 'memory' && <MemoryGame addScore={(s) => addScore('memory', s)} currentUser={currentUser}/>}
+                        {activeGame === 'wordle' && <WordleGame addScore={(s) => addScore('wordle', s)} currentUser={currentUser}/>}
+                        {activeGame === 'typing' && <TypingGame addScore={(s) => addScore('typing', s)} currentUser={currentUser}/>}
+                        {activeGame === 'reaction' && <ReactionGame addScore={(s) => addScore('reaction', s)} currentUser={currentUser}/>}
+                        {activeGame === 'simon' && <SimonGame addScore={(s) => addScore('simon', s)} currentUser={currentUser}/>}
+                        {activeGame === 'whackamole' && <WhackAMoleGame addScore={(s) => addScore('whackamole', s)} currentUser={currentUser}/>}
+                        {activeGame === 'beerpong' && <BeerPongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('beerpong', s)} toast={toast}/>}
+                        {activeGame === 'pong' && <PongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('pong', s)}/>}
+                        {activeGame === 'tanks' && <TanksGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('tanks', s)}/>}
+                        {activeGame === 'tron' && <TronGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('tron', s)}/>}
+                        {activeGame === 'racing' && <RacingGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('racing', s)}/>}
+                        {activeGame === 'sumo' && <SumoGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('sumo', s)}/>}
+                        {activeGame === 'battleship' && <BattleshipGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('battleship', s)}/>}
+                        {activeGame === 'chess' && <ChessGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('chess', s)}/>}
+                        {activeGame === 'checkers' && <CheckersGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('checkers', s)}/>}
+                        {activeGame === 'wordchain' && <WordChainGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('wordchain', s)}/>}
+                        {activeGame === 'trivia' && <TriviaGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('trivia', s)}/>}
+                        {activeGame === 'typerace' && <TypeRaceGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('typerace', s)}/>}
+                    </div>
+                    
+                    {showLeaderboard && (
+                        <div className="card" style={{height:'fit-content'}}>
+                            <span className="card-title">🏆 Top Scores</span>
+                            <div style={{marginTop:'12px',display:'flex',flexDirection:'column',gap:'8px'}}>
+                                {getLeaderboard(activeGame).length === 0 ? (
+                                    <div style={{textAlign:'center',padding:'24px',color:'var(--text-muted)'}}>No scores yet</div>
+                                ) : getLeaderboard(activeGame).map((e, i) => (
+                                    <div key={e.id} style={{display:'flex',alignItems:'center',gap:'8px',padding:'8px',background: i < 3 ? ['rgba(255,215,0,0.1)', 'rgba(192,192,192,0.1)', 'rgba(205,127,50,0.1)'][i] : 'var(--bg-input)',borderRadius:'6px'}}>
+                                        <span style={{width:'20px',textAlign:'center',fontWeight:700,color: i < 3 ? ['#ffd700','#c0c0c0','#cd7f32'][i] : 'var(--text-muted)'}}>{i < 3 ? ['🥇','🥈','🥉'][i] : i+1}</span>
+                                        <span style={{flex:1,fontWeight:500,fontSize:'13px'}}>{e.username}</span>
+                                        <span style={{fontWeight:700,color:'var(--green)'}}>{e.score}</span>
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                    )}
+                </div>
+            </div>
+        );
+    }
     
-    // Initial draw
-    useEffect(() => {
-        draw();
-    }, [draw]);
-    
-    // Keyboard controls
-    useEffect(() => {
-        const handleKey = (e) => {
-            if (gameState !== 'playing') {
-                if (e.key === ' ' || e.key === 'Enter') {
-                    e.preventDefault();
-                    initGame();
-                }
-                return;
-            }
-            
-            const { direction } = gameRef.current;
-            switch (e.key) {
-                case 'ArrowUp':
-                case 'w':
-                case 'W':
-                    e.preventDefault();
-                    if (direction !== 'down') gameRef.current.nextDirection = 'up';
-                    break;
-                case 'ArrowDown':
-                case 's':
-                case 'S':
-                    e.preventDefault();
-                    if (direction !== 'up') gameRef.current.nextDirection = 'down';
-                    break;
-                case 'ArrowLeft':
-                case 'a':
-                case 'A':
-                    e.preventDefault();
-                    if (direction !== 'right') gameRef.current.nextDirection = 'left';
-                    break;
-                case 'ArrowRight':
-                case 'd':
-                case 'D':
-                    e.preventDefault();
-                    if (direction !== 'left') gameRef.current.nextDirection = 'right';
-                    break;
-                case ' ':
-                    e.preventDefault();
-                    setGameState(s => s === 'playing' ? 'paused' : 'playing');
-                    break;
-            }
-        };
-        
-        window.addEventListener('keydown', handleKey);
-        return () => window.removeEventListener('keydown', handleKey);
-    }, [gameState]);
-    
-    const topScores = useMemo(() => {
-        return leaderboard.sort((a, b) => b.score - a.score).slice(0, 10);
-    }, [leaderboard]);
-    
-    const fmtDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    // Join room modal state
+    const [joinCode, setJoinCode] = useState('');
+    const [showJoin, setShowJoin] = useState(false);
     
     return (
         <div className="page active">
             <div className="page-header">
                 <div className="page-header-left">
-                    <h1 className="page-title">🐍 Snake Game</h1>
-                    <p className="page-sub">Take a break! Compete for the high score.</p>
+                    <h1 className="page-title">🎮 Games</h1>
+                    <p className="page-sub">Take a break! {onlineUsers?.length > 1 ? `${onlineUsers.length} players online` : ''}</p>
+                </div>
+                <div style={{display:'flex',gap:'8px'}}>
+                    <button onClick={() => setShowJoin(true)} className="btn btn-secondary">Join Room</button>
                 </div>
             </div>
             
-            <div style={{display:'grid',gridTemplateColumns:'auto 300px',gap:'24px',maxWidth:'750px'}}>
-                {/* Game Area */}
-                <div>
-                    <div style={{position:'relative',width:CANVAS_SIZE,height:CANVAS_SIZE,borderRadius:'12px',overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,0.3)'}}>
-                        <canvas ref={canvasRef} width={CANVAS_SIZE} height={CANVAS_SIZE} style={{display:'block'}}/>
-                        
-                        {/* Overlay */}
-                        {gameState !== 'playing' && (
-                            <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                                {gameState === 'idle' && (
-                                    <>
-                                        <div style={{fontSize:'48px',marginBottom:'16px'}}>🐍</div>
-                                        <div style={{fontSize:'24px',fontWeight:700,marginBottom:'8px'}}>SNAKE</div>
-                                        <div style={{fontSize:'13px',color:'#888',marginBottom:'24px'}}>Use arrow keys or WASD to move</div>
-                                        <button onClick={initGame} className="btn btn-primary" style={{padding:'12px 32px',fontSize:'16px'}}>
-                                            Press SPACE to Start
-                                        </button>
-                                    </>
-                                )}
-                                {gameState === 'paused' && (
-                                    <>
-                                        <div style={{fontSize:'24px',fontWeight:700,marginBottom:'8px'}}>PAUSED</div>
-                                        <div style={{fontSize:'13px',color:'#888',marginBottom:'24px'}}>Press SPACE to continue</div>
-                                        <button onClick={() => setGameState('playing')} className="btn btn-primary">Resume</button>
-                                    </>
-                                )}
-                                {gameState === 'gameOver' && (
-                                    <>
-                                        <div style={{fontSize:'24px',fontWeight:700,marginBottom:'8px',color:'#ff6b6b'}}>GAME OVER</div>
-                                        <div style={{fontSize:'48px',fontWeight:700,marginBottom:'8px'}}>{score + (gameRef.current.snake.length - 3) * 10}</div>
-                                        <div style={{fontSize:'13px',color:'#888',marginBottom:'24px'}}>
-                                            {score + (gameRef.current.snake.length - 3) * 10 >= highScore ? '🏆 New High Score!' : `High Score: ${highScore}`}
-                                        </div>
-                                        <button onClick={initGame} className="btn btn-primary" style={{padding:'12px 32px'}}>
-                                            Play Again
-                                        </button>
-                                    </>
-                                )}
-                            </div>
-                        )}
-                    </div>
-                    
-                    {/* Score Display */}
-                    <div style={{display:'flex',justifyContent:'space-between',marginTop:'16px',padding:'12px 16px',background:'var(--bg-card)',borderRadius:'8px'}}>
-                        <div>
-                            <div style={{fontSize:'11px',color:'var(--text-muted)',textTransform:'uppercase'}}>Score</div>
-                            <div style={{fontSize:'24px',fontWeight:700,color:'var(--green)'}}>{score}</div>
-                        </div>
-                        <div style={{textAlign:'right'}}>
-                            <div style={{fontSize:'11px',color:'var(--text-muted)',textTransform:'uppercase'}}>Your Best</div>
-                            <div style={{fontSize:'24px',fontWeight:700,color:'var(--primary)'}}>{highScore}</div>
-                        </div>
-                    </div>
-                    
-                    {/* Speed Control */}
-                    <div style={{marginTop:'12px',padding:'12px 16px',background:'var(--bg-card)',borderRadius:'8px'}}>
-                        <div style={{fontSize:'11px',color:'var(--text-muted)',textTransform:'uppercase',marginBottom:'8px'}}>Speed</div>
-                        <div style={{display:'flex',gap:'8px'}}>
-                            {[{ label: 'Slow', value: 150 }, { label: 'Normal', value: 100 }, { label: 'Fast', value: 60 }, { label: 'Insane', value: 30 }].map(s => (
-                                <button key={s.value} onClick={() => setSpeed(s.value)} className="btn" style={{flex:1,padding:'8px',fontSize:'12px',background: speed === s.value ? 'var(--primary)' : 'var(--bg-input)',color: speed === s.value ? '#fff' : 'var(--text-muted)',border: speed === s.value ? 'none' : '1px solid var(--border)'}}>{s.label}</button>
-                            ))}
+            {showJoin && (
+                <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.5)',display:'flex',alignItems:'center',justifyContent:'center',zIndex:1000}} onClick={() => setShowJoin(false)}>
+                    <div className="card" style={{width:'300px'}} onClick={e => e.stopPropagation()}>
+                        <span className="card-title">Join Game Room</span>
+                        <input type="text" placeholder="Enter room code" value={joinCode} onChange={e => setJoinCode(e.target.value.toUpperCase())} maxLength={4} style={{marginTop:'12px',textAlign:'center',fontSize:'24px',letterSpacing:'4px',fontWeight:700}}/>
+                        <div style={{display:'flex',gap:'8px',marginTop:'16px'}}>
+                            <button onClick={() => setShowJoin(false)} className="btn btn-secondary" style={{flex:1}}>Cancel</button>
+                            <button onClick={() => { joinRoom(joinCode); setShowJoin(false); setJoinCode(''); }} className="btn btn-primary" style={{flex:1}} disabled={joinCode.length !== 4}>Join</button>
                         </div>
                     </div>
                 </div>
-                
-                {/* Leaderboard */}
-                <div className="card" style={{height:'fit-content'}}>
-                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
-                        <span className="card-title">🏆 Leaderboard</span>
-                        <span style={{fontSize:'11px',color:'var(--text-muted)'}}>{leaderboard.length} scores</span>
-                    </div>
-                    
-                    {topScores.length === 0 ? (
-                        <div style={{textAlign:'center',padding:'32px 16px',color:'var(--text-muted)'}}>
-                            <div style={{fontSize:'32px',marginBottom:'8px'}}>🎮</div>
-                            <div>No scores yet!</div>
-                            <div style={{fontSize:'12px'}}>Be the first to play.</div>
-                        </div>
-                    ) : (
-                        <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
-                            {topScores.map((entry, i) => (
-                                <div key={entry.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 12px',background: i < 3 ? ['rgba(255,215,0,0.1)', 'rgba(192,192,192,0.1)', 'rgba(205,127,50,0.1)'][i] : 'var(--bg-input)',borderRadius:'8px',border: entry.username === currentUser?.username ? '1px solid var(--primary)' : 'none'}}>
-                                    <div style={{width:'24px',height:'24px',display:'flex',alignItems:'center',justifyContent:'center',fontSize: i < 3 ? '16px' : '12px',fontWeight:700,color: i < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][i] : 'var(--text-muted)'}}>
-                                        {i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}
+            )}
+            
+            {categories.map(cat => (
+                <div key={cat} style={{marginBottom:'32px'}}>
+                    <h2 style={{fontSize:'16px',fontWeight:600,marginBottom:'16px',color:'var(--text-muted)'}}>{cat === 'Multiplayer' ? '👥 ' : '🎯 '}{cat}</h2>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:'12px'}}>
+                        {games.filter(g => g.category === cat).map(game => (
+                            <div key={game.id} className="card" style={{padding:'16px',cursor:'pointer',transition:'all 0.2s',border:'1px solid var(--border)'}} onClick={() => game.multiplayer ? createRoom(game.id) : setActiveGame(game.id)} onMouseOver={e => e.currentTarget.style.borderColor = 'var(--primary)'} onMouseOut={e => e.currentTarget.style.borderColor = 'var(--border)'}>
+                                <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                                    <span style={{fontSize:'32px'}}>{game.emoji}</span>
+                                    <div>
+                                        <div style={{fontWeight:600,fontSize:'14px'}}>{game.name}</div>
+                                        <div style={{fontSize:'11px',color:'var(--text-muted)'}}>{game.desc}</div>
                                     </div>
-                                    <div style={{flex:1,minWidth:0}}>
-                                        <div style={{fontWeight:600,fontSize:'13px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.username}</div>
-                                        <div style={{fontSize:'10px',color:'var(--text-muted)'}}>{fmtDate(entry.date)}</div>
-                                    </div>
-                                    <div style={{fontWeight:700,fontSize:'16px',color:'var(--green)'}}>{entry.score}</div>
                                 </div>
-                            ))}
-                        </div>
-                    )}
+                                {game.multiplayer && <div style={{marginTop:'8px',fontSize:'10px',color:'var(--primary)',fontWeight:500}}>👥 Creates room</div>}
+                            </div>
+                        ))}
+                    </div>
                 </div>
+            ))}
+            
+            {/* Active Rooms */}
+            {gameRooms.filter(r => r.state === 'waiting').length > 0 && (
+                <div style={{marginBottom:'32px'}}>
+                    <h2 style={{fontSize:'16px',fontWeight:600,marginBottom:'16px',color:'var(--text-muted)'}}>🔴 Live Rooms</h2>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:'12px'}}>
+                        {gameRooms.filter(r => r.state === 'waiting').map(room => {
+                            const game = games.find(g => g.id === room.gameId);
+                            return (
+                                <div key={room.id} className="card" style={{padding:'16px',cursor:'pointer',border:'1px solid var(--green)'}} onClick={() => joinRoom(room.id)}>
+                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                        <span style={{fontSize:'24px'}}>{game?.emoji}</span>
+                                        <span style={{fontWeight:700,fontSize:'18px',color:'var(--primary)'}}>{room.id}</span>
+                                    </div>
+                                    <div style={{marginTop:'8px',fontSize:'12px'}}>{game?.name}</div>
+                                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>Host: {room.host} • {room.players.length}/2</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// ==================== SINGLE PLAYER GAMES ====================
+
+// SNAKE
+function SnakeGameInner({ addScore, currentUser }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState(0);
+    const gameRef = useRef({ snake: [], food: null, direction: 'right', nextDirection: 'right' });
+    const GRID = 20, SIZE = 400, CELL = SIZE / GRID;
+    
+    const init = () => { gameRef.current = { snake: [{x:10,y:10},{x:9,y:10},{x:8,y:10}], food: spawn([{x:10,y:10}]), direction: 'right', nextDirection: 'right' }; setScore(0); setGameState('playing'); };
+    const spawn = (snake) => { let f; do { f = {x:Math.floor(Math.random()*GRID),y:Math.floor(Math.random()*GRID)}; } while(snake.some(s=>s.x===f.x&&s.y===f.y)); return f; };
+    
+    const loop = useCallback(() => {
+        if (gameState !== 'playing') return;
+        const { snake, food, nextDirection } = gameRef.current;
+        gameRef.current.direction = nextDirection;
+        const head = { ...snake[0] };
+        if (nextDirection === 'up') head.y--; else if (nextDirection === 'down') head.y++; else if (nextDirection === 'left') head.x--; else head.x++;
+        if (head.x < 0 || head.x >= GRID || head.y < 0 || head.y >= GRID || snake.some(s => s.x === head.x && s.y === head.y)) { setGameState('over'); addScore(score); return; }
+        const newSnake = [head, ...snake];
+        if (head.x === food.x && head.y === food.y) { setScore(s => s + 10); gameRef.current.food = spawn(newSnake); } else newSnake.pop();
+        gameRef.current.snake = newSnake;
+        draw();
+    }, [gameState, score]);
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, SIZE, SIZE);
+        const { snake, food } = gameRef.current;
+        ctx.fillStyle = '#ff6b6b'; ctx.beginPath(); ctx.arc(food.x*CELL+CELL/2, food.y*CELL+CELL/2, CELL/2-2, 0, Math.PI*2); ctx.fill();
+        snake.forEach((s, i) => { ctx.fillStyle = i === 0 ? '#4ade80' : '#22c55e'; ctx.fillRect(s.x*CELL+1, s.y*CELL+1, CELL-2, CELL-2); });
+    };
+    
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 100); return () => clearInterval(i); } }, [gameState, loop]);
+    useEffect(() => { draw(); }, []);
+    useEffect(() => {
+        const handleKey = (e) => {
+            if (gameState !== 'playing' && (e.key === ' ' || e.key === 'Enter')) { e.preventDefault(); init(); return; }
+            const d = gameRef.current.direction;
+            if ((e.key === 'ArrowUp' || e.key === 'w') && d !== 'down') gameRef.current.nextDirection = 'up';
+            else if ((e.key === 'ArrowDown' || e.key === 's') && d !== 'up') gameRef.current.nextDirection = 'down';
+            else if ((e.key === 'ArrowLeft' || e.key === 'a') && d !== 'right') gameRef.current.nextDirection = 'left';
+            else if ((e.key === 'ArrowRight' || e.key === 'd') && d !== 'left') gameRef.current.nextDirection = 'right';
+        };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    }, [gameState]);
+    
+    return (
+        <div style={{position:'relative',width:SIZE,height:SIZE,borderRadius:'12px',overflow:'hidden'}}>
+            <canvas ref={canvasRef} width={SIZE} height={SIZE}/>
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'48px'}}>🐍</div><div style={{marginTop:'16px'}}>Press SPACE to start</div></>}
+                {gameState === 'over' && <><div style={{fontSize:'24px',color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'48px',fontWeight:700}}>{score}</div><div style={{marginTop:'16px'}}>Press SPACE to retry</div></>}
+            </div>}
+            {gameState === 'playing' && <div style={{position:'absolute',top:'10px',left:'10px',color:'#fff',fontSize:'20px',fontWeight:700}}>{score}</div>}
+        </div>
+    );
+}
+
+// TETRIS
+function TetrisGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState(0);
+    const [level, setLevel] = useState(1);
+    const gameRef = useRef({ board: [], piece: null, x: 0, y: 0, rotation: 0 });
+    const COLS = 10, ROWS = 20, CELL = 24;
+    const PIECES = [[[1,1,1,1]],[[1,1],[1,1]],[[0,1,0],[1,1,1]],[[1,0,0],[1,1,1]],[[0,0,1],[1,1,1]],[[0,1,1],[1,1,0]],[[1,1,0],[0,1,1]]];
+    const COLORS = ['#00f0f0','#f0f000','#a000f0','#f0a000','#0000f0','#00f000','#f00000'];
+    
+    const init = () => {
+        gameRef.current = { board: Array(ROWS).fill(null).map(() => Array(COLS).fill(0)), piece: null, x: 0, y: 0, rotation: 0, color: 0 };
+        spawnPiece(); setScore(0); setLevel(1); setGameState('playing');
+    };
+    
+    const spawnPiece = () => {
+        const idx = Math.floor(Math.random() * PIECES.length);
+        gameRef.current.piece = PIECES[idx]; gameRef.current.color = idx;
+        gameRef.current.x = Math.floor(COLS / 2) - 1; gameRef.current.y = 0; gameRef.current.rotation = 0;
+        if (collides()) { setGameState('over'); addScore(score); }
+    };
+    
+    const rotate = (piece) => piece[0].map((_, i) => piece.map(row => row[i]).reverse());
+    
+    const collides = (px = gameRef.current.x, py = gameRef.current.y, pp = gameRef.current.piece) => {
+        for (let r = 0; r < pp.length; r++) for (let c = 0; c < pp[r].length; c++) if (pp[r][c]) {
+            const nx = px + c, ny = py + r;
+            if (nx < 0 || nx >= COLS || ny >= ROWS || (ny >= 0 && gameRef.current.board[ny][nx])) return true;
+        }
+        return false;
+    };
+    
+    const merge = () => {
+        const { piece, x, y, board, color } = gameRef.current;
+        for (let r = 0; r < piece.length; r++) for (let c = 0; c < piece[r].length; c++) if (piece[r][c] && y + r >= 0) board[y + r][x + c] = color + 1;
+        let cleared = 0;
+        for (let r = ROWS - 1; r >= 0; r--) if (board[r].every(c => c)) { board.splice(r, 1); board.unshift(Array(COLS).fill(0)); cleared++; r++; }
+        if (cleared) { setScore(s => s + cleared * 100 * level); setLevel(l => Math.min(10, Math.floor(score / 1000) + 1)); }
+        spawnPiece();
+    };
+    
+    const move = (dx, dy) => { if (!collides(gameRef.current.x + dx, gameRef.current.y + dy)) { gameRef.current.x += dx; gameRef.current.y += dy; return true; } return false; };
+    const drop = () => { while (move(0, 1)); merge(); };
+    const rotatePiece = () => { const r = rotate(gameRef.current.piece); if (!collides(gameRef.current.x, gameRef.current.y, r)) gameRef.current.piece = r; };
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, COLS * CELL, ROWS * CELL);
+        const { board, piece, x, y, color } = gameRef.current;
+        board.forEach((row, r) => row.forEach((c, col) => { if (c) { ctx.fillStyle = COLORS[c - 1]; ctx.fillRect(col * CELL + 1, r * CELL + 1, CELL - 2, CELL - 2); } }));
+        if (piece) piece.forEach((row, r) => row.forEach((c, col) => { if (c) { ctx.fillStyle = COLORS[color]; ctx.fillRect((x + col) * CELL + 1, (y + r) * CELL + 1, CELL - 2, CELL - 2); } }));
+    };
+    
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(() => { if (!move(0, 1)) merge(); draw(); }, Math.max(100, 500 - level * 40)); return () => clearInterval(i); } }, [gameState, level]);
+    useEffect(() => { draw(); }, []);
+    useEffect(() => {
+        const handleKey = (e) => {
+            if (gameState !== 'playing') { if (e.key === ' ') init(); return; }
+            if (e.key === 'ArrowLeft') move(-1, 0);
+            else if (e.key === 'ArrowRight') move(1, 0);
+            else if (e.key === 'ArrowDown') move(0, 1);
+            else if (e.key === 'ArrowUp') rotatePiece();
+            else if (e.key === ' ') drop();
+            draw();
+        };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    }, [gameState]);
+    
+    return (
+        <div style={{display:'flex',gap:'24px'}}>
+            <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
+                <canvas ref={canvasRef} width={COLS * CELL} height={ROWS * CELL}/>
+                {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                    {gameState === 'idle' && <><div style={{fontSize:'32px'}}>🧱</div><div>Press SPACE</div></>}
+                    {gameState === 'over' && <><div style={{color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div><div>Press SPACE</div></>}
+                </div>}
+            </div>
+            <div style={{color:'var(--text)'}}>
+                <div style={{fontSize:'12px',color:'var(--text-muted)'}}>SCORE</div>
+                <div style={{fontSize:'24px',fontWeight:700}}>{score}</div>
+                <div style={{fontSize:'12px',color:'var(--text-muted)',marginTop:'12px'}}>LEVEL</div>
+                <div style={{fontSize:'24px',fontWeight:700}}>{level}</div>
+                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'24px'}}>← → Move<br/>↑ Rotate<br/>↓ Soft drop<br/>Space Hard drop</div>
             </div>
         </div>
     );
 }
+
+// BREAKOUT
+function BreakoutGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState(0);
+    const W = 480, H = 400;
+    const gameRef = useRef({ paddle: W/2, ball: {x:W/2,y:H-40,dx:4,dy:-4}, bricks: [] });
+    
+    const init = () => {
+        const bricks = [];
+        for (let r = 0; r < 5; r++) for (let c = 0; c < 10; c++) bricks.push({x:c*46+8,y:r*20+30,w:42,h:16,hit:false});
+        gameRef.current = { paddle: W/2, ball: {x:W/2,y:H-40,dx:4*(Math.random()>0.5?1:-1),dy:-4}, bricks };
+        setScore(0); setGameState('playing');
+    };
+    
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const { paddle, ball, bricks } = gameRef.current;
+        ball.x += ball.dx; ball.y += ball.dy;
+        if (ball.x <= 5 || ball.x >= W-5) ball.dx *= -1;
+        if (ball.y <= 5) ball.dy *= -1;
+        if (ball.y >= H-20 && ball.x > paddle-40 && ball.x < paddle+40) { ball.dy = -Math.abs(ball.dy); ball.dx = (ball.x - paddle) / 10; }
+        if (ball.y > H) { setGameState('over'); addScore(score); return; }
+        bricks.forEach(b => { if (!b.hit && ball.x > b.x && ball.x < b.x+b.w && ball.y > b.y && ball.y < b.y+b.h) { b.hit = true; ball.dy *= -1; setScore(s => s + 10); } });
+        if (bricks.every(b => b.hit)) { setGameState('won'); addScore(score + 500); }
+        draw();
+    };
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+        const { paddle, ball, bricks } = gameRef.current;
+        ctx.fillStyle = '#4ade80'; ctx.fillRect(paddle - 40, H - 15, 80, 10);
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 6, 0, Math.PI*2); ctx.fill();
+        bricks.forEach(b => { if (!b.hit) { ctx.fillStyle = `hsl(${b.y*2}, 70%, 50%)`; ctx.fillRect(b.x, b.y, b.w, b.h); } });
+    };
+    
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState]);
+    useEffect(() => { draw(); }, []);
+    useEffect(() => {
+        const move = (e) => { if (gameState === 'playing') { const rect = canvasRef.current.getBoundingClientRect(); gameRef.current.paddle = Math.max(40, Math.min(W-40, e.clientX - rect.left)); } };
+        const click = () => { if (gameState !== 'playing') init(); };
+        window.addEventListener('mousemove', move); window.addEventListener('click', click);
+        return () => { window.removeEventListener('mousemove', move); window.removeEventListener('click', click); };
+    }, [gameState]);
+    
+    return (
+        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{cursor:'none'}}/>
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'32px'}}>🧱</div><div>Click to start</div></>}
+                {gameState === 'over' && <><div style={{color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
+                {gameState === 'won' && <><div style={{color:'#4ade80'}}>You Win!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
+            </div>}
+            {gameState === 'playing' && <div style={{position:'absolute',top:'5px',right:'10px',color:'#fff',fontSize:'16px',fontWeight:700}}>{score}</div>}
+        </div>
+    );
+}
+
+// SPACE INVADERS
+function SpaceInvadersGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState(0);
+    const W = 400, H = 500;
+    const gameRef = useRef({ player: W/2, bullets: [], aliens: [], alienBullets: [], dir: 1 });
+    
+    const init = () => {
+        const aliens = [];
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 8; c++) aliens.push({x:c*45+40,y:r*35+40,alive:true});
+        gameRef.current = { player: W/2, bullets: [], aliens, alienBullets: [], dir: 1 };
+        setScore(0); setGameState('playing');
+    };
+    
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const g = gameRef.current;
+        g.bullets = g.bullets.filter(b => { b.y -= 8; return b.y > 0; });
+        g.alienBullets = g.alienBullets.filter(b => { b.y += 4; return b.y < H; });
+        const liveAliens = g.aliens.filter(a => a.alive);
+        if (liveAliens.length === 0) { setGameState('won'); addScore(score + 1000); return; }
+        const minX = Math.min(...liveAliens.map(a => a.x)), maxX = Math.max(...liveAliens.map(a => a.x));
+        if ((g.dir > 0 && maxX > W - 40) || (g.dir < 0 && minX < 20)) { g.dir *= -1; g.aliens.forEach(a => a.y += 20); }
+        g.aliens.forEach(a => a.x += g.dir * 0.5);
+        if (Math.random() < 0.02 && liveAliens.length) { const a = liveAliens[Math.floor(Math.random() * liveAliens.length)]; g.alienBullets.push({x:a.x+12,y:a.y+20}); }
+        g.bullets.forEach(b => { g.aliens.forEach(a => { if (a.alive && b.x > a.x && b.x < a.x+24 && b.y > a.y && b.y < a.y+20) { a.alive = false; b.y = -10; setScore(s => s + 25); } }); });
+        if (g.alienBullets.some(b => b.x > g.player-15 && b.x < g.player+15 && b.y > H-35)) { setGameState('over'); addScore(score); return; }
+        if (liveAliens.some(a => a.y > H - 80)) { setGameState('over'); addScore(score); return; }
+        draw();
+    };
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, W, H);
+        const g = gameRef.current;
+        ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.moveTo(g.player,H-35); ctx.lineTo(g.player-15,H-15); ctx.lineTo(g.player+15,H-15); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#fff'; g.bullets.forEach(b => ctx.fillRect(b.x-2,b.y,4,10));
+        ctx.fillStyle = '#ff6b6b'; g.alienBullets.forEach(b => ctx.fillRect(b.x-2,b.y,4,10));
+        g.aliens.forEach(a => { if (a.alive) { ctx.fillStyle = '#a855f7'; ctx.fillRect(a.x,a.y,24,20); ctx.fillStyle = '#fff'; ctx.fillRect(a.x+4,a.y+6,4,4); ctx.fillRect(a.x+16,a.y+6,4,4); } });
+    };
+    
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 33); return () => clearInterval(i); } }, [gameState]);
+    useEffect(() => { draw(); }, []);
+    useEffect(() => {
+        const handleKey = (e) => {
+            if (gameState !== 'playing') { if (e.key === ' ') init(); return; }
+            if (e.key === 'ArrowLeft') gameRef.current.player = Math.max(20, gameRef.current.player - 15);
+            else if (e.key === 'ArrowRight') gameRef.current.player = Math.min(W-20, gameRef.current.player + 15);
+            else if (e.key === ' ') gameRef.current.bullets.push({x:gameRef.current.player,y:H-40});
+        };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    }, [gameState]);
+    
+    return (
+        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
+            <canvas ref={canvasRef} width={W} height={H}/>
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'32px'}}>👾</div><div>Press SPACE</div></>}
+                {gameState === 'over' && <><div style={{color:'#ff6b6b'}}>Game Over!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
+                {gameState === 'won' && <><div style={{color:'#4ade80'}}>Victory!</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div></>}
+            </div>}
+            {gameState === 'playing' && <div style={{position:'absolute',top:'5px',left:'10px',color:'#fff',fontWeight:700}}>{score}</div>}
+        </div>
+    );
+}
+
+// ASTEROIDS
+function AsteroidsGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState(0);
+    const W = 500, H = 500;
+    const gameRef = useRef({ ship: {x:W/2,y:H/2,angle:0,dx:0,dy:0}, bullets: [], asteroids: [], keys: {} });
+    
+    const init = () => {
+        const asteroids = Array(5).fill(0).map(() => ({x:Math.random()*W,y:Math.random()*H,dx:(Math.random()-0.5)*2,dy:(Math.random()-0.5)*2,r:30+Math.random()*20}));
+        gameRef.current = { ship: {x:W/2,y:H/2,angle:-Math.PI/2,dx:0,dy:0}, bullets: [], asteroids, keys: {} };
+        setScore(0); setGameState('playing');
+    };
+    
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const g = gameRef.current, s = g.ship;
+        if (g.keys['ArrowLeft']) s.angle -= 0.08;
+        if (g.keys['ArrowRight']) s.angle += 0.08;
+        if (g.keys['ArrowUp']) { s.dx += Math.cos(s.angle) * 0.15; s.dy += Math.sin(s.angle) * 0.15; }
+        s.x = (s.x + s.dx + W) % W; s.y = (s.y + s.dy + H) % H;
+        s.dx *= 0.99; s.dy *= 0.99;
+        g.bullets = g.bullets.filter(b => { b.x += b.dx; b.y += b.dy; b.life--; return b.life > 0; });
+        g.asteroids.forEach(a => { a.x = (a.x + a.dx + W) % W; a.y = (a.y + a.dy + H) % H; });
+        g.bullets.forEach(b => { g.asteroids.forEach((a, i) => { if (Math.hypot(b.x-a.x,b.y-a.y) < a.r) { b.life = 0; setScore(sc => sc + Math.round(100/a.r*10)); if (a.r > 15) { g.asteroids.push({x:a.x,y:a.y,dx:(Math.random()-0.5)*3,dy:(Math.random()-0.5)*3,r:a.r/2}); g.asteroids.push({x:a.x,y:a.y,dx:(Math.random()-0.5)*3,dy:(Math.random()-0.5)*3,r:a.r/2}); } g.asteroids.splice(i, 1); } }); });
+        if (g.asteroids.some(a => Math.hypot(s.x-a.x,s.y-a.y) < a.r + 10)) { setGameState('over'); addScore(score); return; }
+        if (g.asteroids.length === 0) { for (let i = 0; i < 7; i++) g.asteroids.push({x:Math.random()*W,y:Math.random()*H,dx:(Math.random()-0.5)*3,dy:(Math.random()-0.5)*3,r:30+Math.random()*20}); }
+        draw();
+    };
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#0a0a1a'; ctx.fillRect(0, 0, W, H);
+        const g = gameRef.current, s = g.ship;
+        ctx.save(); ctx.translate(s.x, s.y); ctx.rotate(s.angle + Math.PI/2);
+        ctx.strokeStyle = '#4ade80'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(0, -15); ctx.lineTo(-10, 10); ctx.lineTo(10, 10); ctx.closePath(); ctx.stroke(); ctx.restore();
+        ctx.fillStyle = '#fff'; g.bullets.forEach(b => { ctx.beginPath(); ctx.arc(b.x, b.y, 2, 0, Math.PI*2); ctx.fill(); });
+        ctx.strokeStyle = '#888'; ctx.lineWidth = 2; g.asteroids.forEach(a => { ctx.beginPath(); ctx.arc(a.x, a.y, a.r, 0, Math.PI*2); ctx.stroke(); });
+    };
+    
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState]);
+    useEffect(() => { draw(); }, []);
+    useEffect(() => {
+        const down = (e) => { gameRef.current.keys[e.key] = true; if (e.key === ' ') { if (gameState !== 'playing') init(); else { const s = gameRef.current.ship; gameRef.current.bullets.push({x:s.x,y:s.y,dx:Math.cos(s.angle)*8,dy:Math.sin(s.angle)*8,life:50}); } } };
+        const up = (e) => { gameRef.current.keys[e.key] = false; };
+        window.addEventListener('keydown', down); window.addEventListener('keyup', up);
+        return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    }, [gameState]);
+    
+    return (
+        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
+            <canvas ref={canvasRef} width={W} height={H}/>
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                <div style={{fontSize:'32px'}}>☄️</div><div>{gameState === 'over' ? `Game Over! ${score}` : 'Press SPACE'}</div>
+            </div>}
+            {gameState === 'playing' && <div style={{position:'absolute',top:'5px',left:'10px',color:'#fff',fontWeight:700}}>{score}</div>}
+        </div>
+    );
+}
+
+// FLAPPY BIRD
+function FlappyBirdGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState(0);
+    const W = 400, H = 600;
+    const gameRef = useRef({ bird: {y:H/2,v:0}, pipes: [], frame: 0 });
+    
+    const init = () => { gameRef.current = { bird: {y:H/2,v:0}, pipes: [], frame: 0 }; setScore(0); setGameState('playing'); };
+    
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const g = gameRef.current;
+        g.bird.v += 0.5; g.bird.y += g.bird.v;
+        g.frame++;
+        if (g.frame % 90 === 0) { const gap = 150, top = 50 + Math.random() * (H - 200 - gap); g.pipes.push({x:W,top,bottom:top+gap,passed:false}); }
+        g.pipes = g.pipes.filter(p => { p.x -= 3; return p.x > -60; });
+        g.pipes.forEach(p => { if (!p.passed && p.x < 50) { p.passed = true; setScore(s => s + 1); } });
+        const hit = g.bird.y < 0 || g.bird.y > H - 30 || g.pipes.some(p => p.x < 80 && p.x > 20 && (g.bird.y < p.top || g.bird.y > p.bottom - 30));
+        if (hit) { setGameState('over'); addScore(score); return; }
+        draw();
+    };
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#87ceeb'; ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = '#228b22'; ctx.fillRect(0, H - 50, W, 50);
+        const g = gameRef.current;
+        ctx.fillStyle = '#ffd700'; ctx.beginPath(); ctx.arc(50, g.bird.y, 15, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(55, g.bird.y - 3, 5, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(57, g.bird.y - 3, 2, 0, Math.PI*2); ctx.fill();
+        ctx.fillStyle = '#ff6b00'; ctx.beginPath(); ctx.moveTo(65, g.bird.y); ctx.lineTo(75, g.bird.y + 3); ctx.lineTo(65, g.bird.y + 6); ctx.closePath(); ctx.fill();
+        ctx.fillStyle = '#2d8b2d'; g.pipes.forEach(p => { ctx.fillRect(p.x, 0, 50, p.top); ctx.fillRect(p.x, p.bottom, 50, H - p.bottom); ctx.fillRect(p.x - 5, p.top - 20, 60, 20); ctx.fillRect(p.x - 5, p.bottom, 60, 20); });
+    };
+    
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState]);
+    useEffect(() => { draw(); }, []);
+    useEffect(() => {
+        const flap = (e) => { if (e.key === ' ' || e.type === 'click') { if (gameState !== 'playing') init(); else gameRef.current.bird.v = -8; } };
+        window.addEventListener('keydown', flap); canvasRef.current?.addEventListener('click', flap);
+        return () => { window.removeEventListener('keydown', flap); };
+    }, [gameState]);
+    
+    return (
+        <div style={{position:'relative',borderRadius:'8px',overflow:'hidden'}}>
+            <canvas ref={canvasRef} width={W} height={H}/>
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.7)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                <div style={{fontSize:'48px'}}>🐦</div><div style={{fontSize:'32px',fontWeight:700}}>{score}</div><div>Click or SPACE to {gameState === 'over' ? 'retry' : 'start'}</div>
+            </div>}
+            {gameState === 'playing' && <div style={{position:'absolute',top:'20px',left:'50%',transform:'translateX(-50%)',color:'#fff',fontSize:'48px',fontWeight:700,textShadow:'2px 2px #000'}}>{score}</div>}
+        </div>
+    );
+}
+
+// 2048
+function Game2048({ addScore }) {
+    const [board, setBoard] = useState(Array(16).fill(0));
+    const [score, setScore] = useState(0);
+    const [gameOver, setGameOver] = useState(false);
+    
+    const init = () => { const b = Array(16).fill(0); addTile(b); addTile(b); setBoard(b); setScore(0); setGameOver(false); };
+    const addTile = (b) => { const empty = b.map((v,i) => v === 0 ? i : -1).filter(i => i >= 0); if (empty.length) b[empty[Math.floor(Math.random()*empty.length)]] = Math.random() < 0.9 ? 2 : 4; };
+    
+    const move = (dir) => {
+        if (gameOver) return;
+        let b = [...board], moved = false, pts = 0;
+        const slide = (arr) => { let a = arr.filter(x => x), n = []; for (let i = 0; i < a.length; i++) { if (a[i] === a[i+1]) { n.push(a[i]*2); pts += a[i]*2; i++; } else n.push(a[i]); } while (n.length < 4) n.push(0); return n; };
+        const getRow = (r) => [b[r*4],b[r*4+1],b[r*4+2],b[r*4+3]];
+        const setRow = (r, arr) => { for (let i = 0; i < 4; i++) b[r*4+i] = arr[i]; };
+        const getCol = (c) => [b[c],b[c+4],b[c+8],b[c+12]];
+        const setCol = (c, arr) => { for (let i = 0; i < 4; i++) b[c+i*4] = arr[i]; };
+        
+        for (let i = 0; i < 4; i++) {
+            let line, newLine;
+            if (dir === 'left') { line = getRow(i); newLine = slide(line); setRow(i, newLine); }
+            else if (dir === 'right') { line = getRow(i).reverse(); newLine = slide(line).reverse(); setRow(i, newLine); }
+            else if (dir === 'up') { line = getCol(i); newLine = slide(line); setCol(i, newLine); }
+            else if (dir === 'down') { line = getCol(i).reverse(); newLine = slide(line).reverse(); setCol(i, newLine); }
+            if (JSON.stringify(line) !== JSON.stringify(newLine)) moved = true;
+        }
+        
+        if (moved) { addTile(b); setBoard(b); setScore(s => s + pts); }
+        const canMove = b.some((v,i) => v === 0 || (i % 4 < 3 && v === b[i+1]) || (i < 12 && v === b[i+4]));
+        if (!canMove) { setGameOver(true); addScore(score + pts); }
+    };
+    
+    useEffect(() => { init(); }, []);
+    useEffect(() => {
+        const handleKey = (e) => { if (e.key === 'ArrowLeft') move('left'); else if (e.key === 'ArrowRight') move('right'); else if (e.key === 'ArrowUp') move('up'); else if (e.key === 'ArrowDown') move('down'); };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    });
+    
+    const colors = {0:'#cdc1b4',2:'#eee4da',4:'#ede0c8',8:'#f2b179',16:'#f59563',32:'#f67c5f',64:'#f65e3b',128:'#edcf72',256:'#edcc61',512:'#edc850',1024:'#edc53f',2048:'#edc22e'};
+    
+    return (
+        <div>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px'}}>
+                <div><div style={{fontSize:'11px',color:'var(--text-muted)'}}>SCORE</div><div style={{fontSize:'24px',fontWeight:700}}>{score}</div></div>
+                <button onClick={init} className="btn btn-secondary">New Game</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,80px)',gap:'8px',background:'#bbada0',padding:'8px',borderRadius:'8px'}}>
+                {board.map((v, i) => <div key={i} style={{width:'80px',height:'80px',background:colors[v]||'#3c3a32',borderRadius:'4px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:v>99?'24px':'32px',fontWeight:700,color:v<=4?'#776e65':'#f9f6f2'}}>{v||''}</div>)}
+            </div>
+            {gameOver && <div style={{marginTop:'16px',textAlign:'center',color:'#ff6b6b',fontWeight:700}}>Game Over! Final: {score}</div>}
+        </div>
+    );
+}
+
+// MINESWEEPER
+function MinesweeperGame({ addScore }) {
+    const [board, setBoard] = useState([]);
+    const [revealed, setRevealed] = useState([]);
+    const [flags, setFlags] = useState([]);
+    const [gameOver, setGameOver] = useState(false);
+    const [won, setWon] = useState(false);
+    const [time, setTime] = useState(0);
+    const ROWS = 9, COLS = 9, MINES = 10;
+    
+    const init = () => {
+        const b = Array(ROWS*COLS).fill(0);
+        let placed = 0;
+        while (placed < MINES) { const i = Math.floor(Math.random()*ROWS*COLS); if (b[i] !== -1) { b[i] = -1; placed++; } }
+        for (let i = 0; i < ROWS*COLS; i++) if (b[i] !== -1) { let c = 0; const neighbors = getNeighbors(i); neighbors.forEach(n => { if (b[n] === -1) c++; }); b[i] = c; }
+        setBoard(b); setRevealed(Array(ROWS*COLS).fill(false)); setFlags(Array(ROWS*COLS).fill(false)); setGameOver(false); setWon(false); setTime(0);
+    };
+    
+    const getNeighbors = (i) => {
+        const r = Math.floor(i/COLS), c = i%COLS, n = [];
+        for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) if (dr || dc) { const nr = r+dr, nc = c+dc; if (nr >= 0 && nr < ROWS && nc >= 0 && nc < COLS) n.push(nr*COLS+nc); }
+        return n;
+    };
+    
+    const reveal = (i) => {
+        if (gameOver || won || revealed[i] || flags[i]) return;
+        const r = [...revealed]; r[i] = true;
+        if (board[i] === -1) { setRevealed(board.map(() => true)); setGameOver(true); return; }
+        if (board[i] === 0) { const stack = [i]; while (stack.length) { const curr = stack.pop(); getNeighbors(curr).forEach(n => { if (!r[n] && board[n] !== -1) { r[n] = true; if (board[n] === 0) stack.push(n); } }); } }
+        setRevealed(r);
+        if (r.filter((v,i) => !v).length === MINES) { setWon(true); addScore(Math.max(1, 1000 - time * 2)); }
+    };
+    
+    const flag = (e, i) => { e.preventDefault(); if (gameOver || won || revealed[i]) return; const f = [...flags]; f[i] = !f[i]; setFlags(f); };
+    
+    useEffect(() => { init(); }, []);
+    useEffect(() => { if (!gameOver && !won && revealed.some(r => r)) { const t = setInterval(() => setTime(s => s + 1), 1000); return () => clearInterval(t); } }, [gameOver, won, revealed]);
+    
+    const colors = ['','#0000ff','#008000','#ff0000','#000080','#800000','#008080','#000','#808080'];
+    
+    return (
+        <div>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px',alignItems:'center'}}>
+                <div style={{fontSize:'20px'}}>💣 {MINES - flags.filter(f=>f).length}</div>
+                <button onClick={init} className="btn btn-secondary">New</button>
+                <div style={{fontSize:'20px'}}>⏱️ {time}</div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:`repeat(${COLS},32px)`,gap:'2px',background:'#999',padding:'4px',borderRadius:'4px'}}>
+                {board.map((v, i) => <div key={i} onClick={() => reveal(i)} onContextMenu={e => flag(e, i)} style={{width:'32px',height:'32px',background:revealed[i]?'#ddd':'#bbb',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'16px',fontWeight:700,color:colors[v]||'#000',cursor:'pointer',borderRadius:'2px',boxShadow:revealed[i]?'none':'inset 2px 2px #fff, inset -2px -2px #888'}}>
+                    {revealed[i] ? (v === -1 ? '💣' : v || '') : flags[i] ? '🚩' : ''}
+                </div>)}
+            </div>
+            {(gameOver || won) && <div style={{marginTop:'12px',textAlign:'center',fontWeight:700,color:won?'#4ade80':'#ff6b6b'}}>{won ? `You win! ${Math.max(1, 1000 - time * 2)} pts` : 'Game Over!'}</div>}
+        </div>
+    );
+}
+
+// Simple placeholder components for remaining games
+function SudokuGame({ addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🔠</div><div style={{marginTop:'16px'}}>Sudoku - Coming Soon!</div></div>; }
+function MemoryGame({ addScore }) {
+    const [cards, setCards] = useState([]);
+    const [flipped, setFlipped] = useState([]);
+    const [matched, setMatched] = useState([]);
+    const [moves, setMoves] = useState(0);
+    const emojis = ['🐶','🐱','🐭','🐹','🐰','🦊','🐻','🐼'];
+    
+    const init = () => { const deck = [...emojis,...emojis].sort(() => Math.random() - 0.5); setCards(deck); setFlipped([]); setMatched([]); setMoves(0); };
+    useEffect(() => { init(); }, []);
+    
+    const flip = (i) => {
+        if (flipped.length === 2 || flipped.includes(i) || matched.includes(i)) return;
+        const newFlipped = [...flipped, i];
+        setFlipped(newFlipped);
+        if (newFlipped.length === 2) {
+            setMoves(m => m + 1);
+            if (cards[newFlipped[0]] === cards[newFlipped[1]]) { setMatched(m => [...m, ...newFlipped]); setFlipped([]); if (matched.length + 2 === cards.length) addScore(Math.max(1, 500 - moves * 5)); }
+            else setTimeout(() => setFlipped([]), 1000);
+        }
+    };
+    
+    return (
+        <div>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}><div>Moves: {moves}</div><button onClick={init} className="btn btn-secondary">Reset</button></div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(4,70px)',gap:'8px'}}>
+                {cards.map((c, i) => <div key={i} onClick={() => flip(i)} style={{width:'70px',height:'70px',background:flipped.includes(i)||matched.includes(i)?'#4ade80':'#3b82f6',borderRadius:'8px',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'32px',cursor:'pointer'}}>{flipped.includes(i)||matched.includes(i)?c:'?'}</div>)}
+            </div>
+            {matched.length === cards.length && <div style={{marginTop:'12px',textAlign:'center',color:'#4ade80',fontWeight:700}}>You won in {moves} moves!</div>}
+        </div>
+    );
+}
+function WordleGame({ addScore }) {
+    const words = ['REACT','SNAKE','GAMES','SHIPS','NAVAL','FLEET','TRACK','PARTS'];
+    const [target] = useState(words[Math.floor(Math.random()*words.length)]);
+    const [guesses, setGuesses] = useState([]);
+    const [current, setCurrent] = useState('');
+    const [won, setWon] = useState(false);
+    
+    const submit = () => {
+        if (current.length !== 5) return;
+        const g = [...guesses, current.toUpperCase()];
+        setGuesses(g);
+        if (current.toUpperCase() === target) { setWon(true); addScore((7 - g.length) * 100); }
+        setCurrent('');
+    };
+    
+    useEffect(() => {
+        const handleKey = (e) => {
+            if (won || guesses.length >= 6) return;
+            if (e.key === 'Enter') submit();
+            else if (e.key === 'Backspace') setCurrent(c => c.slice(0,-1));
+            else if (/^[a-zA-Z]$/.test(e.key) && current.length < 5) setCurrent(c => c + e.key.toUpperCase());
+        };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    });
+    
+    const getColor = (letter, i, word) => {
+        if (target[i] === letter) return '#538d4e';
+        if (target.includes(letter)) return '#b59f3b';
+        return '#3a3a3c';
+    };
+    
+    return (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'8px'}}>
+            {[...guesses, ...(guesses.length < 6 && !won ? [current.padEnd(5)] : [])].map((g, gi) => (
+                <div key={gi} style={{display:'flex',gap:'6px'}}>
+                    {g.split('').map((l, li) => <div key={li} style={{width:'50px',height:'50px',background:gi<guesses.length?getColor(l,li,g):'#3a3a3c',border:'2px solid #555',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'24px',fontWeight:700,color:'#fff'}}>{l !== ' ' ? l : ''}</div>)}
+                </div>
+            ))}
+            {won && <div style={{color:'#4ade80',fontWeight:700,marginTop:'12px'}}>🎉 You got it!</div>}
+            {!won && guesses.length >= 6 && <div style={{color:'#ff6b6b',marginTop:'12px'}}>The word was: {target}</div>}
+        </div>
+    );
+}
+function TypingGame({ addScore }) {
+    const sentences = ['The quick brown fox jumps over the lazy dog','Ship tracker helps manage fleet operations','React makes building user interfaces easy'];
+    const [text] = useState(sentences[Math.floor(Math.random()*sentences.length)]);
+    const [input, setInput] = useState('');
+    const [started, setStarted] = useState(false);
+    const [startTime, setStartTime] = useState(0);
+    const [wpm, setWpm] = useState(0);
+    
+    const handleInput = (e) => {
+        if (!started) { setStarted(true); setStartTime(Date.now()); }
+        setInput(e.target.value);
+        if (e.target.value === text) {
+            const mins = (Date.now() - startTime) / 60000;
+            const w = Math.round(text.split(' ').length / mins);
+            setWpm(w); addScore(w);
+        }
+    };
+    
+    return (
+        <div style={{maxWidth:'500px'}}>
+            <div style={{padding:'16px',background:'var(--bg-input)',borderRadius:'8px',marginBottom:'16px',fontSize:'18px',lineHeight:1.6}}>
+                {text.split('').map((c, i) => <span key={i} style={{color:i<input.length?(input[i]===c?'#4ade80':'#ff6b6b'):'var(--text)'}}>{c}</span>)}
+            </div>
+            <input value={input} onChange={handleInput} disabled={wpm>0} placeholder="Start typing..." style={{width:'100%',padding:'12px',fontSize:'16px'}} autoFocus/>
+            {wpm > 0 && <div style={{marginTop:'16px',textAlign:'center'}}><div style={{fontSize:'48px',fontWeight:700,color:'#4ade80'}}>{wpm}</div><div>Words per minute!</div></div>}
+        </div>
+    );
+}
+function ReactionGame({ addScore }) {
+    const [state, setState] = useState('waiting');
+    const [startTime, setStartTime] = useState(0);
+    const [result, setResult] = useState(0);
+    
+    const start = () => { setState('ready'); setTimeout(() => { setStartTime(Date.now()); setState('go'); }, 1000 + Math.random() * 3000); };
+    const click = () => {
+        if (state === 'waiting') start();
+        else if (state === 'ready') { setState('early'); setTimeout(() => setState('waiting'), 1000); }
+        else if (state === 'go') { const ms = Date.now() - startTime; setResult(ms); setState('done'); addScore(Math.max(1, 500 - ms)); }
+        else if (state === 'done' || state === 'early') setState('waiting');
+    };
+    
+    const colors = {waiting:'#3b82f6',ready:'#ef4444',go:'#22c55e',early:'#ef4444',done:'#3b82f6'};
+    const text = {waiting:'Click to start',ready:'Wait for green...',go:'CLICK NOW!',early:'Too early!',done:`${result}ms - Click to retry`};
+    
+    return <div onClick={click} style={{width:'400px',height:'300px',background:colors[state],borderRadius:'12px',display:'flex',alignItems:'center',justifyContent:'center',cursor:'pointer',color:'#fff',fontSize:'24px',fontWeight:700}}>{text[state]}</div>;
+}
+function SimonGame({ addScore }) {
+    const [sequence, setSequence] = useState([]);
+    const [playerSeq, setPlayerSeq] = useState([]);
+    const [playing, setPlaying] = useState(false);
+    const [showing, setShowing] = useState(-1);
+    const colors = ['#ef4444','#22c55e','#3b82f6','#eab308'];
+    
+    const start = () => { const s = [Math.floor(Math.random()*4)]; setSequence(s); setPlayerSeq([]); showSequence(s); };
+    const showSequence = async (s) => { setPlaying(false); for (let i of s) { setShowing(i); await new Promise(r => setTimeout(r, 500)); setShowing(-1); await new Promise(r => setTimeout(r, 200)); } setPlaying(true); };
+    const press = (i) => {
+        if (!playing) return;
+        const newSeq = [...playerSeq, i];
+        if (sequence[newSeq.length-1] !== i) { addScore((sequence.length-1)*10); setPlaying(false); setSequence([]); setPlayerSeq([]); return; }
+        setPlayerSeq(newSeq);
+        if (newSeq.length === sequence.length) { const next = [...sequence, Math.floor(Math.random()*4)]; setSequence(next); setPlayerSeq([]); setTimeout(() => showSequence(next), 1000); }
+    };
+    
+    return (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
+            <div>Score: {sequence.length ? sequence.length - 1 : 0}</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(2,100px)',gap:'8px'}}>
+                {colors.map((c, i) => <div key={i} onClick={() => press(i)} style={{width:'100px',height:'100px',background:c,opacity:showing===i?1:0.6,borderRadius:'8px',cursor:'pointer'}}/>)}
+            </div>
+            {!sequence.length && <button onClick={start} className="btn btn-primary">Start</button>}
+        </div>
+    );
+}
+function WhackAMoleGame({ addScore }) {
+    const [moles, setMoles] = useState(Array(9).fill(false));
+    const [score, setScore] = useState(0);
+    const [playing, setPlaying] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(30);
+    
+    const start = () => { setScore(0); setTimeLeft(30); setPlaying(true); };
+    const whack = (i) => { if (moles[i]) { setScore(s => s + 1); const m = [...moles]; m[i] = false; setMoles(m); } };
+    
+    useEffect(() => {
+        if (!playing) return;
+        const moleTimer = setInterval(() => { const m = Array(9).fill(false); m[Math.floor(Math.random()*9)] = true; setMoles(m); }, 800);
+        const gameTimer = setInterval(() => setTimeLeft(t => { if (t <= 1) { setPlaying(false); addScore(score); return 0; } return t - 1; }), 1000);
+        return () => { clearInterval(moleTimer); clearInterval(gameTimer); };
+    }, [playing, score]);
+    
+    return (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
+            <div style={{display:'flex',gap:'24px'}}><div>Score: {score}</div><div>Time: {timeLeft}s</div></div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,80px)',gap:'8px'}}>
+                {moles.map((up, i) => <div key={i} onClick={() => whack(i)} style={{width:'80px',height:'80px',background:'#8b4513',borderRadius:'50%',display:'flex',alignItems:'center',justifyContent:'center',fontSize:'40px',cursor:'pointer'}}>{up ? '🐹' : ''}</div>)}
+            </div>
+            {!playing && <button onClick={start} className="btn btn-primary">{timeLeft === 0 ? 'Play Again' : 'Start'}</button>}
+        </div>
+    );
+}
+
+// ==================== MULTIPLAYER GAMES ====================
+
+// BEER PONG
+function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
+    const canvasRef = useRef(null);
+    const [power, setPower] = useState(0);
+    const [angle, setAngle] = useState(45);
+    const [dragging, setDragging] = useState(false);
+    const [dragStart, setDragStart] = useState(null);
+    const [ball, setBall] = useState(null);
+    const [cups, setCups] = useState([1,1,1,1,1,1,1,1,1,1]);
+    const [turn, setTurn] = useState(0);
+    const [scores, setScores] = useState([0, 0]);
+    const W = 400, H = 500;
+    
+    useEffect(() => { draw(); }, [cups, ball, power, angle, dragging]);
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        // Table
+        ctx.fillStyle = '#1a472a'; ctx.fillRect(0, 0, W, H);
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2; ctx.strokeRect(10, 10, W-20, H-20);
+        ctx.beginPath(); ctx.moveTo(10, H/2); ctx.lineTo(W-10, H/2); ctx.stroke();
+        
+        // Cups (triangle formation at top)
+        const cupPositions = [[W/2,80],[W/2-30,120],[W/2+30,120],[W/2-60,160],[W/2,160],[W/2+60,160],[W/2-90,200],[W/2-30,200],[W/2+30,200],[W/2+90,200]];
+        cupPositions.forEach((pos, i) => {
+            if (cups[i]) {
+                ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 20, 0, Math.PI*2); ctx.fill();
+                ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(pos[0], pos[1], 12, 0, Math.PI*2); ctx.fill();
+            }
+        });
+        
+        // Ball at bottom
+        if (!ball) {
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(W/2, H-50, 10, 0, Math.PI*2); ctx.fill();
+            // Aim line
+            if (dragging) {
+                ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 2; ctx.setLineDash([5,5]);
+                ctx.beginPath(); ctx.moveTo(W/2, H-50);
+                const rad = (90 - angle) * Math.PI / 180;
+                ctx.lineTo(W/2 + Math.cos(rad) * power * 2, H-50 - Math.sin(rad) * power * 2);
+                ctx.stroke(); ctx.setLineDash([]);
+            }
+        } else {
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(ball.x, ball.y, 10, 0, Math.PI*2); ctx.fill();
+        }
+        
+        // Power meter
+        ctx.fillStyle = '#333'; ctx.fillRect(20, H-30, 100, 15);
+        ctx.fillStyle = power > 70 ? '#ef4444' : power > 40 ? '#eab308' : '#22c55e';
+        ctx.fillRect(20, H-30, power, 15);
+        ctx.fillStyle = '#fff'; ctx.font = '10px sans-serif'; ctx.fillText(`Power: ${Math.round(power)}%`, 25, H-19);
+    };
+    
+    const handleMouseDown = (e) => {
+        if (ball) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        setDragStart({ x: e.clientX - rect.left, y: e.clientY - rect.top });
+        setDragging(true);
+    };
+    
+    const handleMouseMove = (e) => {
+        if (!dragging || !dragStart) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        const x = e.clientX - rect.left, y = e.clientY - rect.top;
+        const dx = dragStart.x - x, dy = dragStart.y - y;
+        setPower(Math.min(100, Math.hypot(dx, dy)));
+        setAngle(Math.max(20, Math.min(80, Math.atan2(dy, dx) * 180 / Math.PI)));
+    };
+    
+    const handleMouseUp = () => {
+        if (!dragging) return;
+        setDragging(false);
+        if (power > 10) throwBall();
+    };
+    
+    const throwBall = () => {
+        const rad = (90 - angle) * Math.PI / 180;
+        const vx = Math.cos(rad) * power * 0.08;
+        const vy = -Math.sin(rad) * power * 0.12;
+        setBall({ x: W/2, y: H-50, vx, vy });
+    };
+    
+    useEffect(() => {
+        if (!ball) return;
+        const interval = setInterval(() => {
+            setBall(b => {
+                if (!b) return null;
+                const newB = { ...b, x: b.x + b.vx, y: b.y + b.vy, vy: b.vy + 0.3 };
+                
+                // Check cup collisions
+                const cupPositions = [[W/2,80],[W/2-30,120],[W/2+30,120],[W/2-60,160],[W/2,160],[W/2+60,160],[W/2-90,200],[W/2-30,200],[W/2+30,200],[W/2+90,200]];
+                cupPositions.forEach((pos, i) => {
+                    if (cups[i] && Math.hypot(newB.x - pos[0], newB.y - pos[1]) < 25) {
+                        setCups(c => { const nc = [...c]; nc[i] = 0; return nc; });
+                        setScores(s => [s[0] + 1, s[1]]);
+                        toast('🎯 Cup hit!', 'success');
+                    }
+                });
+                
+                // Out of bounds
+                if (newB.y > H || newB.x < 0 || newB.x > W || newB.y < 0) {
+                    setPower(0);
+                    return null;
+                }
+                return newB;
+            });
+        }, 16);
+        return () => clearInterval(interval);
+    }, [ball, cups]);
+    
+    const reset = () => { setCups([1,1,1,1,1,1,1,1,1,1]); setScores([0,0]); setBall(null); setPower(0); };
+    
+    return (
+        <div>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'12px'}}>
+                <div>Cups Hit: {scores[0]}/10</div>
+                <button onClick={reset} className="btn btn-secondary">Reset</button>
+            </div>
+            <canvas ref={canvasRef} width={W} height={H} onMouseDown={handleMouseDown} onMouseMove={handleMouseMove} onMouseUp={handleMouseUp} onMouseLeave={handleMouseUp} style={{borderRadius:'8px',cursor:'crosshair'}}/>
+            <div style={{marginTop:'8px',fontSize:'12px',color:'var(--text-muted)'}}>Click and drag back to aim, release to throw!</div>
+            {cups.every(c => !c) && <div style={{marginTop:'12px',textAlign:'center',color:'#4ade80',fontWeight:700}}>🎉 You cleared the table!</div>}
+        </div>
+    );
+}
+
+// Placeholder multiplayer games - would need full implementation for real-time sync
+function PongGame({ room, updateRoom, currentUser, addScore }) {
+    const canvasRef = useRef(null);
+    const [score, setScore] = useState([0, 0]);
+    const gameRef = useRef({ p1: 200, p2: 200, ball: {x:300,y:200,dx:4,dy:2} });
+    const W = 600, H = 400;
+    
+    const loop = () => {
+        const g = gameRef.current;
+        g.ball.x += g.ball.dx; g.ball.y += g.ball.dy;
+        if (g.ball.y <= 5 || g.ball.y >= H-5) g.ball.dy *= -1;
+        if (g.ball.x <= 25 && g.ball.y > g.p1-40 && g.ball.y < g.p1+40) g.ball.dx = Math.abs(g.ball.dx);
+        if (g.ball.x >= W-25 && g.ball.y > g.p2-40 && g.ball.y < g.p2+40) g.ball.dx = -Math.abs(g.ball.dx);
+        if (g.ball.x < 0) { setScore(s => [s[0], s[1]+1]); g.ball = {x:300,y:200,dx:4,dy:2}; }
+        if (g.ball.x > W) { setScore(s => [s[0]+1, s[1]]); g.ball = {x:300,y:200,dx:-4,dy:2}; }
+        // Simple AI for P2
+        if (g.ball.x > W/2) g.p2 += (g.ball.y - g.p2) * 0.1;
+        draw();
+    };
+    
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+        ctx.setLineDash([10,10]); ctx.strokeStyle = '#333'; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
+        const g = gameRef.current;
+        ctx.fillStyle = '#fff'; ctx.fillRect(10, g.p1-40, 10, 80); ctx.fillRect(W-20, g.p2-40, 10, 80);
+        ctx.beginPath(); ctx.arc(g.ball.x, g.ball.y, 8, 0, Math.PI*2); ctx.fill();
+        ctx.font = '48px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(score[0], W/4, 60); ctx.fillText(score[1], W*3/4, 60);
+    };
+    
+    useEffect(() => { const i = setInterval(loop, 16); return () => clearInterval(i); }, []);
+    useEffect(() => {
+        const move = (e) => { const rect = canvasRef.current?.getBoundingClientRect(); if (rect) gameRef.current.p1 = Math.max(40, Math.min(H-40, e.clientY - rect.top)); };
+        window.addEventListener('mousemove', move); return () => window.removeEventListener('mousemove', move);
+    }, []);
+    
+    return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'8px'}}/>;
+}
+
+function TanksGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🎯</div><div style={{marginTop:'16px'}}>Tank Battle - Coming Soon!</div></div>; }
+function TronGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🏍️</div><div style={{marginTop:'16px'}}>Tron - Coming Soon!</div></div>; }
+function RacingGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🏎️</div><div style={{marginTop:'16px'}}>Racing - Coming Soon!</div></div>; }
+function SumoGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🤼</div><div style={{marginTop:'16px'}}>Sumo - Coming Soon!</div></div>; }
+function BattleshipGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🚢</div><div style={{marginTop:'16px'}}>Battleship - Coming Soon!</div></div>; }
+function ChessGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>♟️</div><div style={{marginTop:'16px'}}>Chess - Coming Soon!</div></div>; }
+function CheckersGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🔴</div><div style={{marginTop:'16px'}}>Checkers - Coming Soon!</div></div>; }
+function WordChainGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🔤</div><div style={{marginTop:'16px'}}>Word Chain - Coming Soon!</div></div>; }
+function TriviaGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>❓</div><div style={{marginTop:'16px'}}>Trivia - Coming Soon!</div></div>; }
+function TypeRaceGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🏁</div><div style={{marginTop:'16px'}}>Type Race - Coming Soon!</div></div>; }
 
 ReactDOM.createRoot(document.getElementById('root')).render(<AuthWrapper/>);
 </script>
