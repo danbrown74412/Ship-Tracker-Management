@@ -6665,7 +6665,131 @@ function MinesweeperGame({ addScore }) {
 }
 
 // Puzzle & Quick games - keep mostly same but improved
-function SudokuGame({ addScore }) { return <div className="card" style={{padding:'32px',textAlign:'center'}}><div style={{fontSize:'48px'}}>🔠</div><div style={{marginTop:'16px'}}>Sudoku - Coming Soon!</div></div>; }
+function SudokuGame({ addScore }) {
+    const [board, setBoard] = useState([]);
+    const [solution, setSolution] = useState([]);
+    const [initial, setInitial] = useState([]);
+    const [selected, setSelected] = useState(null);
+    const [errors, setErrors] = useState(new Set());
+    const [won, setWon] = useState(false);
+    const [time, setTime] = useState(0);
+    const [difficulty, setDifficulty] = useState('medium');
+    const [notes, setNotes] = useState({});
+    const [noteMode, setNoteMode] = useState(false);
+
+    const generate = (diff) => {
+        // Generate a solved board using backtracking
+        const grid = Array(81).fill(0);
+        const isValid = (g, pos, num) => {
+            const row = Math.floor(pos / 9), col = pos % 9;
+            for (let i = 0; i < 9; i++) { if (g[row * 9 + i] === num || g[i * 9 + col] === num) return false; }
+            const br = Math.floor(row / 3) * 3, bc = Math.floor(col / 3) * 3;
+            for (let r = br; r < br + 3; r++) for (let c = bc; c < bc + 3; c++) if (g[r * 9 + c] === num) return false;
+            return true;
+        };
+        const solve = (g) => {
+            const empty = g.indexOf(0);
+            if (empty === -1) return true;
+            const nums = [1,2,3,4,5,6,7,8,9].sort(() => Math.random() - 0.5);
+            for (const n of nums) { if (isValid(g, empty, n)) { g[empty] = n; if (solve(g)) return true; g[empty] = 0; } }
+            return false;
+        };
+        solve(grid);
+        const sol = [...grid];
+        // Remove numbers based on difficulty
+        const remove = { easy: 35, medium: 45, hard: 55 }[diff] || 45;
+        const positions = Array(81).fill(0).map((_, i) => i).sort(() => Math.random() - 0.5);
+        for (let i = 0; i < remove; i++) grid[positions[i]] = 0;
+        const init = grid.map(v => v !== 0);
+        setBoard([...grid]); setSolution(sol); setInitial(init); setSelected(null); setErrors(new Set()); setWon(false); setTime(0); setNotes({}); setNoteMode(false);
+    };
+
+    useEffect(() => { generate(difficulty); }, []);
+    useEffect(() => { if (!won && board.some(v => v > 0)) { const t = setInterval(() => setTime(t => t + 1), 1000); return () => clearInterval(t); } }, [won, board]);
+
+    const handleCell = (idx) => { if (!won) setSelected(idx); };
+    const handleNumber = (num) => {
+        if (selected === null || won || initial[selected]) return;
+        if (noteMode) {
+            const key = selected;
+            const cur = notes[key] || new Set();
+            const next = new Set(cur);
+            if (next.has(num)) next.delete(num); else next.add(num);
+            setNotes({ ...notes, [key]: next });
+            return;
+        }
+        const newBoard = [...board];
+        newBoard[selected] = num;
+        setBoard(newBoard);
+        // Check if correct
+        const newErrors = new Set(errors);
+        if (num !== solution[selected]) newErrors.add(selected); else newErrors.delete(selected);
+        setErrors(newErrors);
+        // Check win
+        if (newBoard.every((v, i) => v === solution[i])) { setWon(true); addScore(Math.max(100, 3000 - time * 2)); }
+    };
+    const clearCell = () => {
+        if (selected === null || won || initial[selected]) return;
+        const newBoard = [...board]; newBoard[selected] = 0; setBoard(newBoard);
+        const newErrors = new Set(errors); newErrors.delete(selected); setErrors(newErrors);
+        const newNotes = { ...notes }; delete newNotes[selected]; setNotes(newNotes);
+    };
+
+    const formatTime = (s) => `${Math.floor(s/60)}:${(s%60).toString().padStart(2,'0')}`;
+    const selRow = selected !== null ? Math.floor(selected / 9) : -1;
+    const selCol = selected !== null ? selected % 9 : -1;
+    const selBox = selected !== null ? Math.floor(selRow/3)*3+Math.floor(selCol/3) : -1;
+    const selVal = selected !== null ? board[selected] : 0;
+
+    return (
+        <div style={{display:'flex',gap:'32px',alignItems:'flex-start'}}>
+            <div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(9,48px)',gap:'0px',border:'3px solid var(--text)',borderRadius:'4px'}}>
+                    {board.map((v, i) => {
+                        const row = Math.floor(i/9), col = i%9, box = Math.floor(row/3)*3+Math.floor(col/3);
+                        const isSel = i === selected;
+                        const isHighlight = row === selRow || col === selCol || box === selBox;
+                        const isSameVal = selVal > 0 && v === selVal;
+                        const isError = errors.has(i);
+                        const isInit = initial[i];
+                        const cellNotes = notes[i];
+                        return <div key={i} onClick={() => handleCell(i)} style={{
+                            width:'48px',height:'48px',display:'flex',alignItems:'center',justifyContent:'center',
+                            fontSize: v ? '22px' : '9px', fontWeight: isInit ? 700 : 500,
+                            background: isSel ? 'rgba(74,222,128,0.3)' : isError ? 'rgba(239,68,68,0.15)' : isSameVal ? 'rgba(74,222,128,0.1)' : isHighlight ? 'rgba(255,255,255,0.04)' : 'var(--bg-card)',
+                            color: isError ? '#ef4444' : isInit ? 'var(--text)' : '#4ade80',
+                            cursor:'pointer', position:'relative',
+                            borderRight: (col+1)%3===0 && col<8 ? '3px solid var(--text)' : '1px solid var(--border)',
+                            borderBottom: (row+1)%3===0 && row<8 ? '3px solid var(--text)' : '1px solid var(--border)',
+                        }}>
+                            {v > 0 ? v : (cellNotes && cellNotes.size > 0 ? (
+                                <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',width:'100%',height:'100%',alignItems:'center',justifyItems:'center',color:'var(--text-muted)',lineHeight:1}}>
+                                    {[1,2,3,4,5,6,7,8,9].map(n => <span key={n} style={{opacity:cellNotes.has(n)?1:0}}>{n}</span>)}
+                                </div>
+                            ) : '')}
+                        </div>;
+                    })}
+                </div>
+                {won && <div style={{marginTop:'16px',textAlign:'center',color:'#4ade80',fontWeight:700,fontSize:'18px'}}>🎉 Puzzle Complete! {formatTime(time)}</div>}
+            </div>
+            <div style={{minWidth:'160px'}}>
+                <div style={{marginBottom:'16px'}}><div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>TIME</div><div style={{fontSize:'24px',fontWeight:700,fontFamily:'JetBrains Mono, monospace'}}>{formatTime(time)}</div></div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3,48px)',gap:'4px',marginBottom:'16px'}}>
+                    {[1,2,3,4,5,6,7,8,9].map(n => <button key={n} onClick={() => handleNumber(n)} className="btn btn-secondary" style={{width:'48px',height:'48px',fontSize:'20px',fontWeight:700,padding:0}}>{n}</button>)}
+                </div>
+                <div style={{display:'flex',flexDirection:'column',gap:'6px'}}>
+                    <button onClick={clearCell} className="btn btn-secondary" style={{width:'100%'}}>✕ Clear</button>
+                    <button onClick={() => setNoteMode(!noteMode)} className={`btn ${noteMode ? 'btn-primary' : 'btn-secondary'}`} style={{width:'100%'}}>✏️ Notes {noteMode ? 'ON' : 'OFF'}</button>
+                </div>
+                <div style={{marginTop:'20px',borderTop:'1px solid var(--border)',paddingTop:'16px'}}>
+                    <div style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'8px'}}>NEW GAME</div>
+                    {['easy','medium','hard'].map(d => <button key={d} onClick={() => { setDifficulty(d); generate(d); }} className={`btn ${difficulty===d?'btn-primary':'btn-secondary'}`} style={{width:'100%',marginBottom:'4px',textTransform:'capitalize'}}>{d}</button>)}
+                </div>
+            </div>
+        </div>
+    );
+}
+
 
 function MemoryGame({ addScore }) {
     const [cards, setCards] = useState([]);
@@ -6971,17 +7095,1211 @@ function PongGame({ room, updateRoom, currentUser, addScore }) {
     return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block'}}/>;
 }
 
-// Placeholder multiplayer games
-function TanksGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🎯</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Tank Battle</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function TronGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🏍️</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Tron</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function RacingGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🏎️</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Racing</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function SumoGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🤼</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Sumo</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function BattleshipGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🚢</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Battleship</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function ChessGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>♟️</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Chess</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function CheckersGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🔴</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Checkers</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function WordChainGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🔤</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Word Chain</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function TriviaGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>❓</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Trivia</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
-function TypeRaceGame({ room, updateRoom, currentUser, addScore }) { return <div className="card" style={{padding:'48px',textAlign:'center'}}><div style={{fontSize:'56px'}}>🏁</div><div style={{marginTop:'16px',fontSize:'18px',fontWeight:600}}>Type Race</div><div style={{color:'var(--text-muted)',marginTop:'8px'}}>Coming Soon!</div></div>; }
+// TANK BATTLE - Top-down arena shooter vs AI
+function TanksGame({ room, updateRoom, currentUser, addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState([0, 0]);
+    const W = 700, H = 500;
+    const gameRef = useRef(null);
+
+    const init = () => {
+        const walls = [];
+        for (let i = 0; i < 12; i++) {
+            const x = 80 + Math.random() * (W - 160), y = 80 + Math.random() * (H - 160);
+            const w = Math.random() > 0.5 ? 60 + Math.random() * 40 : 20;
+            const h = w === 20 ? 60 + Math.random() * 40 : 20;
+            walls.push({ x, y, w, h });
+        }
+        gameRef.current = {
+            p1: { x: 80, y: H / 2, angle: 0, turret: 0, hp: 5, maxHp: 5, cooldown: 0, speed: 0 },
+            p2: { x: W - 80, y: H / 2, angle: Math.PI, turret: Math.PI, hp: 5, maxHp: 5, cooldown: 0, speed: 0, aiTarget: null, aiTimer: 0 },
+            bullets: [], walls, particles: [], keys: {}
+        };
+        setScore([0, 0]); setGameState('playing');
+    };
+
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const g = gameRef.current;
+        const { p1, p2, walls } = g;
+
+        // Player controls
+        if (g.keys['w'] || g.keys['ArrowUp']) { p1.x += Math.cos(p1.angle) * 3; p1.y += Math.sin(p1.angle) * 3; }
+        if (g.keys['s'] || g.keys['ArrowDown']) { p1.x -= Math.cos(p1.angle) * 2; p1.y -= Math.sin(p1.angle) * 2; }
+        if (g.keys['a'] || g.keys['ArrowLeft']) p1.angle -= 0.05;
+        if (g.keys['d'] || g.keys['ArrowRight']) p1.angle += 0.05;
+        p1.x = Math.max(20, Math.min(W - 20, p1.x)); p1.y = Math.max(20, Math.min(H - 20, p1.y));
+        if (p1.cooldown > 0) p1.cooldown--;
+        if (p2.cooldown > 0) p2.cooldown--;
+
+        // Wall collision for player
+        walls.forEach(w => {
+            if (p1.x > w.x - 18 && p1.x < w.x + w.w + 18 && p1.y > w.y - 18 && p1.y < w.y + w.h + 18) {
+                const cx = w.x + w.w / 2, cy = w.y + w.h / 2;
+                const dx = p1.x - cx, dy = p1.y - cy;
+                if (Math.abs(dx / w.w) > Math.abs(dy / w.h)) p1.x += dx > 0 ? 3 : -3;
+                else p1.y += dy > 0 ? 3 : -3;
+            }
+        });
+
+        // AI behavior
+        p2.aiTimer++;
+        const dx = p1.x - p2.x, dy = p1.y - p2.y;
+        const angleToPlayer = Math.atan2(dy, dx);
+        // Rotate turret toward player
+        let tDiff = angleToPlayer - p2.turret;
+        while (tDiff > Math.PI) tDiff -= Math.PI * 2; while (tDiff < -Math.PI) tDiff += Math.PI * 2;
+        p2.turret += Math.sign(tDiff) * Math.min(Math.abs(tDiff), 0.04);
+        // Move toward player but keep distance
+        const dist = Math.hypot(dx, dy);
+        if (dist > 200) { p2.angle += (angleToPlayer - p2.angle) * 0.03; p2.x += Math.cos(p2.angle) * 1.5; p2.y += Math.sin(p2.angle) * 1.5; }
+        else if (dist < 120) { p2.x -= Math.cos(angleToPlayer) * 1.5; p2.y -= Math.sin(angleToPlayer) * 1.5; }
+        else { p2.angle += 0.02; p2.x += Math.cos(p2.angle) * 0.8; p2.y += Math.sin(p2.angle) * 0.8; }
+        p2.x = Math.max(20, Math.min(W - 20, p2.x)); p2.y = Math.max(20, Math.min(H - 20, p2.y));
+        // AI shoot
+        if (Math.abs(tDiff) < 0.3 && p2.cooldown <= 0 && dist < 400) {
+            g.bullets.push({ x: p2.x + Math.cos(p2.turret) * 20, y: p2.y + Math.sin(p2.turret) * 20, dx: Math.cos(p2.turret) * 6, dy: Math.sin(p2.turret) * 6, owner: 2, life: 80 });
+            p2.cooldown = 40;
+        }
+
+        // Move bullets
+        g.bullets = g.bullets.filter(b => {
+            b.x += b.dx; b.y += b.dy; b.life--;
+            if (b.x < 0 || b.x > W || b.y < 0 || b.y > H || b.life <= 0) return false;
+            // Wall collision
+            for (const w of walls) {
+                if (b.x > w.x && b.x < w.x + w.w && b.y > w.y && b.y < w.y + w.h) {
+                    for (let i = 0; i < 4; i++) g.particles.push({ x: b.x, y: b.y, dx: (Math.random() - 0.5) * 4, dy: (Math.random() - 0.5) * 4, life: 10, color: '#fbbf24' });
+                    return false;
+                }
+            }
+            // Tank hit
+            const target = b.owner === 1 ? p2 : p1;
+            if (Math.hypot(b.x - target.x, b.y - target.y) < 18) {
+                target.hp--;
+                for (let i = 0; i < 8; i++) g.particles.push({ x: target.x, y: target.y, dx: (Math.random() - 0.5) * 6, dy: (Math.random() - 0.5) * 6, life: 15, color: b.owner === 1 ? '#ef4444' : '#4ade80' });
+                if (target.hp <= 0) {
+                    setScore(s => { const ns = b.owner === 1 ? [s[0] + 1, s[1]] : [s[0], s[1] + 1]; return ns; });
+                    target.hp = target.maxHp;
+                    target.x = b.owner === 1 ? W - 80 : 80; target.y = H / 2;
+                }
+                return false;
+            }
+            return true;
+        });
+
+        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
+        draw();
+    };
+
+    const shoot = () => {
+        const g = gameRef.current; if (!g || g.p1.cooldown > 0) return;
+        g.bullets.push({ x: g.p1.x + Math.cos(g.p1.angle) * 20, y: g.p1.y + Math.sin(g.p1.angle) * 20, dx: Math.cos(g.p1.angle) * 7, dy: Math.sin(g.p1.angle) * 7, owner: 1, life: 80 });
+        g.p1.cooldown = 25;
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#1a1f2e'; ctx.fillRect(0, 0, W, H);
+        // Grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
+        for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+        for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        const g = gameRef.current; if (!g) return;
+        // Walls
+        g.walls.forEach(w => { ctx.fillStyle = '#475569'; ctx.fillRect(w.x, w.y, w.w, w.h); ctx.fillStyle = 'rgba(255,255,255,0.1)'; ctx.fillRect(w.x, w.y, w.w, 3); });
+        // Draw tank helper
+        const drawTank = (t, color, turretColor) => {
+            ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.angle);
+            ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-16, -12, 32, 24, 4); ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.3)'; ctx.fillRect(-14, -14, 6, 28); ctx.fillRect(8, -14, 6, 28);
+            ctx.restore();
+            ctx.save(); ctx.translate(t.x, t.y); ctx.rotate(t.turret || t.angle);
+            ctx.fillStyle = turretColor; ctx.beginPath(); ctx.arc(0, 0, 8, 0, Math.PI * 2); ctx.fill();
+            ctx.fillRect(0, -3, 22, 6); ctx.restore();
+            // HP bar
+            ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(t.x - 18, t.y - 24, 36, 5);
+            ctx.fillStyle = t.hp > t.maxHp * 0.3 ? '#4ade80' : '#ef4444'; ctx.fillRect(t.x - 18, t.y - 24, 36 * (t.hp / t.maxHp), 5);
+        };
+        drawTank(g.p1, '#22c55e', '#16a34a');
+        drawTank(g.p2, '#ef4444', '#dc2626');
+        // Bullets
+        g.bullets.forEach(b => { ctx.fillStyle = b.owner === 1 ? '#4ade80' : '#fbbf24'; ctx.shadowColor = ctx.fillStyle; ctx.shadowBlur = 6; ctx.beginPath(); ctx.arc(b.x, b.y, 4, 0, Math.PI * 2); ctx.fill(); });
+        ctx.shadowBlur = 0;
+        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 15; ctx.fillRect(p.x - 2, p.y - 2, 4, 4); });
+        ctx.globalAlpha = 1;
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#4ade80'; ctx.fillText(`You: ${score[0]}`, 15, 25);
+        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right'; ctx.fillText(`AI: ${score[1]}`, W - 15, 25);
+    };
+
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score]);
+    useEffect(() => {
+        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if (gameRef.current) gameRef.current.keys[e.key] = true; if (e.key === ' ') { if (gameState !== 'playing') init(); else shoot(); } };
+        const up = (e) => { if (gameRef.current) gameRef.current.keys[e.key] = false; };
+        window.addEventListener('keydown', down); window.addEventListener('keyup', up);
+        return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    }, [gameState]);
+
+    return (
+        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
+            {gameState === 'idle' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                <div style={{fontSize:'56px'}}>🎯</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Tank Battle</div>
+                <div style={{color:'#94a3b8',marginTop:'8px'}}>WASD to move • SPACE to shoot</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div>
+            </div>}
+        </div>
+    );
+}
+
+// TRON - Light bikes vs AI
+function TronGame({ room, updateRoom, currentUser, addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState([0, 0]);
+    const W = 600, H = 500;
+    const CELL = 5;
+    const gameRef = useRef(null);
+
+    const init = () => {
+        gameRef.current = {
+            p1: { x: 100, y: H / 2, dir: 'right', trail: [], alive: true },
+            p2: { x: W - 100, y: H / 2, dir: 'left', trail: [], alive: true, aiTimer: 0 },
+            grid: new Set()
+        };
+        setGameState('playing');
+    };
+
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const g = gameRef.current;
+        const { p1, p2 } = g;
+        // Move
+        const move = (p) => {
+            if (p.dir === 'right') p.x += CELL; else if (p.dir === 'left') p.x -= CELL;
+            else if (p.dir === 'up') p.y -= CELL; else if (p.dir === 'down') p.y += CELL;
+            const key = `${p.x},${p.y}`;
+            if (p.x < 0 || p.x >= W || p.y < 0 || p.y >= H || g.grid.has(key)) { p.alive = false; return; }
+            g.grid.add(key); p.trail.push({ x: p.x, y: p.y });
+        };
+        // AI - look ahead and avoid walls
+        p2.aiTimer++;
+        if (p2.aiTimer % 3 === 0) {
+            const dirs = ['up', 'down', 'left', 'right'];
+            const opp = { up: 'down', down: 'up', left: 'right', right: 'left' };
+            const valid = dirs.filter(d => d !== opp[p2.dir]);
+            let bestDir = p2.dir, bestDist = 0;
+            valid.forEach(d => {
+                let tx = p2.x, ty = p2.y, dist = 0;
+                for (let i = 0; i < 30; i++) {
+                    if (d === 'right') tx += CELL; else if (d === 'left') tx -= CELL;
+                    else if (d === 'up') ty -= CELL; else ty += CELL;
+                    if (tx < 0 || tx >= W || ty < 0 || ty >= H || g.grid.has(`${tx},${ty}`)) break;
+                    dist++;
+                }
+                // Bias toward player direction for aggression
+                const toP1 = Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y);
+                let nx = p2.x, ny = p2.y;
+                if (d === 'right') nx += CELL * 5; else if (d === 'left') nx -= CELL * 5;
+                else if (d === 'up') ny -= CELL * 5; else ny += CELL * 5;
+                const newDist = Math.abs(p1.x - nx) + Math.abs(p1.y - ny);
+                if (dist > bestDist || (dist === bestDist && newDist < toP1)) { bestDist = dist; bestDir = d; }
+            });
+            if (bestDist < 3) { // Emergency: pick any safe direction
+                const safe = valid.find(d => {
+                    let tx = p2.x, ty = p2.y;
+                    if (d === 'right') tx += CELL; else if (d === 'left') tx -= CELL;
+                    else if (d === 'up') ty -= CELL; else ty += CELL;
+                    return tx >= 0 && tx < W && ty >= 0 && ty < H && !g.grid.has(`${tx},${ty}`);
+                });
+                if (safe) bestDir = safe;
+            }
+            p2.dir = bestDir;
+        }
+        move(p1); move(p2);
+        if (!p1.alive || !p2.alive) {
+            if (!p1.alive && !p2.alive) { /* draw */ }
+            else if (!p1.alive) setScore(s => [s[0], s[1] + 1]);
+            else setScore(s => [s[0] + 1, s[1]]);
+            setGameState('over');
+            addScore(score[0] > score[1] ? 100 : 0);
+        }
+        draw();
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#080c18'; ctx.fillRect(0, 0, W, H);
+        // Grid lines
+        ctx.strokeStyle = 'rgba(59,130,246,0.08)'; ctx.lineWidth = 0.5;
+        for (let x = 0; x < W; x += 20) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
+        for (let y = 0; y < H; y += 20) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
+        const g = gameRef.current; if (!g) return;
+        // Trails
+        ctx.shadowBlur = 4;
+        g.p1.trail.forEach(t => { ctx.fillStyle = '#4ade80'; ctx.shadowColor = '#4ade80'; ctx.fillRect(t.x, t.y, CELL, CELL); });
+        g.p2.trail.forEach(t => { ctx.fillStyle = '#f97316'; ctx.shadowColor = '#f97316'; ctx.fillRect(t.x, t.y, CELL, CELL); });
+        // Heads
+        ctx.shadowBlur = 12;
+        ctx.fillStyle = '#fff'; ctx.shadowColor = '#4ade80'; ctx.fillRect(g.p1.x - 1, g.p1.y - 1, CELL + 2, CELL + 2);
+        ctx.fillStyle = '#fff'; ctx.shadowColor = '#f97316'; ctx.fillRect(g.p2.x - 1, g.p2.y - 1, CELL + 2, CELL + 2);
+        ctx.shadowBlur = 0;
+        // Score
+        ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`You: ${score[0]}`, 15, 25);
+        ctx.fillStyle = '#f97316'; ctx.textAlign = 'right'; ctx.fillText(`AI: ${score[1]}`, W - 15, 25);
+    };
+
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 50); return () => clearInterval(i); } }, [gameState, score]);
+    useEffect(() => {
+        const handleKey = (e) => {
+            if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+            if (gameState !== 'playing' && (e.key === ' ')) { init(); return; }
+            if (!gameRef.current) return;
+            const p = gameRef.current.p1;
+            if ((e.key === 'ArrowUp' || e.key === 'w') && p.dir !== 'down') p.dir = 'up';
+            else if ((e.key === 'ArrowDown' || e.key === 's') && p.dir !== 'up') p.dir = 'down';
+            else if ((e.key === 'ArrowLeft' || e.key === 'a') && p.dir !== 'right') p.dir = 'left';
+            else if ((e.key === 'ArrowRight' || e.key === 'd') && p.dir !== 'left') p.dir = 'right';
+        };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    }, [gameState]);
+
+    return (
+        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>🏍️</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Tron</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to steer • Don't hit walls or trails</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div></>}
+                {gameState === 'over' && <><div style={{fontSize:'24px',fontWeight:700,color:score[0]>score[1]?'#4ade80':'#ef4444'}}>{score[0]>score[1]?'You Win!':'AI Wins!'}</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Press SPACE to play again</div></>}
+            </div>}
+        </div>
+    );
+}
+
+// RACING - Top-down racing
+function RacingGame({ room, updateRoom, currentUser, addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [lap, setLap] = useState([0, 0]);
+    const W = 600, H = 600;
+    const gameRef = useRef(null);
+    const LAPS = 3;
+
+    const init = () => {
+        gameRef.current = {
+            p1: { x: W/2 - 20, y: H - 100, angle: -Math.PI/2, speed: 0, checkpoint: 0, lap: 0 },
+            p2: { x: W/2 + 20, y: H - 100, angle: -Math.PI/2, speed: 0, checkpoint: 0, lap: 0 },
+            keys: {},
+            checkpoints: [
+                { x: W/2, y: 60, r: 60 },
+                { x: 60, y: H/2, r: 60 },
+                { x: W/2, y: H - 60, r: 60 },
+                { x: W - 60, y: H/2, r: 60 },
+            ]
+        };
+        setLap([0, 0]); setGameState('playing');
+    };
+
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const g = gameRef.current;
+        const { p1, p2 } = g;
+        // Player
+        if (g.keys['ArrowUp'] || g.keys['w']) p1.speed = Math.min(p1.speed + 0.15, 5);
+        else if (g.keys['ArrowDown'] || g.keys['s']) p1.speed = Math.max(p1.speed - 0.1, -2);
+        else p1.speed *= 0.98;
+        if (g.keys['ArrowLeft'] || g.keys['a']) p1.angle -= 0.04 * (Math.abs(p1.speed) > 0.5 ? 1 : 0.3);
+        if (g.keys['ArrowRight'] || g.keys['d']) p1.angle += 0.04 * (Math.abs(p1.speed) > 0.5 ? 1 : 0.3);
+        p1.x += Math.cos(p1.angle) * p1.speed; p1.y += Math.sin(p1.angle) * p1.speed;
+        p1.x = Math.max(15, Math.min(W - 15, p1.x)); p1.y = Math.max(15, Math.min(H - 15, p1.y));
+        // Track boundary (oval)
+        const cx = W/2, cy = H/2, rx = W/2 - 30, ry = H/2 - 30, irx = rx - 100, iry = ry - 100;
+        const px1 = ((p1.x-cx)/rx)**2 + ((p1.y-cy)/ry)**2;
+        const pi1 = ((p1.x-cx)/irx)**2 + ((p1.y-cy)/iry)**2;
+        if (px1 > 1 || pi1 < 1) p1.speed *= 0.9;
+
+        // AI
+        const targetCP = g.checkpoints[p2.checkpoint % g.checkpoints.length];
+        const aiAngle = Math.atan2(targetCP.y - p2.y, targetCP.x - p2.x);
+        let diff = aiAngle - p2.angle; while (diff > Math.PI) diff -= Math.PI*2; while (diff < -Math.PI) diff += Math.PI*2;
+        p2.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.05);
+        p2.speed = Math.min(p2.speed + 0.12, 4.2);
+        p2.x += Math.cos(p2.angle) * p2.speed; p2.y += Math.sin(p2.angle) * p2.speed;
+        p2.x = Math.max(15, Math.min(W - 15, p2.x)); p2.y = Math.max(15, Math.min(H - 15, p2.y));
+
+        // Checkpoint detection
+        [p1, p2].forEach((p, pi) => {
+            const cp = g.checkpoints[p.checkpoint % g.checkpoints.length];
+            if (Math.hypot(p.x - cp.x, p.y - cp.y) < cp.r) {
+                p.checkpoint++;
+                if (p.checkpoint % g.checkpoints.length === 0) {
+                    p.lap++;
+                    setLap(l => { const nl = [...l]; nl[pi] = p.lap; return nl; });
+                    if (p.lap >= LAPS) {
+                        setGameState('over');
+                        addScore(pi === 0 ? 500 : 50);
+                    }
+                }
+            }
+        });
+        draw();
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#1a5c1a'; ctx.fillRect(0, 0, W, H);
+        const cx = W/2, cy = H/2;
+        // Track
+        ctx.strokeStyle = '#555'; ctx.lineWidth = 110;
+        ctx.beginPath(); ctx.ellipse(cx, cy, W/2-80, H/2-80, 0, 0, Math.PI*2); ctx.stroke();
+        ctx.strokeStyle = '#888'; ctx.lineWidth = 106;
+        ctx.beginPath(); ctx.ellipse(cx, cy, W/2-80, H/2-80, 0, 0, Math.PI*2); ctx.stroke();
+        // Track lines
+        ctx.setLineDash([15, 15]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(cx, cy, W/2-80, H/2-80, 0, 0, Math.PI*2); ctx.stroke();
+        ctx.setLineDash([]);
+        // Start/finish
+        ctx.fillStyle = '#fff';
+        for (let i = 0; i < 6; i++) for (let j = 0; j < 2; j++) {
+            if ((i + j) % 2 === 0) ctx.fillRect(W/2 - 55 + j * 10, H - 110 + i * 8, 10, 8);
+        }
+        const g = gameRef.current; if (!g) return;
+        // Cars
+        const drawCar = (p, color) => {
+            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+            ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-14, -8, 28, 16, 4); ctx.fill();
+            ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(6, -6, 6, 12);
+            ctx.restore();
+        };
+        drawCar(g.p1, '#4ade80'); drawCar(g.p2, '#ef4444');
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#4ade80'; ctx.fillText(`You: Lap ${Math.min(lap[0]+1, LAPS)}/${LAPS}`, 15, 25);
+        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right'; ctx.fillText(`AI: Lap ${Math.min(lap[1]+1, LAPS)}/${LAPS}`, W - 15, 25);
+    };
+
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, lap]);
+    useEffect(() => {
+        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if (gameRef.current) gameRef.current.keys[e.key] = true; if (e.key === ' ' && gameState !== 'playing') init(); };
+        const up = (e) => { if (gameRef.current) gameRef.current.keys[e.key] = false; };
+        window.addEventListener('keydown', down); window.addEventListener('keyup', up);
+        return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    }, [gameState]);
+
+    return (
+        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
+            {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>🏎️</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Racing</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to drive • {LAPS} laps to win</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div></>}
+                {gameState === 'over' && <><div style={{fontSize:'24px',fontWeight:700,color:lap[0]>=LAPS?'#4ade80':'#ef4444'}}>{lap[0]>=LAPS?'You Win!':'AI Wins!'}</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Press SPACE to race again</div></>}
+            </div>}
+        </div>
+    );
+}
+
+// SUMO - Push opponent out of ring
+function SumoGame({ room, updateRoom, currentUser, addScore }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle');
+    const [score, setScore] = useState([0, 0]);
+    const [round, setRound] = useState(1);
+    const W = 500, H = 500;
+    const RING_R = 180;
+    const gameRef = useRef(null);
+
+    const init = () => {
+        gameRef.current = { p1: { x: W/2 - 60, y: H/2, vx: 0, vy: 0, charging: false, charge: 0 }, p2: { x: W/2 + 60, y: H/2, vx: 0, vy: 0 }, keys: {}, particles: [] };
+        setRound(1); setScore([0, 0]); setGameState('playing');
+    };
+
+    const resetRound = () => {
+        if (!gameRef.current) return;
+        gameRef.current.p1 = { x: W/2 - 60, y: H/2, vx: 0, vy: 0, charging: false, charge: 0 };
+        gameRef.current.p2 = { x: W/2 + 60, y: H/2, vx: 0, vy: 0 };
+    };
+
+    const loop = () => {
+        if (gameState !== 'playing') return;
+        const g = gameRef.current;
+        const { p1, p2 } = g;
+        const speed = 2.5;
+        // Player movement
+        if (g.keys['ArrowUp'] || g.keys['w']) p1.vy -= 0.4;
+        if (g.keys['ArrowDown'] || g.keys['s']) p1.vy += 0.4;
+        if (g.keys['ArrowLeft'] || g.keys['a']) p1.vx -= 0.4;
+        if (g.keys['ArrowRight'] || g.keys['d']) p1.vx += 0.4;
+        if (g.keys[' ']) { p1.charging = true; p1.charge = Math.min(p1.charge + 1, 30); }
+        p1.vx *= 0.92; p1.vy *= 0.92; p1.x += p1.vx; p1.y += p1.vy;
+        // AI - chase and try to push
+        const dx = p1.x - p2.x, dy = p1.y - p2.y;
+        const dist = Math.hypot(dx, dy);
+        if (dist > 0) { p2.vx += (dx / dist) * 0.35; p2.vy += (dy / dist) * 0.35; }
+        // AI retreats toward center if near edge
+        const aiDistCenter = Math.hypot(p2.x - W/2, p2.y - H/2);
+        if (aiDistCenter > RING_R * 0.6) { p2.vx += (W/2 - p2.x) * 0.01; p2.vy += (H/2 - p2.y) * 0.01; }
+        p2.vx *= 0.92; p2.vy *= 0.92; p2.x += p2.vx; p2.y += p2.vy;
+        // Collision
+        if (dist < 40 && dist > 0) {
+            const nx = dx / dist, ny = dy / dist;
+            const pushForce = p1.charging && p1.charge > 10 ? 8 + p1.charge * 0.3 : 3;
+            if (p1.charging && p1.charge > 10) {
+                p2.vx += nx * pushForce; p2.vy += ny * pushForce;
+                for (let i = 0; i < 8; i++) g.particles.push({ x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2, dx: (Math.random()-0.5)*6, dy: (Math.random()-0.5)*6, life: 12, color: '#fbbf24' });
+            } else {
+                p1.vx -= nx * 2; p1.vy -= ny * 2; p2.vx += nx * 2; p2.vy += ny * 2;
+            }
+            const overlap = 40 - dist;
+            p1.x -= nx * overlap / 2; p1.y -= ny * overlap / 2;
+            p2.x += nx * overlap / 2; p2.y += ny * overlap / 2;
+        }
+        // Out of ring check
+        const p1Dist = Math.hypot(p1.x - W/2, p1.y - H/2);
+        const p2Dist = Math.hypot(p2.x - W/2, p2.y - H/2);
+        if (p1Dist > RING_R || p2Dist > RING_R) {
+            const winner = p2Dist > RING_R ? 0 : 1;
+            setScore(s => { const ns = [...s]; ns[winner]++; return ns; });
+            setRound(r => r + 1);
+            for (let i = 0; i < 15; i++) g.particles.push({ x: winner===0?p2.x:p1.x, y: winner===0?p2.y:p1.y, dx: (Math.random()-0.5)*8, dy: (Math.random()-0.5)*8, life: 20, color: winner===0?'#4ade80':'#ef4444' });
+            setTimeout(resetRound, 800);
+        }
+        if (p1.charging && !g.keys[' ']) { p1.charging = false; p1.charge = 0; }
+        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
+        draw();
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+        // Ring
+        ctx.beginPath(); ctx.arc(W/2, H/2, RING_R, 0, Math.PI*2);
+        ctx.fillStyle = '#3a2a1a'; ctx.fill();
+        ctx.strokeStyle = '#c4a64a'; ctx.lineWidth = 6; ctx.stroke();
+        ctx.beginPath(); ctx.arc(W/2, H/2, RING_R - 15, 0, Math.PI*2);
+        ctx.strokeStyle = 'rgba(196,166,74,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+        const g = gameRef.current; if (!g) return;
+        // Players
+        const drawSumo = (p, color, label) => {
+            ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = p === g.p1 && g.p1.charging ? 20 : 0;
+            ctx.beginPath(); ctx.arc(p.x, p.y, 18, 0, Math.PI*2); ctx.fill();
+            ctx.shadowBlur = 0;
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, p.x, p.y + 4);
+            if (p === g.p1 && p.charging) {
+                ctx.strokeStyle = `rgba(251,191,36,${p.charge/30})`; ctx.lineWidth = 3;
+                ctx.beginPath(); ctx.arc(p.x, p.y, 22 + p.charge * 0.3, 0, Math.PI*2); ctx.stroke();
+            }
+        };
+        drawSumo(g.p1, '#4ade80', 'YOU'); drawSumo(g.p2, '#ef4444', 'AI');
+        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 20; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText(`${score[0]} - ${score[1]}`, W/2, 30);
+        ctx.font = '12px sans-serif'; ctx.fillStyle = '#94a3b8'; ctx.fillText(`Round ${round}`, W/2, 48);
+    };
+
+    useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score, round]);
+    useEffect(() => {
+        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if (gameRef.current) gameRef.current.keys[e.key] = true; if (e.key === ' ' && gameState !== 'playing') init(); };
+        const up = (e) => { if (gameRef.current) gameRef.current.keys[e.key] = false; };
+        window.addEventListener('keydown', down); window.addEventListener('keyup', up);
+        return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    }, [gameState]);
+
+    return (
+        <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
+            <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
+            {gameState === 'idle' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                <div style={{fontSize:'56px'}}>🤼</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Sumo</div>
+                <div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to move • Hold SPACE to charge push</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div>
+            </div>}
+        </div>
+    );
+}
+
+// BATTLESHIP - Classic grid game vs AI
+function BattleshipGame({ room, updateRoom, currentUser, addScore }) {
+    const [phase, setPhase] = useState('place'); // place, play, over
+    const [playerBoard, setPlayerBoard] = useState(Array(100).fill(0));
+    const [aiBoard, setAiBoard] = useState(Array(100).fill(0));
+    const [playerShots, setPlayerShots] = useState(Array(100).fill(0)); // 0=unknown,1=miss,2=hit
+    const [aiShots, setAiShots] = useState(Array(100).fill(0));
+    const [ships, setShips] = useState([5, 4, 3, 3, 2]);
+    const [currentShip, setCurrentShip] = useState(0);
+    const [horizontal, setHorizontal] = useState(true);
+    const [message, setMessage] = useState('Place your ships! Click to place, R to rotate');
+    const [turn, setTurn] = useState('player');
+    const [aiMemory, setAiMemory] = useState({ hits: [], hunting: false, direction: null, lastHit: null });
+    const SHIP_NAMES = ['Carrier (5)', 'Battleship (4)', 'Cruiser (3)', 'Submarine (3)', 'Destroyer (2)'];
+
+    const canPlace = (board, row, col, size, horiz) => {
+        for (let i = 0; i < size; i++) {
+            const r = horiz ? row : row + i, c = horiz ? col + i : col;
+            if (r >= 10 || c >= 10 || board[r * 10 + c] !== 0) return false;
+        }
+        return true;
+    };
+
+    const placeShip = (board, row, col, size, horiz, shipId) => {
+        const nb = [...board];
+        for (let i = 0; i < size; i++) { const r = horiz ? row : row + i, c = horiz ? col + i : col; nb[r * 10 + c] = shipId; }
+        return nb;
+    };
+
+    const placeAiShips = () => {
+        let board = Array(100).fill(0);
+        ships.forEach((size, idx) => {
+            let placed = false;
+            while (!placed) {
+                const h = Math.random() > 0.5;
+                const r = Math.floor(Math.random() * 10), c = Math.floor(Math.random() * 10);
+                if (canPlace(board, r, c, size, h)) { board = placeShip(board, r, c, size, h, idx + 1); placed = true; }
+            }
+        });
+        return board;
+    };
+
+    const handlePlaceClick = (idx) => {
+        if (phase !== 'place' || currentShip >= ships.length) return;
+        const row = Math.floor(idx / 10), col = idx % 10;
+        const size = ships[currentShip];
+        if (!canPlace(playerBoard, row, col, size, horizontal)) return;
+        const nb = placeShip(playerBoard, row, col, size, horizontal, currentShip + 1);
+        setPlayerBoard(nb);
+        if (currentShip + 1 >= ships.length) {
+            setAiBoard(placeAiShips());
+            setPhase('play'); setMessage('Your turn! Click enemy grid to fire');
+        } else {
+            setCurrentShip(currentShip + 1); setMessage(`Place ${SHIP_NAMES[currentShip + 1]}! R to rotate`);
+        }
+    };
+
+    const handleShot = (idx) => {
+        if (phase !== 'play' || turn !== 'player' || playerShots[idx] !== 0) return;
+        const ns = [...playerShots];
+        ns[idx] = aiBoard[idx] > 0 ? 2 : 1;
+        setPlayerShots(ns);
+        if (aiBoard[idx] > 0) setMessage('Hit! 💥');
+        else setMessage('Miss...');
+        // Check win
+        if (aiBoard.every((v, i) => v === 0 || ns[i] === 2)) { setPhase('over'); setMessage('You win! 🎉'); addScore(500); return; }
+        setTurn('ai');
+        setTimeout(aiTurn, 600);
+    };
+
+    const aiTurn = () => {
+        const ns = [...aiShots];
+        let target;
+        // Smart AI - hunt around hits
+        const hits = ns.map((v, i) => v === 2 ? i : -1).filter(i => i >= 0);
+        const unfinished = hits.filter(h => {
+            const r = Math.floor(h/10), c = h%10;
+            return [h-1,h+1,h-10,h+10].some(n => n>=0 && n<100 && ns[n]===0 && (n===h-1?c>0:true) && (n===h+1?c<9:true));
+        });
+        if (unfinished.length > 0) {
+            const h = unfinished[Math.floor(Math.random()*unfinished.length)];
+            const r = Math.floor(h/10), c = h%10;
+            const neighbors = [h-1,h+1,h-10,h+10].filter(n => n>=0 && n<100 && ns[n]===0 && (n===h-1?c>0:true) && (n===h+1?c<9:true));
+            target = neighbors[Math.floor(Math.random()*neighbors.length)];
+        } else {
+            const available = ns.map((v, i) => v === 0 ? i : -1).filter(i => i >= 0);
+            // Checkerboard pattern for efficiency
+            const checkerboard = available.filter(i => (Math.floor(i/10) + i%10) % 2 === 0);
+            const pool = checkerboard.length > 0 ? checkerboard : available;
+            target = pool[Math.floor(Math.random() * pool.length)];
+        }
+        if (target === undefined) return;
+        ns[target] = playerBoard[target] > 0 ? 2 : 1;
+        setAiShots(ns);
+        if (playerBoard.every((v, i) => v === 0 || ns[i] === 2)) { setPhase('over'); setMessage('AI wins! 😢'); addScore(50); return; }
+        setTurn('player'); setMessage('Your turn!');
+    };
+
+    useEffect(() => {
+        const handleKey = (e) => { if (e.key === 'r' || e.key === 'R') setHorizontal(h => !h); };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    }, []);
+
+    const renderGrid = (board, shots, onClick, isEnemy, label) => (
+        <div>
+            <div style={{fontSize:'12px',fontWeight:600,marginBottom:'8px',color:'var(--text-muted)'}}>{label}</div>
+            <div style={{display:'grid',gridTemplateColumns:'repeat(10,36px)',gap:'2px'}}>
+                {Array(100).fill(0).map((_, i) => {
+                    const hasShip = board[i] > 0;
+                    const shot = shots ? shots[i] : 0;
+                    let bg = 'var(--bg-input)';
+                    if (shot === 2) bg = '#ef4444';
+                    else if (shot === 1) bg = '#334155';
+                    else if (!isEnemy && hasShip) bg = '#3b82f6';
+                    return <div key={i} onClick={() => onClick?.(i)} style={{
+                        width:'36px', height:'36px', background: bg, borderRadius:'3px', display:'flex', alignItems:'center', justifyContent:'center',
+                        cursor: onClick ? 'crosshair' : 'default', fontSize:'14px', border: '1px solid var(--border)',
+                        transition:'all 0.1s'
+                    }}>{shot === 2 ? '💥' : shot === 1 ? '•' : ''}</div>;
+                })}
+            </div>
+        </div>
+    );
+
+    return (
+        <div>
+            <div style={{marginBottom:'16px',padding:'12px',background:'var(--bg-input)',borderRadius:'8px',textAlign:'center',fontWeight:600,fontSize:'14px',color: phase==='over' ? (message.includes('win') && message.includes('You') ? '#4ade80' : '#ef4444') : 'var(--text)'}}>{message}</div>
+            <div style={{display:'flex',gap:'40px',justifyContent:'center'}}>
+                {phase === 'place' ? (
+                    <div>
+                        <div style={{fontSize:'12px',fontWeight:600,marginBottom:'8px',color:'var(--text-muted)'}}>YOUR BOARD - {SHIP_NAMES[currentShip]} ({horizontal ? 'Horizontal' : 'Vertical'})</div>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(10,36px)',gap:'2px'}}>
+                            {playerBoard.map((v, i) => <div key={i} onClick={() => handlePlaceClick(i)} style={{width:'36px',height:'36px',background:v>0?'#3b82f6':'var(--bg-input)',borderRadius:'3px',cursor:'pointer',border:'1px solid var(--border)'}}/>)}
+                        </div>
+                    </div>
+                ) : (
+                    <>{renderGrid(playerBoard, aiShots, null, false, 'YOUR BOARD')}{renderGrid(aiBoard, playerShots, phase === 'play' ? handleShot : null, true, 'ENEMY BOARD')}</>
+                )}
+            </div>
+        </div>
+    );
+}
+
+// CHECKERS - vs AI
+function CheckersGame({ room, updateRoom, currentUser, addScore }) {
+    const [board, setBoard] = useState([]);
+    const [selected, setSelected] = useState(null);
+    const [validMoves, setValidMoves] = useState([]);
+    const [turn, setTurn] = useState('red');
+    const [message, setMessage] = useState('Your turn (Red)');
+    const [gameOver, setGameOver] = useState(false);
+    const CELL = 56;
+
+    const initBoard = () => {
+        const b = Array(64).fill(null);
+        for (let r = 0; r < 3; r++) for (let c = 0; c < 8; c++) if ((r + c) % 2 === 1) b[r * 8 + c] = { color: 'black', king: false };
+        for (let r = 5; r < 8; r++) for (let c = 0; c < 8; c++) if ((r + c) % 2 === 1) b[r * 8 + c] = { color: 'red', king: false };
+        setBoard(b); setSelected(null); setValidMoves([]); setTurn('red'); setGameOver(false); setMessage('Your turn (Red)');
+    };
+
+    useEffect(() => { initBoard(); }, []);
+
+    const getMoves = (b, idx, color, mustJump = false) => {
+        const piece = b[idx]; if (!piece || piece.color !== color) return [];
+        const r = Math.floor(idx / 8), c = idx % 8;
+        const dirs = piece.king ? [-1, 1] : (color === 'red' ? [-1] : [1]);
+        const moves = [];
+        dirs.forEach(dr => {
+            [-1, 1].forEach(dc => {
+                const nr = r + dr, nc = c + dc, ni = nr * 8 + nc;
+                const jr = r + dr * 2, jc = c + dc * 2, ji = jr * 8 + jc;
+                if (jr >= 0 && jr < 8 && jc >= 0 && jc < 8 && b[ni] && b[ni].color !== color && !b[ji]) {
+                    moves.push({ to: ji, jump: ni });
+                }
+                if (!mustJump && nr >= 0 && nr < 8 && nc >= 0 && nc < 8 && !b[ni]) {
+                    moves.push({ to: ni, jump: null });
+                }
+            });
+        });
+        return moves;
+    };
+
+    const getAllMoves = (b, color) => {
+        let allMoves = [];
+        let hasJumps = false;
+        for (let i = 0; i < 64; i++) {
+            if (b[i] && b[i].color === color) {
+                const jumps = getMoves(b, i, color, true);
+                if (jumps.length > 0) { hasJumps = true; allMoves.push(...jumps.map(m => ({ from: i, ...m }))); }
+            }
+        }
+        if (!hasJumps) {
+            for (let i = 0; i < 64; i++) {
+                if (b[i] && b[i].color === color) {
+                    const moves = getMoves(b, i, color, false);
+                    allMoves.push(...moves.map(m => ({ from: i, ...m })));
+                }
+            }
+        }
+        return { moves: allMoves, mustJump: hasJumps };
+    };
+
+    const handleClick = (idx) => {
+        if (turn !== 'red' || gameOver) return;
+        const piece = board[idx];
+        if (piece && piece.color === 'red') {
+            setSelected(idx);
+            const { moves, mustJump } = getAllMoves(board, 'red');
+            const pieceMoves = moves.filter(m => m.from === idx);
+            setValidMoves(pieceMoves);
+            return;
+        }
+        if (selected !== null) {
+            const move = validMoves.find(m => m.to === idx);
+            if (move) executeMove(move.from || selected, move);
+        }
+    };
+
+    const executeMove = (from, move) => {
+        const nb = [...board].map(p => p ? { ...p } : null);
+        nb[move.to] = { ...nb[from] };
+        nb[from] = null;
+        if (move.jump !== null) nb[move.jump] = null;
+        // King promotion
+        const toRow = Math.floor(move.to / 8);
+        if (nb[move.to].color === 'red' && toRow === 0) nb[move.to].king = true;
+        if (nb[move.to].color === 'black' && toRow === 7) nb[move.to].king = true;
+        // Check for chain jumps
+        if (move.jump !== null) {
+            const chainJumps = getMoves(nb, move.to, nb[move.to].color, true);
+            if (chainJumps.length > 0) {
+                setBoard(nb); setSelected(move.to);
+                setValidMoves(chainJumps.map(m => ({ from: move.to, ...m })));
+                return;
+            }
+        }
+        setBoard(nb); setSelected(null); setValidMoves([]);
+        // Check game over
+        const nextColor = turn === 'red' ? 'black' : 'red';
+        const { moves } = getAllMoves(nb, nextColor);
+        if (moves.length === 0 || !nb.some(p => p && p.color === nextColor)) {
+            setGameOver(true);
+            setMessage(turn === 'red' ? 'You win! 🎉' : 'AI wins!');
+            addScore(turn === 'red' ? 300 : 50);
+            return;
+        }
+        setTurn(nextColor);
+        if (nextColor === 'black') { setMessage('AI thinking...'); setTimeout(() => aiMove(nb), 400); }
+        else setMessage('Your turn (Red)');
+    };
+
+    const aiMove = (b) => {
+        const { moves } = getAllMoves(b, 'black');
+        if (moves.length === 0) { setGameOver(true); setMessage('You win! 🎉'); addScore(300); return; }
+        // Prefer jumps, then forward moves, then random
+        const jumps = moves.filter(m => m.jump !== null);
+        const choice = jumps.length > 0 ? jumps[Math.floor(Math.random() * jumps.length)] : moves[Math.floor(Math.random() * moves.length)];
+        const nb = [...b].map(p => p ? { ...p } : null);
+        nb[choice.to] = { ...nb[choice.from] }; nb[choice.from] = null;
+        if (choice.jump !== null) nb[choice.jump] = null;
+        const toRow = Math.floor(choice.to / 8);
+        if (nb[choice.to].color === 'black' && toRow === 7) nb[choice.to].king = true;
+        // Chain jumps for AI
+        if (choice.jump !== null) {
+            const chain = getMoves(nb, choice.to, 'black', true);
+            if (chain.length > 0) {
+                const next = chain[Math.floor(Math.random() * chain.length)];
+                nb[next.to] = { ...nb[choice.to] }; nb[choice.to] = null;
+                if (next.jump !== null) nb[next.jump] = null;
+            }
+        }
+        setBoard(nb);
+        const { moves: playerMoves } = getAllMoves(nb, 'red');
+        if (playerMoves.length === 0 || !nb.some(p => p && p.color === 'red')) {
+            setGameOver(true); setMessage('AI wins!'); addScore(50);
+        } else { setTurn('red'); setMessage('Your turn (Red)'); }
+    };
+
+    return (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',width:CELL*8+'px',alignItems:'center'}}>
+                <div style={{fontWeight:600,color: gameOver ? (message.includes('You') ? '#4ade80' : '#ef4444') : 'var(--text)'}}>{message}</div>
+                <button onClick={initBoard} className="btn btn-secondary">New Game</button>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:`repeat(8,${CELL}px)`,border:'3px solid var(--text)',borderRadius:'4px'}}>
+                {board.map((piece, i) => {
+                    const r = Math.floor(i / 8), c = i % 8;
+                    const isDark = (r + c) % 2 === 1;
+                    const isSel = i === selected;
+                    const isValid = validMoves.some(m => m.to === i);
+                    return <div key={i} onClick={() => handleClick(i)} style={{
+                        width: CELL, height: CELL, background: isSel ? 'rgba(74,222,128,0.4)' : isValid ? 'rgba(251,191,36,0.3)' : isDark ? '#5c3d2e' : '#d4a76a',
+                        display:'flex', alignItems:'center', justifyContent:'center', cursor: 'pointer', position:'relative'
+                    }}>
+                        {piece && <div style={{width:CELL-12,height:CELL-12,borderRadius:'50%',background:piece.color==='red'?'#ef4444':'#1e293b',
+                            border:`3px solid ${piece.color==='red'?'#fca5a5':'#475569'}`,display:'flex',alignItems:'center',justifyContent:'center',
+                            boxShadow:'0 2px 4px rgba(0,0,0,0.3)',fontSize:'16px'}}>{piece.king ? '👑' : ''}</div>}
+                        {isValid && !piece && <div style={{width:16,height:16,borderRadius:'50%',background:'rgba(251,191,36,0.5)'}}/>}
+                    </div>;
+                })}
+            </div>
+            <div style={{display:'flex',gap:'24px',fontSize:'13px'}}>
+                <div>🔴 Red (You): {board.filter(p=>p&&p.color==='red').length} pieces</div>
+                <div>⚫ Black (AI): {board.filter(p=>p&&p.color==='black').length} pieces</div>
+            </div>
+        </div>
+    );
+}
+
+// CHESS - Simplified vs AI
+function ChessGame({ room, updateRoom, currentUser, addScore }) {
+    const PIECES = { K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' };
+    const initPos = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
+    const [board, setBoard] = useState([]);
+    const [selected, setSelected] = useState(null);
+    const [validMoves, setValidMoves] = useState([]);
+    const [turn, setTurn] = useState('white');
+    const [message, setMessage] = useState('Your turn (White)');
+    const [gameOver, setGameOver] = useState(false);
+    const [captured, setCaptured] = useState({ white: [], black: [] });
+    const CELL = 60;
+
+    const parseFen = (fen) => {
+        const b = Array(64).fill(null);
+        let i = 0;
+        fen.split('/').forEach((row, r) => {
+            let c = 0;
+            for (const ch of row) {
+                if ('12345678'.includes(ch)) c += parseInt(ch);
+                else { b[r * 8 + c] = { type: ch.toLowerCase(), color: ch === ch.toUpperCase() ? 'white' : 'black' }; c++; }
+            }
+        });
+        return b;
+    };
+
+    const initGame = () => {
+        setBoard(parseFen(initPos)); setSelected(null); setValidMoves([]); setTurn('white'); setGameOver(false); setMessage('Your turn (White)'); setCaptured({ white: [], black: [] });
+    };
+    useEffect(() => { initGame(); }, []);
+
+    const getBasicMoves = (b, idx) => {
+        const piece = b[idx]; if (!piece) return [];
+        const r = Math.floor(idx / 8), c = idx % 8;
+        const moves = [];
+        const add = (nr, nc) => { if (nr >= 0 && nr < 8 && nc >= 0 && nc < 8) { const ni = nr * 8 + nc; if (!b[ni] || b[ni].color !== piece.color) moves.push(ni); } };
+        const addSlide = (dr, dc) => { for (let i = 1; i < 8; i++) { const nr = r + dr * i, nc = c + dc * i; if (nr < 0 || nr >= 8 || nc < 0 || nc >= 8) break; const ni = nr * 8 + nc; if (b[ni]) { if (b[ni].color !== piece.color) moves.push(ni); break; } moves.push(ni); } };
+
+        if (piece.type === 'p') {
+            const dir = piece.color === 'white' ? -1 : 1;
+            const startRow = piece.color === 'white' ? 6 : 1;
+            if (r + dir >= 0 && r + dir < 8 && !b[(r + dir) * 8 + c]) { moves.push((r + dir) * 8 + c); if (r === startRow && !b[(r + dir * 2) * 8 + c]) moves.push((r + dir * 2) * 8 + c); }
+            [-1, 1].forEach(dc => { const nc = c + dc, nr = r + dir; if (nc >= 0 && nc < 8 && nr >= 0 && nr < 8 && b[nr * 8 + nc] && b[nr * 8 + nc].color !== piece.color) moves.push(nr * 8 + nc); });
+        } else if (piece.type === 'n') { [[-2,-1],[-2,1],[-1,-2],[-1,2],[1,-2],[1,2],[2,-1],[2,1]].forEach(([dr,dc]) => add(r+dr,c+dc)); }
+        else if (piece.type === 'b') { [[-1,-1],[-1,1],[1,-1],[1,1]].forEach(([dr,dc]) => addSlide(dr,dc)); }
+        else if (piece.type === 'r') { [[-1,0],[1,0],[0,-1],[0,1]].forEach(([dr,dc]) => addSlide(dr,dc)); }
+        else if (piece.type === 'q') { [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => addSlide(dr,dc)); }
+        else if (piece.type === 'k') { [[-1,-1],[-1,0],[-1,1],[0,-1],[0,1],[1,-1],[1,0],[1,1]].forEach(([dr,dc]) => add(r+dr,c+dc)); }
+        return moves;
+    };
+
+    const handleClick = (idx) => {
+        if (turn !== 'white' || gameOver) return;
+        const piece = board[idx];
+        if (piece && piece.color === 'white') {
+            setSelected(idx);
+            setValidMoves(getBasicMoves(board, idx));
+            return;
+        }
+        if (selected !== null && validMoves.includes(idx)) {
+            doMove(board, selected, idx, 'white');
+        }
+    };
+
+    const doMove = (b, from, to, color) => {
+        const nb = [...b].map(p => p ? { ...p } : null);
+        const captured_piece = nb[to];
+        nb[to] = { ...nb[from] };
+        nb[from] = null;
+        // Pawn promotion
+        const toRow = Math.floor(to / 8);
+        if (nb[to].type === 'p' && (toRow === 0 || toRow === 7)) nb[to].type = 'q';
+        if (captured_piece) setCaptured(prev => ({ ...prev, [color]: [...prev[color], captured_piece.type] }));
+        setBoard(nb); setSelected(null); setValidMoves([]);
+        // Check if king captured (simplified - no check/checkmate detection)
+        if (captured_piece && captured_piece.type === 'k') {
+            setGameOver(true);
+            setMessage(color === 'white' ? 'You win! Checkmate! 🎉' : 'AI wins!');
+            addScore(color === 'white' ? 500 : 50);
+            return;
+        }
+        const nextColor = color === 'white' ? 'black' : 'white';
+        setTurn(nextColor);
+        if (nextColor === 'black') { setMessage('AI thinking...'); setTimeout(() => aiMove(nb), 400); }
+        else setMessage('Your turn (White)');
+    };
+
+    const aiMove = (b) => {
+        // Simple AI: prefer captures, especially high-value, then random
+        const pieceVal = { p: 1, n: 3, b: 3, r: 5, q: 9, k: 100 };
+        let bestMove = null, bestVal = -1;
+        const allMoves = [];
+        for (let i = 0; i < 64; i++) {
+            if (b[i] && b[i].color === 'black') {
+                const moves = getBasicMoves(b, i);
+                moves.forEach(to => {
+                    const val = b[to] ? pieceVal[b[to].type] || 0 : 0;
+                    allMoves.push({ from: i, to, val });
+                    if (val > bestVal) { bestVal = val; bestMove = { from: i, to }; }
+                });
+            }
+        }
+        if (allMoves.length === 0) { setGameOver(true); setMessage('You win! Stalemate! 🎉'); addScore(500); return; }
+        // 60% chance to pick best capture, 40% random
+        const choice = (bestVal > 0 && Math.random() < 0.6) ? bestMove : allMoves[Math.floor(Math.random() * allMoves.length)];
+        doMove(b, choice.from, choice.to, 'black');
+    };
+
+    return (
+        <div style={{display:'flex',flexDirection:'column',alignItems:'center',gap:'16px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',width:CELL*8+'px',alignItems:'center'}}>
+                <div style={{fontWeight:600,color:gameOver?(message.includes('You')?'#4ade80':'#ef4444'):'var(--text)'}}>{message}</div>
+                <button onClick={initGame} className="btn btn-secondary">New Game</button>
+            </div>
+            <div style={{display:'flex',gap:'20px',alignItems:'center'}}>
+                <div style={{fontSize:'18px',display:'flex',flexWrap:'wrap',width:'30px',gap:'2px'}}>{captured.white.map((t,i) => <span key={i}>{PIECES[t]}</span>)}</div>
+                <div style={{display:'grid',gridTemplateColumns:`repeat(8,${CELL}px)`,border:'3px solid var(--text)',borderRadius:'4px'}}>
+                    {board.map((piece, i) => {
+                        const r = Math.floor(i / 8), c = i % 8;
+                        const isDark = (r + c) % 2 === 1;
+                        const isSel = i === selected;
+                        const isValid = validMoves.includes(i);
+                        return <div key={i} onClick={() => handleClick(i)} style={{
+                            width: CELL, height: CELL, background: isSel ? 'rgba(74,222,128,0.4)' : isValid ? (piece ? 'rgba(239,68,68,0.3)' : 'rgba(251,191,36,0.3)') : isDark ? '#779556' : '#ebecd0',
+                            display:'flex', alignItems:'center', justifyContent:'center', cursor:'pointer', fontSize:'38px', userSelect:'none'
+                        }}>
+                            {piece && PIECES[piece.color === 'white' ? piece.type.toUpperCase() : piece.type]}
+                            {isValid && !piece && <div style={{width:16,height:16,borderRadius:'50%',background:'rgba(0,0,0,0.2)'}}/>}
+                        </div>;
+                    })}
+                </div>
+                <div style={{fontSize:'18px',display:'flex',flexWrap:'wrap',width:'30px',gap:'2px'}}>{captured.black.map((t,i) => <span key={i}>{PIECES[t.toUpperCase()]}</span>)}</div>
+            </div>
+        </div>
+    );
+}
+
+// WORD CHAIN - Take turns making words
+function WordChainGame({ room, updateRoom, currentUser, addScore }) {
+    const WORDS = ['apple','banana','cherry','dragon','eagle','falcon','grape','honey','island','jungle','koala','lemon','mango','nectar','ocean','pepper','quail','river','salmon','tiger','umbrella','violet','walnut','xenon','yacht','zebra','anchor','bridge','castle','delta','ember','forest','glacier','harbor','ivory','jasper','kitten','lantern','marble','noble','olive','prism','quartz','raven','silver','temple','unity','velvet','wonder','xylem','yarrow','zenith'];
+    const [chain, setChain] = useState([]);
+    const [input, setInput] = useState('');
+    const [message, setMessage] = useState('Start with any word!');
+    const [turn, setTurn] = useState('player');
+    const [score, setScore] = useState(0);
+    const [used, setUsed] = useState(new Set());
+    const [gameOver, setGameOver] = useState(false);
+
+    const submit = () => {
+        if (!input.trim() || turn !== 'player' || gameOver) return;
+        const word = input.trim().toLowerCase();
+        if (used.has(word)) { setMessage('Word already used!'); return; }
+        if (chain.length > 0) {
+            const lastWord = chain[chain.length - 1].word;
+            if (word[0] !== lastWord[lastWord.length - 1]) { setMessage(`Word must start with "${lastWord[lastWord.length - 1]}"`); return; }
+        }
+        if (word.length < 2) { setMessage('Word too short!'); return; }
+        const pts = word.length * 10;
+        setScore(s => s + pts);
+        setChain(c => [...c, { word, player: 'You' }]);
+        setUsed(u => new Set([...u, word]));
+        setInput('');
+        setTurn('ai');
+        setMessage('AI thinking...');
+        setTimeout(() => aiRespond(word), 600);
+    };
+
+    const aiRespond = (lastWord) => {
+        const lastChar = lastWord[lastWord.length - 1];
+        const options = WORDS.filter(w => w[0] === lastChar && !used.has(w));
+        if (options.length === 0) {
+            setMessage('AI can\'t think of a word! You win! 🎉');
+            setGameOver(true); addScore(score);
+            return;
+        }
+        const word = options[Math.floor(Math.random() * options.length)];
+        setChain(c => [...c, { word, player: 'AI' }]);
+        setUsed(u => new Set([...u, word]));
+        setTurn('player');
+        setMessage(`Your turn! Word must start with "${word[word.length - 1]}"`);
+    };
+
+    const reset = () => { setChain([]); setInput(''); setMessage('Start with any word!'); setTurn('player'); setScore(0); setUsed(new Set()); setGameOver(false); };
+
+    return (
+        <div style={{maxWidth:'500px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
+                <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>SCORE</span><div style={{fontSize:'24px',fontWeight:700}}>{score}</div></div>
+                <button onClick={reset} className="btn btn-secondary">New Game</button>
+            </div>
+            <div style={{marginBottom:'16px',padding:'10px',background:'var(--bg-input)',borderRadius:'8px',fontSize:'13px',fontWeight:600,textAlign:'center',color:gameOver?'#4ade80':'var(--text)'}}>{message}</div>
+            <div style={{maxHeight:'300px',overflowY:'auto',marginBottom:'16px',display:'flex',flexDirection:'column',gap:'6px'}}>
+                {chain.map((c, i) => (
+                    <div key={i} style={{display:'flex',alignItems:'center',gap:'8px',padding:'8px 12px',background:c.player==='You'?'rgba(74,222,128,0.1)':'rgba(239,68,68,0.1)',borderRadius:'8px',borderLeft:`3px solid ${c.player==='You'?'#4ade80':'#ef4444'}`}}>
+                        <span style={{fontSize:'11px',fontWeight:600,color:c.player==='You'?'#4ade80':'#ef4444',minWidth:'30px'}}>{c.player}</span>
+                        <span style={{fontWeight:600,fontSize:'16px'}}>{c.word}</span>
+                        {i < chain.length - 1 && <span style={{marginLeft:'auto',fontSize:'11px',color:'var(--text-muted)'}}>→ {c.word[c.word.length-1]}</span>}
+                    </div>
+                ))}
+            </div>
+            {!gameOver && <div style={{display:'flex',gap:'8px'}}>
+                <input value={input} onChange={e => setInput(e.target.value)} onKeyDown={e => e.key === 'Enter' && submit()} disabled={turn !== 'player'} placeholder={turn === 'player' ? 'Type a word...' : 'Waiting for AI...'} className="form-input" style={{flex:1}} autoFocus/>
+                <button onClick={submit} disabled={turn !== 'player'} className="btn btn-primary">Send</button>
+            </div>}
+        </div>
+    );
+}
+
+// TRIVIA - Quiz game
+function TriviaGame({ room, updateRoom, currentUser, addScore }) {
+    const QUESTIONS = [
+        { q: 'What planet is known as the Red Planet?', a: ['Mars', 'Venus', 'Jupiter', 'Saturn'], correct: 0 },
+        { q: 'What is the largest ocean on Earth?', a: ['Atlantic', 'Indian', 'Pacific', 'Arctic'], correct: 2 },
+        { q: 'How many bones are in the human body?', a: ['186', '206', '226', '246'], correct: 1 },
+        { q: 'What year did the Titanic sink?', a: ['1905', '1912', '1918', '1920'], correct: 1 },
+        { q: 'What gas do plants absorb from the atmosphere?', a: ['Oxygen', 'Nitrogen', 'Carbon Dioxide', 'Hydrogen'], correct: 2 },
+        { q: 'Which country has the most time zones?', a: ['Russia', 'USA', 'China', 'France'], correct: 3 },
+        { q: 'What is the hardest natural substance?', a: ['Gold', 'Iron', 'Diamond', 'Platinum'], correct: 2 },
+        { q: 'How many hearts does an octopus have?', a: ['1', '2', '3', '4'], correct: 2 },
+        { q: 'What is the smallest country in the world?', a: ['Monaco', 'Vatican City', 'San Marino', 'Liechtenstein'], correct: 1 },
+        { q: 'Which element has the symbol Au?', a: ['Silver', 'Gold', 'Aluminum', 'Argon'], correct: 1 },
+        { q: 'What is the longest river in the world?', a: ['Amazon', 'Nile', 'Mississippi', 'Yangtze'], correct: 1 },
+        { q: 'How many players are on a soccer team?', a: ['9', '10', '11', '12'], correct: 2 },
+        { q: 'What is the speed of light (approx)?', a: ['186,000 mi/s', '286,000 mi/s', '156,000 mi/s', '216,000 mi/s'], correct: 0 },
+        { q: 'Which planet has the most moons?', a: ['Jupiter', 'Saturn', 'Uranus', 'Neptune'], correct: 1 },
+        { q: 'What year was the first iPhone released?', a: ['2005', '2006', '2007', '2008'], correct: 2 },
+    ];
+    const [questions] = useState(() => [...QUESTIONS].sort(() => Math.random() - 0.5).slice(0, 10));
+    const [current, setCurrent] = useState(0);
+    const [score, setScore] = useState(0);
+    const [answered, setAnswered] = useState(null);
+    const [streak, setStreak] = useState(0);
+    const [done, setDone] = useState(false);
+    const [timeLeft, setTimeLeft] = useState(15);
+
+    useEffect(() => {
+        if (done || answered !== null) return;
+        if (timeLeft <= 0) { handleAnswer(-1); return; }
+        const t = setTimeout(() => setTimeLeft(tl => tl - 1), 1000);
+        return () => clearTimeout(t);
+    }, [timeLeft, done, answered]);
+
+    const handleAnswer = (idx) => {
+        if (answered !== null || done) return;
+        setAnswered(idx);
+        if (idx === questions[current].correct) {
+            const pts = 100 + streak * 25 + timeLeft * 5;
+            setScore(s => s + pts); setStreak(s => s + 1);
+        } else { setStreak(0); }
+        setTimeout(() => {
+            if (current + 1 >= questions.length) { setDone(true); addScore(score); }
+            else { setCurrent(c => c + 1); setAnswered(null); setTimeLeft(15); }
+        }, 1500);
+    };
+
+    const reset = () => { setCurrent(0); setScore(0); setAnswered(null); setStreak(0); setDone(false); setTimeLeft(15); };
+
+    if (done) return (
+        <div style={{textAlign:'center',padding:'40px'}}>
+            <div style={{fontSize:'56px',marginBottom:'16px'}}>🏆</div>
+            <div style={{fontSize:'32px',fontWeight:700}}>{score} points</div>
+            <div style={{color:'var(--text-muted)',marginTop:'8px'}}>{questions.length} questions answered</div>
+            <button onClick={reset} className="btn btn-primary" style={{marginTop:'20px'}}>Play Again</button>
+        </div>
+    );
+
+    const q = questions[current];
+    return (
+        <div style={{maxWidth:'550px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
+                <div style={{display:'flex',gap:'20px'}}>
+                    <div><span style={{fontSize:'10px',color:'var(--text-muted)'}}>SCORE</span><div style={{fontSize:'20px',fontWeight:700}}>{score}</div></div>
+                    {streak > 1 && <div><span style={{fontSize:'10px',color:'var(--amber)'}}>STREAK</span><div style={{fontSize:'20px',fontWeight:700,color:'var(--amber)'}}>{streak}🔥</div></div>}
+                </div>
+                <div style={{fontSize:'13px',color:'var(--text-muted)'}}>Q{current + 1}/{questions.length}</div>
+            </div>
+            <div style={{height:'6px',background:'var(--bg-input)',borderRadius:'3px',marginBottom:'16px',overflow:'hidden'}}>
+                <div style={{height:'100%',width:`${(timeLeft/15)*100}%`,background:timeLeft<=5?'var(--red)':'var(--primary)',transition:'width 1s linear',borderRadius:'3px'}}/>
+            </div>
+            <div style={{fontSize:'10px',color:timeLeft<=5?'var(--red)':'var(--text-muted)',textAlign:'right',marginBottom:'8px',marginTop:'-10px'}}>{timeLeft}s</div>
+            <div className="card" style={{padding:'24px',marginBottom:'16px'}}>
+                <div style={{fontSize:'18px',fontWeight:600,lineHeight:1.4}}>{q.q}</div>
+            </div>
+            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'10px'}}>
+                {q.a.map((a, i) => {
+                    let bg = 'var(--bg-card)';
+                    if (answered !== null) { if (i === q.correct) bg = 'rgba(74,222,128,0.2)'; else if (i === answered) bg = 'rgba(239,68,68,0.2)'; }
+                    return <div key={i} onClick={() => handleAnswer(i)} style={{padding:'16px',background:bg,border:`2px solid ${answered!==null?(i===q.correct?'#4ade80':i===answered?'#ef4444':'var(--border)'):'var(--border)'}`,borderRadius:'10px',cursor:answered===null?'pointer':'default',fontWeight:500,fontSize:'14px',textAlign:'center',transition:'all 0.2s'}}>{a}</div>;
+                })}
+            </div>
+        </div>
+    );
+}
+
+// TYPE RACE - Race against AI typist
+function TypeRaceGame({ room, updateRoom, currentUser, addScore }) {
+    const sentences = [
+        'The quick brown fox jumps over the lazy dog near the old mill',
+        'Ship operations require constant vigilance and careful planning',
+        'A journey of a thousand miles begins with a single step forward',
+        'Technology continues to reshape how we interact with the world',
+        'The ocean waves crashed against the rocky shore at midnight',
+        'Every great achievement started as an impossible dream once',
+    ];
+    const [text] = useState(() => sentences[Math.floor(Math.random() * sentences.length)]);
+    const [input, setInput] = useState('');
+    const [started, setStarted] = useState(false);
+    const [startTime, setStartTime] = useState(0);
+    const [playerWpm, setPlayerWpm] = useState(0);
+    const [aiProgress, setAiProgress] = useState(0);
+    const [aiWpm] = useState(() => 40 + Math.floor(Math.random() * 30)); // 40-70 WPM AI
+    const [winner, setWinner] = useState(null);
+
+    const handleInput = (e) => {
+        if (!started) { setStarted(true); setStartTime(Date.now()); }
+        const val = e.target.value;
+        setInput(val);
+        if (val === text) {
+            const mins = (Date.now() - startTime) / 60000;
+            const wpm = Math.round(text.split(' ').length / mins);
+            setPlayerWpm(wpm);
+            if (!winner) { setWinner('player'); addScore(wpm * 5); }
+        }
+    };
+
+    useEffect(() => {
+        if (!started || winner === 'ai') return;
+        const charsPerMs = (aiWpm * 5) / 60000; // avg 5 chars per word
+        const interval = setInterval(() => {
+            setAiProgress(p => {
+                const np = Math.min(p + charsPerMs * 50 + (Math.random() - 0.3) * 0.5, text.length);
+                if (np >= text.length && !winner) { setWinner('ai'); }
+                return np;
+            });
+        }, 50);
+        return () => clearInterval(interval);
+    }, [started, winner]);
+
+    const playerProgress = input.length / text.length;
+    const aiProgressPct = aiProgress / text.length;
+
+    const reset = () => { setInput(''); setStarted(false); setPlayerWpm(0); setAiProgress(0); setWinner(null); };
+
+    return (
+        <div style={{maxWidth:'600px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'16px',alignItems:'center'}}>
+                <div style={{fontWeight:700,fontSize:'16px'}}>{winner ? (winner === 'player' ? '🏆 You win!' : '😢 AI wins!') : 'Type Race'}</div>
+                <button onClick={reset} className="btn btn-secondary">New Race</button>
+            </div>
+            {/* Progress bars */}
+            <div style={{marginBottom:'20px'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'8px'}}>
+                    <span style={{fontSize:'12px',minWidth:'40px',color:'#4ade80',fontWeight:600}}>You</span>
+                    <div style={{flex:1,height:'20px',background:'var(--bg-input)',borderRadius:'10px',overflow:'hidden'}}>
+                        <div style={{height:'100%',width:`${playerProgress*100}%`,background:'#4ade80',borderRadius:'10px',transition:'width 0.1s'}}/>
+                    </div>
+                    {playerWpm > 0 && <span style={{fontSize:'12px',fontWeight:600,color:'#4ade80'}}>{playerWpm} WPM</span>}
+                </div>
+                <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                    <span style={{fontSize:'12px',minWidth:'40px',color:'#ef4444',fontWeight:600}}>AI</span>
+                    <div style={{flex:1,height:'20px',background:'var(--bg-input)',borderRadius:'10px',overflow:'hidden'}}>
+                        <div style={{height:'100%',width:`${aiProgressPct*100}%`,background:'#ef4444',borderRadius:'10px',transition:'width 0.1s'}}/>
+                    </div>
+                    <span style={{fontSize:'12px',fontWeight:600,color:'#ef4444'}}>{aiWpm} WPM</span>
+                </div>
+            </div>
+            {/* Text display */}
+            <div style={{padding:'20px',background:'var(--bg-input)',borderRadius:'10px',marginBottom:'16px',fontSize:'20px',lineHeight:1.8,border:'1px solid var(--border)'}}>
+                {text.split('').map((c, i) => <span key={i} style={{color:i<input.length?(input[i]===c?'#4ade80':'#ef4444'):'var(--text)',background:i===input.length?'rgba(74,222,128,0.3)':'transparent',borderRadius:'2px'}}>{c}</span>)}
+            </div>
+            <input value={input} onChange={handleInput} disabled={winner !== null} placeholder={winner ? 'Race finished!' : 'Start typing to begin the race...'} className="form-input" style={{fontSize:'18px',padding:'14px'}} autoFocus/>
+        </div>
+    );
+}
+
 
 
 ReactDOM.createRoot(document.getElementById('root')).render(<AuthWrapper/>);
