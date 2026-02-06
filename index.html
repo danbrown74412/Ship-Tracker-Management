@@ -979,6 +979,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
     const [parts, setParts] = useFirestore('parts', []);
     const [activityLog, setActivityLog] = useFirestore('activityLog', defaultActivityLog);
     const [suggestions, setSuggestions] = useFirestore('suggestions', []);
+    const [snakeLeaderboard, setSnakeLeaderboard] = useFirestore('snakeLeaderboard', []);
     const [onlineUsers, setOnlineUsers] = useState([]);
     // Local-only settings (not shared)
     const [toasts, setToasts] = useState([]);
@@ -1099,8 +1100,9 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
         { id: 6, label: 'Parts', icon: 'parts' }, { id: 7, label: 'Email Status', icon: 'email', badge: overdueShips },
         { id: 8, label: 'Data / Import', icon: 'settings' },
         ...(isAdmin ? [{ id: 10, label: 'Suggestions', icon: 'issues', badge: suggestions.filter(s => s.status === 'new').length }] : []),
+        { id: 11, label: 'Snake Game', icon: 'star' },
     ];
-    const sections = [{ title: 'Overview', items: [0, 1] }, { title: 'Ships', items: [2] }, { title: 'Equipment', items: [4, 5, 6] }, { title: 'Comms', items: [7] }, { title: 'System', items: isAdmin ? [8, 10] : [8] }];
+    const sections = [{ title: 'Overview', items: [0, 1] }, { title: 'Ships', items: [2] }, { title: 'Equipment', items: [4, 5, 6] }, { title: 'Comms', items: [7] }, { title: 'System', items: isAdmin ? [8, 10] : [8] }, { title: 'Fun', items: [11] }];
 
     return (
         <div className="app">
@@ -1190,6 +1192,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
                 {page === 7 && <EmailStatus ships={ships} setShips={setShips} issues={issues} toast={toast} logActivity={logActivity}/>}
                 {page === 8 && <DataSettings ships={ships} setShips={setShips} issues={issues} setIssues={setIssues} dailyChecks={dailyChecks} setDailyChecks={setDailyChecks} installs={installs} setInstalls={setInstalls} parts={parts} setParts={setParts} activityLog={activityLog} setActivityLog={setActivityLog} toast={toast} backupSettings={backupSettings} setBackupSettings={setBackupSettings} downloadBackup={downloadBackup}/>}
                 {page === 10 && isAdmin && <Suggestions suggestions={suggestions} setSuggestions={setSuggestions} toast={toast}/>}
+                {page === 11 && <SnakeGame leaderboard={snakeLeaderboard} setLeaderboard={setSnakeLeaderboard} currentUser={currentUser} toast={toast}/>}
             </main>
             <Toast toasts={toasts} remove={id => setToasts(t => t.filter(x => x.id !== id))}/>
             
@@ -5339,6 +5342,340 @@ function DataSettings({ ships, setShips, issues, setIssues, dailyChecks, setDail
                     <div className="card"><span className="card-title">Import Data</span><p style={{fontSize:'13px',color:'var(--text-dim)',marginBottom:'16px'}}>Paste JSON backup OR CSV data from Excel.</p><div className="form-group"><label className="form-label">Import Type</label><select className="form-select" value={importType} onChange={e => setImportType(e.target.value)}><option value="ships">Ships (CSV)</option><option value="dailychecks">Daily Checks (CSV)</option><option value="issues">Issues (CSV)</option><option value="json">Full Backup (JSON)</option></select></div><div className="form-group"><label className="form-label">Paste Data Here</label><textarea className="form-textarea" style={{minHeight:'200px',fontFamily:'JetBrains Mono',fontSize:'11px'}} placeholder="Paste data here..." value={importText} onChange={e => setImportText(e.target.value)}/></div><div className="btn-group">{importType === 'json' ? (<button className="btn btn-primary" onClick={importAll}>Import JSON</button>) : (<button className="btn btn-primary" onClick={importCSV}>Import CSV</button>)}<button className="btn btn-secondary" onClick={() => setImportText('')}>Clear</button></div></div>
                     <div className="card"><span className="card-title">CSV Format Guide</span><div style={{background:'var(--bg-input)',padding:'12px',borderRadius:'6px',fontSize:'11px',fontFamily:'JetBrains Mono'}}><strong style={{color:'var(--primary)'}}>Ships:</strong> Name, Type, POC, Email, CiscoRouter, HDD, CRNA1, CRNA2<br/><br/><strong style={{color:'var(--primary)'}}>Daily Checks:</strong> ShipID, ShipName, ShipType, CheckDate, PingAM, PingPM, HDSpace, StatusAM, StatusPM<br/><br/><strong style={{color:'var(--primary)'}}>Issues:</strong> ShipName, Threat, Owner, Details, Due</div></div>
                     <div className="card"><span className="card-title">Keyboard Shortcuts</span><div style={{fontSize:'12px',lineHeight:'2'}}><kbd style={{background:'var(--bg-input)',padding:'2px 8px',borderRadius:'4px',marginRight:'8px'}}>/</kbd> Focus search<br/><kbd style={{background:'var(--bg-input)',padding:'2px 8px',borderRadius:'4px',marginRight:'8px'}}>Ctrl+S</kbd> Save reminder<br/><kbd style={{background:'var(--bg-input)',padding:'2px 8px',borderRadius:'4px',marginRight:'8px'}}>Esc</kbd> Close modals</div></div>
+                </div>
+            </div>
+        </div>
+    );
+}
+
+// Snake Game Component
+function SnakeGame({ leaderboard, setLeaderboard, currentUser, toast }) {
+    const canvasRef = useRef(null);
+    const [gameState, setGameState] = useState('idle'); // idle, playing, paused, gameOver
+    const [score, setScore] = useState(0);
+    const [highScore, setHighScore] = useState(0);
+    const [speed, setSpeed] = useState(100);
+    const gameRef = useRef({ snake: [], food: null, direction: 'right', nextDirection: 'right' });
+    
+    const GRID_SIZE = 20;
+    const CANVAS_SIZE = 400;
+    const CELL_SIZE = CANVAS_SIZE / GRID_SIZE;
+    
+    // Get user's high score
+    useEffect(() => {
+        const userBest = leaderboard.filter(e => e.username === currentUser?.username).sort((a, b) => b.score - a.score)[0];
+        if (userBest) setHighScore(userBest.score);
+    }, [leaderboard, currentUser]);
+    
+    const initGame = () => {
+        const snake = [{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }];
+        const food = spawnFood(snake);
+        gameRef.current = { snake, food, direction: 'right', nextDirection: 'right' };
+        setScore(0);
+        setGameState('playing');
+    };
+    
+    const spawnFood = (snake) => {
+        let food;
+        do {
+            food = { x: Math.floor(Math.random() * GRID_SIZE), y: Math.floor(Math.random() * GRID_SIZE) };
+        } while (snake.some(seg => seg.x === food.x && seg.y === food.y));
+        return food;
+    };
+    
+    const gameLoop = useCallback(() => {
+        if (gameState !== 'playing') return;
+        
+        const { snake, food, nextDirection } = gameRef.current;
+        gameRef.current.direction = nextDirection;
+        
+        const head = { ...snake[0] };
+        switch (nextDirection) {
+            case 'up': head.y--; break;
+            case 'down': head.y++; break;
+            case 'left': head.x--; break;
+            case 'right': head.x++; break;
+        }
+        
+        // Wall collision
+        if (head.x < 0 || head.x >= GRID_SIZE || head.y < 0 || head.y >= GRID_SIZE) {
+            endGame();
+            return;
+        }
+        
+        // Self collision
+        if (snake.some(seg => seg.x === head.x && seg.y === head.y)) {
+            endGame();
+            return;
+        }
+        
+        const newSnake = [head, ...snake];
+        
+        // Eat food
+        if (head.x === food.x && head.y === food.y) {
+            setScore(s => s + 10);
+            gameRef.current.food = spawnFood(newSnake);
+        } else {
+            newSnake.pop();
+        }
+        
+        gameRef.current.snake = newSnake;
+        draw();
+    }, [gameState]);
+    
+    const endGame = () => {
+        setGameState('gameOver');
+        const finalScore = score + (gameRef.current.snake.length - 3) * 10;
+        
+        if (finalScore > 0 && currentUser?.username) {
+            const entry = {
+                id: 'SL' + Date.now(),
+                username: currentUser.username,
+                score: finalScore,
+                date: new Date().toISOString()
+            };
+            setLeaderboard(prev => [...prev, entry].sort((a, b) => b.score - a.score).slice(0, 50));
+            
+            if (finalScore > highScore) {
+                setHighScore(finalScore);
+                toast(`🏆 New personal best: ${finalScore}!`, 'success');
+            }
+        }
+    };
+    
+    const draw = useCallback(() => {
+        const canvas = canvasRef.current;
+        if (!canvas) return;
+        const ctx = canvas.getContext('2d');
+        
+        // Clear
+        ctx.fillStyle = '#1a1a2e';
+        ctx.fillRect(0, 0, CANVAS_SIZE, CANVAS_SIZE);
+        
+        // Grid
+        ctx.strokeStyle = '#2a2a4e';
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i <= GRID_SIZE; i++) {
+            ctx.beginPath();
+            ctx.moveTo(i * CELL_SIZE, 0);
+            ctx.lineTo(i * CELL_SIZE, CANVAS_SIZE);
+            ctx.stroke();
+            ctx.beginPath();
+            ctx.moveTo(0, i * CELL_SIZE);
+            ctx.lineTo(CANVAS_SIZE, i * CELL_SIZE);
+            ctx.stroke();
+        }
+        
+        const { snake, food } = gameRef.current;
+        
+        // Food
+        if (food) {
+            ctx.fillStyle = '#ff6b6b';
+            ctx.beginPath();
+            ctx.arc(food.x * CELL_SIZE + CELL_SIZE / 2, food.y * CELL_SIZE + CELL_SIZE / 2, CELL_SIZE / 2 - 2, 0, Math.PI * 2);
+            ctx.fill();
+        }
+        
+        // Snake
+        snake.forEach((seg, i) => {
+            const gradient = ctx.createLinearGradient(seg.x * CELL_SIZE, seg.y * CELL_SIZE, (seg.x + 1) * CELL_SIZE, (seg.y + 1) * CELL_SIZE);
+            if (i === 0) {
+                gradient.addColorStop(0, '#4ade80');
+                gradient.addColorStop(1, '#22c55e');
+            } else {
+                gradient.addColorStop(0, '#22c55e');
+                gradient.addColorStop(1, '#16a34a');
+            }
+            ctx.fillStyle = gradient;
+            ctx.fillRect(seg.x * CELL_SIZE + 1, seg.y * CELL_SIZE + 1, CELL_SIZE - 2, CELL_SIZE - 2);
+            
+            // Eyes on head
+            if (i === 0) {
+                ctx.fillStyle = '#fff';
+                const eyeSize = 3;
+                const { direction } = gameRef.current;
+                let eye1, eye2;
+                if (direction === 'right') { eye1 = { x: 14, y: 5 }; eye2 = { x: 14, y: 13 }; }
+                else if (direction === 'left') { eye1 = { x: 4, y: 5 }; eye2 = { x: 4, y: 13 }; }
+                else if (direction === 'up') { eye1 = { x: 5, y: 4 }; eye2 = { x: 13, y: 4 }; }
+                else { eye1 = { x: 5, y: 14 }; eye2 = { x: 13, y: 14 }; }
+                ctx.beginPath();
+                ctx.arc(seg.x * CELL_SIZE + eye1.x, seg.y * CELL_SIZE + eye1.y, eyeSize, 0, Math.PI * 2);
+                ctx.arc(seg.x * CELL_SIZE + eye2.x, seg.y * CELL_SIZE + eye2.y, eyeSize, 0, Math.PI * 2);
+                ctx.fill();
+            }
+        });
+    }, []);
+    
+    // Game loop
+    useEffect(() => {
+        if (gameState !== 'playing') return;
+        const interval = setInterval(gameLoop, speed);
+        return () => clearInterval(interval);
+    }, [gameState, gameLoop, speed]);
+    
+    // Initial draw
+    useEffect(() => {
+        draw();
+    }, [draw]);
+    
+    // Keyboard controls
+    useEffect(() => {
+        const handleKey = (e) => {
+            if (gameState !== 'playing') {
+                if (e.key === ' ' || e.key === 'Enter') {
+                    e.preventDefault();
+                    initGame();
+                }
+                return;
+            }
+            
+            const { direction } = gameRef.current;
+            switch (e.key) {
+                case 'ArrowUp':
+                case 'w':
+                case 'W':
+                    e.preventDefault();
+                    if (direction !== 'down') gameRef.current.nextDirection = 'up';
+                    break;
+                case 'ArrowDown':
+                case 's':
+                case 'S':
+                    e.preventDefault();
+                    if (direction !== 'up') gameRef.current.nextDirection = 'down';
+                    break;
+                case 'ArrowLeft':
+                case 'a':
+                case 'A':
+                    e.preventDefault();
+                    if (direction !== 'right') gameRef.current.nextDirection = 'left';
+                    break;
+                case 'ArrowRight':
+                case 'd':
+                case 'D':
+                    e.preventDefault();
+                    if (direction !== 'left') gameRef.current.nextDirection = 'right';
+                    break;
+                case ' ':
+                    e.preventDefault();
+                    setGameState(s => s === 'playing' ? 'paused' : 'playing');
+                    break;
+            }
+        };
+        
+        window.addEventListener('keydown', handleKey);
+        return () => window.removeEventListener('keydown', handleKey);
+    }, [gameState]);
+    
+    const topScores = useMemo(() => {
+        return leaderboard.sort((a, b) => b.score - a.score).slice(0, 10);
+    }, [leaderboard]);
+    
+    const fmtDate = (d) => new Date(d).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    
+    return (
+        <div className="page active">
+            <div className="page-header">
+                <div className="page-header-left">
+                    <h1 className="page-title">🐍 Snake Game</h1>
+                    <p className="page-sub">Take a break! Compete for the high score.</p>
+                </div>
+            </div>
+            
+            <div style={{display:'grid',gridTemplateColumns:'auto 300px',gap:'24px',maxWidth:'750px'}}>
+                {/* Game Area */}
+                <div>
+                    <div style={{position:'relative',width:CANVAS_SIZE,height:CANVAS_SIZE,borderRadius:'12px',overflow:'hidden',boxShadow:'0 4px 24px rgba(0,0,0,0.3)'}}>
+                        <canvas ref={canvasRef} width={CANVAS_SIZE} height={CANVAS_SIZE} style={{display:'block'}}/>
+                        
+                        {/* Overlay */}
+                        {gameState !== 'playing' && (
+                            <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.8)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
+                                {gameState === 'idle' && (
+                                    <>
+                                        <div style={{fontSize:'48px',marginBottom:'16px'}}>🐍</div>
+                                        <div style={{fontSize:'24px',fontWeight:700,marginBottom:'8px'}}>SNAKE</div>
+                                        <div style={{fontSize:'13px',color:'#888',marginBottom:'24px'}}>Use arrow keys or WASD to move</div>
+                                        <button onClick={initGame} className="btn btn-primary" style={{padding:'12px 32px',fontSize:'16px'}}>
+                                            Press SPACE to Start
+                                        </button>
+                                    </>
+                                )}
+                                {gameState === 'paused' && (
+                                    <>
+                                        <div style={{fontSize:'24px',fontWeight:700,marginBottom:'8px'}}>PAUSED</div>
+                                        <div style={{fontSize:'13px',color:'#888',marginBottom:'24px'}}>Press SPACE to continue</div>
+                                        <button onClick={() => setGameState('playing')} className="btn btn-primary">Resume</button>
+                                    </>
+                                )}
+                                {gameState === 'gameOver' && (
+                                    <>
+                                        <div style={{fontSize:'24px',fontWeight:700,marginBottom:'8px',color:'#ff6b6b'}}>GAME OVER</div>
+                                        <div style={{fontSize:'48px',fontWeight:700,marginBottom:'8px'}}>{score + (gameRef.current.snake.length - 3) * 10}</div>
+                                        <div style={{fontSize:'13px',color:'#888',marginBottom:'24px'}}>
+                                            {score + (gameRef.current.snake.length - 3) * 10 >= highScore ? '🏆 New High Score!' : `High Score: ${highScore}`}
+                                        </div>
+                                        <button onClick={initGame} className="btn btn-primary" style={{padding:'12px 32px'}}>
+                                            Play Again
+                                        </button>
+                                    </>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                    
+                    {/* Score Display */}
+                    <div style={{display:'flex',justifyContent:'space-between',marginTop:'16px',padding:'12px 16px',background:'var(--bg-card)',borderRadius:'8px'}}>
+                        <div>
+                            <div style={{fontSize:'11px',color:'var(--text-muted)',textTransform:'uppercase'}}>Score</div>
+                            <div style={{fontSize:'24px',fontWeight:700,color:'var(--green)'}}>{score}</div>
+                        </div>
+                        <div style={{textAlign:'right'}}>
+                            <div style={{fontSize:'11px',color:'var(--text-muted)',textTransform:'uppercase'}}>Your Best</div>
+                            <div style={{fontSize:'24px',fontWeight:700,color:'var(--primary)'}}>{highScore}</div>
+                        </div>
+                    </div>
+                    
+                    {/* Speed Control */}
+                    <div style={{marginTop:'12px',padding:'12px 16px',background:'var(--bg-card)',borderRadius:'8px'}}>
+                        <div style={{fontSize:'11px',color:'var(--text-muted)',textTransform:'uppercase',marginBottom:'8px'}}>Speed</div>
+                        <div style={{display:'flex',gap:'8px'}}>
+                            {[{ label: 'Slow', value: 150 }, { label: 'Normal', value: 100 }, { label: 'Fast', value: 60 }, { label: 'Insane', value: 30 }].map(s => (
+                                <button key={s.value} onClick={() => setSpeed(s.value)} className="btn" style={{flex:1,padding:'8px',fontSize:'12px',background: speed === s.value ? 'var(--primary)' : 'var(--bg-input)',color: speed === s.value ? '#fff' : 'var(--text-muted)',border: speed === s.value ? 'none' : '1px solid var(--border)'}}>{s.label}</button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+                
+                {/* Leaderboard */}
+                <div className="card" style={{height:'fit-content'}}>
+                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',marginBottom:'16px'}}>
+                        <span className="card-title">🏆 Leaderboard</span>
+                        <span style={{fontSize:'11px',color:'var(--text-muted)'}}>{leaderboard.length} scores</span>
+                    </div>
+                    
+                    {topScores.length === 0 ? (
+                        <div style={{textAlign:'center',padding:'32px 16px',color:'var(--text-muted)'}}>
+                            <div style={{fontSize:'32px',marginBottom:'8px'}}>🎮</div>
+                            <div>No scores yet!</div>
+                            <div style={{fontSize:'12px'}}>Be the first to play.</div>
+                        </div>
+                    ) : (
+                        <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                            {topScores.map((entry, i) => (
+                                <div key={entry.id} style={{display:'flex',alignItems:'center',gap:'12px',padding:'10px 12px',background: i < 3 ? ['rgba(255,215,0,0.1)', 'rgba(192,192,192,0.1)', 'rgba(205,127,50,0.1)'][i] : 'var(--bg-input)',borderRadius:'8px',border: entry.username === currentUser?.username ? '1px solid var(--primary)' : 'none'}}>
+                                    <div style={{width:'24px',height:'24px',display:'flex',alignItems:'center',justifyContent:'center',fontSize: i < 3 ? '16px' : '12px',fontWeight:700,color: i < 3 ? ['#ffd700', '#c0c0c0', '#cd7f32'][i] : 'var(--text-muted)'}}>
+                                        {i < 3 ? ['🥇', '🥈', '🥉'][i] : i + 1}
+                                    </div>
+                                    <div style={{flex:1,minWidth:0}}>
+                                        <div style={{fontWeight:600,fontSize:'13px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{entry.username}</div>
+                                        <div style={{fontSize:'10px',color:'var(--text-muted)'}}>{fmtDate(entry.date)}</div>
+                                    </div>
+                                    <div style={{fontWeight:700,fontSize:'16px',color:'var(--green)'}}>{entry.score}</div>
+                                </div>
+                            ))}
+                        </div>
+                    )}
                 </div>
             </div>
         </div>
