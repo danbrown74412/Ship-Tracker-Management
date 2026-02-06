@@ -5390,6 +5390,13 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
         // Multiplayer - Party
 
         { id: 'typerace', name: 'Type Race', emoji: '🏁', category: 'Multiplayer', multiplayer: true, desc: 'Type faster than others' },
+        { id: 'poker', name: 'Texas Hold\'em', emoji: '🃏', category: 'Casino', multiplayer: false, desc: 'Poker vs AI opponents' },
+        { id: 'blackjack', name: 'Blackjack', emoji: '🂡', category: 'Casino', multiplayer: false, desc: 'Beat the dealer to 21' },
+
+        { id: 'zombie', name: 'Zombie Survival', emoji: '🧟', category: 'Action', multiplayer: false, desc: 'Wave-based zombie shooter' },
+        { id: 'tower', name: 'Tower Defense', emoji: '🏰', category: 'Strategy', multiplayer: false, desc: 'Build turrets, stop the waves' },
+        { id: 'darts', name: 'Darts 501', emoji: '🎯', category: 'Skill', multiplayer: false, desc: 'Aim for the bullseye' },
+        { id: 'fishing', name: 'Fishing', emoji: '🎣', category: 'Skill', multiplayer: false, desc: 'Cast, reel, catch fish' },
     ];
     
     const categories = ['Arcade', 'Puzzle', 'Quick Play', 'Multiplayer'];
@@ -5485,6 +5492,13 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
                         {activeGame === 'checkers' && <CheckersGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('checkers', s)}/>}
 
                         {activeGame === 'typerace' && <TypeRaceGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('typerace', s)}/>}
+                        {activeGame === 'poker' && <PokerGame addScore={(s) => addScore('poker', s)} currentUser={currentUser}/>}
+                        {activeGame === 'blackjack' && <BlackjackGame addScore={(s) => addScore('blackjack', s)} currentUser={currentUser}/>}
+
+                        {activeGame === 'zombie' && <ZombieSurvival addScore={(s) => addScore('zombie', s)} currentUser={currentUser}/>}
+                        {activeGame === 'tower' && <TowerDefense addScore={(s) => addScore('tower', s)} currentUser={currentUser}/>}
+                        {activeGame === 'darts' && <DartsGame addScore={(s) => addScore('darts', s)} currentUser={currentUser}/>}
+                        {activeGame === 'fishing' && <FishingGame addScore={(s) => addScore('fishing', s)} currentUser={currentUser}/>}
                     </div>
                     
                     {showLeaderboard && (
@@ -7818,7 +7832,7 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
             debris: [],
             score: [0, 0],
             round: 1,
-            message: 'Your turn! ← → angle, A/D power, SPACE fire',
+            message: 'Your turn! ← → angle, ↑ ↓ power, SPACE fire',
             messageTimer: 180,
             shakeX: 0, shakeY: 0, shakeTimer: 0,
             aiTimer: 0,
@@ -8009,7 +8023,7 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
                         s.turn = 1;
                         s.wind = (Math.random() - 0.5) * 0.08;
                         s.phase = 'aim';
-                        s.message = '← → angle, A/D power, SPACE fire';
+                        s.message = '← → angle, ↑ ↓ power, SPACE fire';
                         s.messageTimer = 120;
                     }
                 }
@@ -8315,14 +8329,10 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
             }
             if (s.phase !== 'aim') return;
             const tank = s.p1;
-            if (e.key === 'ArrowLeft') tank.angle = Math.min(170, tank.angle + 2);
-            if (e.key === 'ArrowRight') tank.angle = Math.max(10, tank.angle - 2);
-            if (e.key === 'ArrowUp') tank.angle = Math.min(170, tank.angle + 2);
-            if (e.key === 'ArrowDown') tank.angle = Math.max(10, tank.angle - 2);
-            if (e.key === 'a' || e.key === 'A') tank.power = Math.max(5, tank.power - 2);
-            if (e.key === 'd' || e.key === 'D') tank.power = Math.min(100, tank.power + 2);
-            if (e.key === 'w' || e.key === 'W') tank.power = Math.min(100, tank.power + 2);
-            if (e.key === 's' || e.key === 'S') tank.power = Math.max(5, tank.power - 2);
+            if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') tank.angle = Math.min(170, tank.angle + 2);
+            if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') tank.angle = Math.max(10, tank.angle - 2);
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') tank.power = Math.min(100, tank.power + 2);
+            if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') tank.power = Math.max(5, tank.power - 2);
             if (e.key === ' ') fire(s, 1);
         };
         window.addEventListener('keydown', handleKey);
@@ -8339,7 +8349,7 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
             <canvas ref={canvasRef} width={W} height={H}
                 style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',background:'#0a0f1e'}}/>
             <div style={{marginTop:'8px',fontSize:'12px',color:'var(--text-muted)',textAlign:'center'}}>
-                ← → Adjust Angle • A/D Adjust Power • SPACE to Fire
+                ← → Adjust Angle • ↑ ↓ Adjust Power • SPACE to Fire
             </div>
         </div>
     );
@@ -9235,6 +9245,1621 @@ function TypeRaceGame({ room, updateRoom, currentUser, addScore }) {
     );
 }
 
+
+// BLACKJACK - Full casino blackjack vs dealer
+function BlackjackGame({ addScore }) {
+    const [deck, setDeck] = useState([]);
+    const [playerHand, setPlayerHand] = useState([]);
+    const [dealerHand, setDealerHand] = useState([]);
+    const [chips, setChips] = useState(1000);
+    const [bet, setBet] = useState(0);
+    const [phase, setPhase] = useState('bet'); // bet, play, dealerTurn, result
+    const [message, setMessage] = useState('Place your bet!');
+    const [result, setResult] = useState('');
+    const [splitHand, setSplitHand] = useState(null);
+    const [activeHand, setActiveHand] = useState(0);
+    const [insurance, setInsurance] = useState(0);
+    const [stats, setStats] = useState({ wins: 0, losses: 0, pushes: 0, blackjacks: 0 });
+
+    const suits = ['♠','♥','♦','♣'];
+    const ranks = ['A','2','3','4','5','6','7','8','9','10','J','Q','K'];
+    const suitColors = { '♠': '#fff', '♥': '#ef4444', '♦': '#ef4444', '♣': '#fff' };
+
+    const makeDeck = () => {
+        const d = [];
+        for (let i = 0; i < 6; i++) suits.forEach(s => ranks.forEach(r => d.push({ rank: r, suit: s })));
+        for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+        return d;
+    };
+
+    const cardValue = (card) => { if (['J','Q','K'].includes(card.rank)) return 10; if (card.rank === 'A') return 11; return parseInt(card.rank); };
+    const handValue = (hand) => {
+        let val = hand.reduce((s, c) => s + cardValue(c), 0);
+        let aces = hand.filter(c => c.rank === 'A').length;
+        while (val > 21 && aces > 0) { val -= 10; aces--; }
+        return val;
+    };
+    const isSoft = (hand) => { let v = hand.reduce((s,c) => s + cardValue(c), 0); return v !== handValue(hand); };
+    const isBlackjack = (hand) => hand.length === 2 && handValue(hand) === 21;
+
+    const deal = (betAmt) => {
+        let d = deck.length < 52 ? makeDeck() : [...deck];
+        const pH = [d.pop(), d.pop()];
+        const dH = [d.pop(), d.pop()];
+        setDeck(d); setPlayerHand(pH); setDealerHand(dH);
+        setBet(betAmt); setChips(c => c - betAmt); setSplitHand(null); setActiveHand(0); setInsurance(0);
+        if (isBlackjack(pH)) {
+            if (isBlackjack(dH)) {
+                setMessage('Both Blackjack! Push.'); setResult('push'); setChips(c => c + betAmt);
+                setStats(s => ({...s, pushes: s.pushes + 1}));
+            } else {
+                setMessage('BLACKJACK! 🎉'); setResult('blackjack'); setChips(c => c + betAmt + Math.floor(betAmt * 1.5));
+                setStats(s => ({...s, wins: s.wins + 1, blackjacks: s.blackjacks + 1})); addScore(betAmt * 2);
+            }
+            setPhase('result');
+        } else {
+            setPhase('play'); setMessage('Hit, Stand, or Double Down?'); setResult('');
+        }
+    };
+
+    const hit = () => {
+        const d = [...deck]; const card = d.pop(); setDeck(d);
+        const newHand = [...playerHand, card]; setPlayerHand(newHand);
+        if (handValue(newHand) > 21) {
+            setMessage('Bust! 💀'); setResult('lose'); setStats(s => ({...s, losses: s.losses + 1}));
+            setPhase('result');
+        } else if (handValue(newHand) === 21) { stand(newHand, d); }
+    };
+
+    const doubleDown = () => {
+        if (chips < bet) return;
+        setChips(c => c - bet); setBet(b => b * 2);
+        const d = [...deck]; const card = d.pop(); setDeck(d);
+        const newHand = [...playerHand, card]; setPlayerHand(newHand);
+        if (handValue(newHand) > 21) {
+            setMessage('Bust on double! 💀'); setResult('lose'); setStats(s => ({...s, losses: s.losses + 1}));
+            setPhase('result');
+        } else { stand(newHand, d); }
+    };
+
+    const stand = (pHand, d) => {
+        const pH = pHand || playerHand;
+        const dk = d || [...deck];
+        const dH = [...dealerHand];
+        // Dealer draws to 17
+        while (handValue(dH) < 17) dH.push(dk.pop());
+        setDealerHand(dH); setDeck(dk); setPhase('result');
+        const pv = handValue(pH), dv = handValue(dH);
+        const currentBet = pHand ? bet : bet; // use current bet
+        if (dv > 21) { setMessage('Dealer busts! You win! 🎉'); setResult('win'); setChips(c => c + currentBet * 2); setStats(s => ({...s, wins: s.wins + 1})); addScore(currentBet); }
+        else if (pv > dv) { setMessage('You win! 🎉'); setResult('win'); setChips(c => c + currentBet * 2); setStats(s => ({...s, wins: s.wins + 1})); addScore(currentBet); }
+        else if (pv < dv) { setMessage('Dealer wins 😢'); setResult('lose'); setStats(s => ({...s, losses: s.losses + 1})); }
+        else { setMessage('Push — bet returned'); setResult('push'); setChips(c => c + currentBet); setStats(s => ({...s, pushes: s.pushes + 1})); }
+    };
+
+    const renderCard = (card, faceDown, idx) => {
+        if (faceDown) return (
+            <div key={idx} style={{width:70,height:100,background:'linear-gradient(135deg,#1e40af,#3b82f6)',borderRadius:8,border:'2px solid #60a5fa',display:'flex',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(0,0,0,0.4)',fontSize:'24px'}}>🂠</div>
+        );
+        return (
+            <div key={idx} style={{width:70,height:100,background:'#fff',borderRadius:8,border:'2px solid #d1d5db',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',boxShadow:'0 4px 12px rgba(0,0,0,0.3)',position:'relative',color:suitColors[card.suit]}}>
+                <div style={{position:'absolute',top:4,left:6,fontSize:'14px',fontWeight:700}}>{card.rank}</div>
+                <div style={{fontSize:'28px'}}>{card.suit}</div>
+                <div style={{position:'absolute',bottom:4,right:6,fontSize:'14px',fontWeight:700,transform:'rotate(180deg)'}}>{card.rank}</div>
+            </div>
+        );
+    };
+
+    if (chips <= 0 && phase === 'bet') return (
+        <div style={{textAlign:'center',padding:'40px'}}>
+            <div style={{fontSize:'48px',marginBottom:'16px'}}>💸</div>
+            <div style={{fontSize:'24px',fontWeight:700}}>Broke!</div>
+            <div style={{color:'var(--text-muted)',marginTop:'8px'}}>W: {stats.wins} L: {stats.losses} P: {stats.pushes} BJ: {stats.blackjacks}</div>
+            <button onClick={() => { setChips(1000); setStats({wins:0,losses:0,pushes:0,blackjacks:0}); }} className="btn btn-primary" style={{marginTop:'20px'}}>Buy in ($1000)</button>
+        </div>
+    );
+
+    return (
+        <div style={{maxWidth:'650px'}}>
+            <div style={{display:'flex',justifyContent:'space-between',marginBottom:'20px',alignItems:'center'}}>
+                <div style={{display:'flex',gap:'20px'}}>
+                    <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>CHIPS</span><div style={{fontSize:'22px',fontWeight:700,color:'#fbbf24'}}>💰 ${chips}</div></div>
+                    {bet > 0 && <div><span style={{fontSize:'10px',color:'var(--text-muted)',letterSpacing:'1px'}}>BET</span><div style={{fontSize:'22px',fontWeight:700,color:'#4ade80'}}>${bet}</div></div>}
+                </div>
+                <div style={{fontSize:'12px',color:'var(--text-muted)'}}>W:{stats.wins} L:{stats.losses} BJ:{stats.blackjacks}</div>
+            </div>
+            {/* Dealer */}
+            <div style={{background:'#14532d',borderRadius:'16px',padding:'24px',border:'2px solid #166534',marginBottom:'20px'}}>
+                <div style={{fontSize:'11px',color:'rgba(255,255,255,0.5)',marginBottom:'10px',fontWeight:600}}>DEALER {phase !== 'play' && dealerHand.length > 0 ? `(${handValue(dealerHand)})` : ''}</div>
+                <div style={{display:'flex',gap:'8px',minHeight:'100px',flexWrap:'wrap'}}>
+                    {dealerHand.map((c, i) => renderCard(c, phase === 'play' && i === 1, i))}
+                </div>
+            </div>
+            {/* Player */}
+            <div style={{background:'var(--bg-card)',borderRadius:'16px',padding:'24px',border:'2px solid var(--border)',marginBottom:'20px'}}>
+                <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'10px',fontWeight:600}}>YOUR HAND ({handValue(playerHand)}){isSoft(playerHand) ? ' soft' : ''}</div>
+                <div style={{display:'flex',gap:'8px',minHeight:'100px',flexWrap:'wrap'}}>
+                    {playerHand.map((c, i) => renderCard(c, false, i))}
+                </div>
+            </div>
+            {/* Message */}
+            <div style={{textAlign:'center',marginBottom:'16px',fontWeight:700,fontSize:'18px',color:result==='win'||result==='blackjack'?'#4ade80':result==='lose'?'#ef4444':'var(--text)'}}>{message}</div>
+            {/* Controls */}
+            {phase === 'bet' && (
+                <div style={{display:'flex',gap:'8px',justifyContent:'center',flexWrap:'wrap'}}>
+                    {[25, 50, 100, 250, 500].filter(b => b <= chips).map(b => (
+                        <button key={b} onClick={() => deal(b)} className="btn btn-primary" style={{minWidth:'70px',fontWeight:700}}>${b}</button>
+                    ))}
+                </div>
+            )}
+            {phase === 'play' && (
+                <div style={{display:'flex',gap:'8px',justifyContent:'center'}}>
+                    <button onClick={hit} className="btn btn-primary" style={{minWidth:'80px'}}>Hit</button>
+                    <button onClick={() => stand()} className="btn btn-secondary" style={{minWidth:'80px'}}>Stand</button>
+                    {playerHand.length === 2 && chips >= bet && <button onClick={doubleDown} className="btn btn-secondary" style={{minWidth:'100px'}}>Double (${bet})</button>}
+                </div>
+            )}
+            {phase === 'result' && (
+                <div style={{display:'flex',justifyContent:'center'}}>
+                    <button onClick={() => { setPhase('bet'); setPlayerHand([]); setDealerHand([]); setBet(0); setMessage('Place your bet!'); setResult(''); }} className="btn btn-primary" style={{minWidth:'120px'}}>New Hand</button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+// TEXAS HOLD'EM POKER - vs 3 AI opponents
+function PokerGame({ addScore }) {
+    const [phase, setPhase] = useState('preflop'); // preflop, flop, turn, river, showdown, bet
+    const [gamePhase, setGamePhase] = useState('idle'); // idle, playing, over
+    const [deck, setDeck] = useState([]);
+    const [community, setCommunity] = useState([]);
+    const [players, setPlayers] = useState([]);
+    const [pot, setPot] = useState(0);
+    const [currentBet, setCurrentBet] = useState(0);
+    const [activePlayer, setActivePlayer] = useState(0);
+    const [message, setMessage] = useState('');
+    const [chips, setChips] = useState(1000);
+    const [dealerIdx, setDealerIdx] = useState(0);
+    const [round, setRound] = useState(0);
+
+    const suits = ['♠','♥','♦','♣'];
+    const ranks = ['2','3','4','5','6','7','8','9','10','J','Q','K','A'];
+    const suitColors = { '♠': '#fff', '♥': '#ef4444', '♦': '#ef4444', '♣': '#fff' };
+    const NAMES = ['You', 'Alex', 'Sam', 'Jordan'];
+
+    const makeDeck = () => {
+        const d = [];
+        suits.forEach(s => ranks.forEach(r => d.push({ rank: r, suit: s })));
+        for (let i = d.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [d[i], d[j]] = [d[j], d[i]]; }
+        return d;
+    };
+
+    const rankVal = (r) => ranks.indexOf(r);
+    const handStrength = (hand, comm) => {
+        const all = [...hand, ...comm];
+        const vals = all.map(c => rankVal(c.rank)).sort((a,b) => b - a);
+        const suitMap = {}; all.forEach(c => { suitMap[c.suit] = (suitMap[c.suit]||0)+1; });
+        const valCount = {}; vals.forEach(v => { valCount[v] = (valCount[v]||0)+1; });
+        const counts = Object.values(valCount).sort((a,b) => b - a);
+        const hasFlush = Object.values(suitMap).some(c => c >= 5);
+        const uniqueVals = [...new Set(vals)].sort((a,b) => b - a);
+        let hasStraight = false;
+        for (let i = 0; i <= uniqueVals.length - 5; i++) {
+            if (uniqueVals[i] - uniqueVals[i+4] === 4) { hasStraight = true; break; }
+        }
+        // Ace-low straight
+        if (uniqueVals.includes(12) && uniqueVals.includes(0) && uniqueVals.includes(1) && uniqueVals.includes(2) && uniqueVals.includes(3)) hasStraight = true;
+
+        if (hasStraight && hasFlush) return 8000 + vals[0];
+        if (counts[0] === 4) return 7000 + vals[0];
+        if (counts[0] === 3 && counts[1] >= 2) return 6000 + vals[0];
+        if (hasFlush) return 5000 + vals[0];
+        if (hasStraight) return 4000 + vals[0];
+        if (counts[0] === 3) return 3000 + vals[0];
+        if (counts[0] === 2 && counts[1] === 2) return 2000 + vals[0];
+        if (counts[0] === 2) return 1000 + vals[0];
+        return vals[0];
+    };
+
+    const getHandName = (strength) => {
+        if (strength >= 8000) return 'Straight Flush';
+        if (strength >= 7000) return 'Four of a Kind';
+        if (strength >= 6000) return 'Full House';
+        if (strength >= 5000) return 'Flush';
+        if (strength >= 4000) return 'Straight';
+        if (strength >= 3000) return 'Three of a Kind';
+        if (strength >= 2000) return 'Two Pair';
+        if (strength >= 1000) return 'Pair';
+        return 'High Card';
+    };
+
+    const startGame = () => {
+        const d = makeDeck();
+        const ps = NAMES.map((name, i) => ({
+            name, hand: [d.pop(), d.pop()], chips: i === 0 ? chips : 800 + Math.floor(Math.random() * 400),
+            bet: 0, folded: false, isHuman: i === 0, allIn: false
+        }));
+        // Blinds
+        const sb = (dealerIdx + 1) % 4, bb = (dealerIdx + 2) % 4;
+        const smallBlind = 10, bigBlind = 20;
+        ps[sb].bet = smallBlind; ps[sb].chips -= smallBlind;
+        ps[bb].bet = bigBlind; ps[bb].chips -= bigBlind;
+        setDeck(d); setPlayers(ps); setCommunity([]); setPot(smallBlind + bigBlind);
+        setCurrentBet(bigBlind); setPhase('preflop'); setGamePhase('playing');
+        setActivePlayer((bb + 1) % 4); setMessage('Your turn');
+        setRound(r => r + 1);
+    };
+
+    const aiDecision = (player, comm) => {
+        const strength = comm.length >= 3 ? handStrength(player.hand, comm) : rankVal(player.hand[0].rank) + rankVal(player.hand[1].rank) + (player.hand[0].suit === player.hand[1].suit ? 5 : 0);
+        const toCall = currentBet - player.bet;
+        const potOdds = toCall / (pot + toCall + 1);
+        const threshold = comm.length >= 3 ? strength / 8000 : strength / 30;
+        if (threshold < potOdds * 0.5) return 'fold';
+        if (threshold > 0.7 && Math.random() < 0.4) return 'raise';
+        if (toCall === 0) return 'check';
+        return 'call';
+    };
+
+    const doAction = (action, raiseAmt) => {
+        const ps = [...players].map(p => ({...p, hand: [...p.hand]}));
+        const p = ps[activePlayer];
+        if (action === 'fold') { p.folded = true; setMessage(`${p.name} folds`); }
+        else if (action === 'check') { setMessage(`${p.name} checks`); }
+        else if (action === 'call') {
+            const toCall = Math.min(currentBet - p.bet, p.chips);
+            p.chips -= toCall; p.bet += toCall; setPot(pot + toCall);
+            if (p.chips === 0) p.allIn = true;
+            setMessage(`${p.name} calls $${toCall}`);
+        }
+        else if (action === 'raise') {
+            const amt = raiseAmt || Math.min(currentBet + 20, p.chips + p.bet);
+            const toAdd = amt - p.bet;
+            p.chips -= toAdd; p.bet = amt; setPot(pot + toAdd);
+            setCurrentBet(amt);
+            if (p.chips === 0) p.allIn = true;
+            setMessage(`${p.name} raises to $${amt}`);
+        }
+        setPlayers(ps);
+
+        // Next player
+        const activePlayers = ps.filter(p => !p.folded);
+        if (activePlayers.length <= 1) { doShowdown(ps); return; }
+
+        let next = (activePlayer + 1) % 4;
+        let checked = 0;
+        while (checked < 4) {
+            if (!ps[next].folded && !ps[next].allIn && (ps[next].bet < currentBet || (action === 'check' && next !== activePlayer))) break;
+            next = (next + 1) % 4; checked++;
+        }
+
+        // All bets equalized? Advance phase
+        const allEven = ps.filter(p => !p.folded && !p.allIn).every(p => p.bet === currentBet);
+        if (allEven && checked >= 3) {
+            advancePhase(ps);
+            return;
+        }
+
+        setActivePlayer(next);
+        if (next !== 0 && !ps[next].folded) {
+            setTimeout(() => {
+                const aiAct = aiDecision(ps[next], community);
+                doAction(aiAct, aiAct === 'raise' ? Math.min(currentBet + 20 + Math.floor(Math.random() * 40), ps[next].chips + ps[next].bet) : 0);
+            }, 600);
+        }
+    };
+
+    const advancePhase = (ps) => {
+        const d = [...deck];
+        let comm = [...community];
+        ps.forEach(p => { p.bet = 0; });
+        setCurrentBet(0);
+        if (phase === 'preflop') { comm = [d.pop(), d.pop(), d.pop()]; setPhase('flop'); }
+        else if (phase === 'flop') { comm.push(d.pop()); setPhase('turn'); }
+        else if (phase === 'turn') { comm.push(d.pop()); setPhase('river'); }
+        else { doShowdown(ps); return; }
+        setDeck(d); setCommunity(comm); setPlayers(ps);
+        setActivePlayer((dealerIdx + 1) % 4);
+        const next = ps.findIndex((p, i) => i >= (dealerIdx + 1) % 4 && !p.folded && !p.allIn);
+        const firstActive = next >= 0 ? next : ps.findIndex(p => !p.folded && !p.allIn);
+        if (firstActive < 0) { doShowdown(ps); return; }
+        setActivePlayer(firstActive);
+        if (firstActive !== 0) {
+            setTimeout(() => {
+                const aiAct = aiDecision(ps[firstActive], comm);
+                doAction(aiAct);
+            }, 800);
+        } else { setMessage('Your turn'); }
+    };
+
+    const doShowdown = (ps) => {
+        const active = ps.filter(p => !p.folded);
+        if (active.length === 1) {
+            active[0].chips += pot;
+            setMessage(`${active[0].name} wins $${pot}!`);
+        } else {
+            let comm = community;
+            while (comm.length < 5) { const d = [...deck]; comm.push(d.pop()); setDeck(d); }
+            setCommunity(comm);
+            let best = -1, winner = null;
+            active.forEach(p => {
+                const str = handStrength(p.hand, comm);
+                p.handName = getHandName(str);
+                if (str > best) { best = str; winner = p; }
+            });
+            winner.chips += pot;
+            setMessage(`${winner.name} wins $${pot} with ${winner.handName}!`);
+        }
+        setPlayers(ps); setPhase('showdown'); setGamePhase('over');
+        if (ps[0].chips > chips) addScore(ps[0].chips - chips);
+        setChips(ps[0].chips);
+    };
+
+    const renderCard = (card, faceDown, idx) => {
+        if (faceDown) return <div key={idx} style={{width:48,height:68,background:'linear-gradient(135deg,#1e40af,#3b82f6)',borderRadius:6,border:'1.5px solid #60a5fa',display:'inline-flex',alignItems:'center',justifyContent:'center',fontSize:'16px',margin:'0 2px'}}>🂠</div>;
+        return <div key={idx} style={{width:48,height:68,background:'#fff',borderRadius:6,border:'1.5px solid #d1d5db',display:'inline-flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:suitColors[card.suit],margin:'0 2px',boxShadow:'0 2px 6px rgba(0,0,0,0.2)'}}>
+            <div style={{fontSize:'13px',fontWeight:700}}>{card.rank}</div><div style={{fontSize:'18px',marginTop:'-2px'}}>{card.suit}</div>
+        </div>;
+    };
+
+    if (gamePhase === 'idle') return (
+        <div style={{textAlign:'center',padding:'40px'}}>
+            <div style={{fontSize:'56px',marginBottom:'16px'}}>🃏</div>
+            <div style={{fontSize:'24px',fontWeight:700}}>Texas Hold'em</div>
+            <div style={{color:'var(--text-muted)',marginTop:'8px'}}>4-player poker vs AI • No-Limit</div>
+            <div style={{fontSize:'20px',fontWeight:700,color:'#fbbf24',marginTop:'16px'}}>💰 ${chips}</div>
+            <button onClick={startGame} className="btn btn-primary" style={{marginTop:'20px'}}>Deal</button>
+        </div>
+    );
+
+    return (
+        <div style={{maxWidth:'700px'}}>
+            {/* Community cards */}
+            <div style={{background:'#14532d',borderRadius:'16px',padding:'20px',border:'2px solid #166534',marginBottom:'16px',textAlign:'center'}}>
+                <div style={{fontSize:'10px',color:'rgba(255,255,255,0.5)',marginBottom:'8px',letterSpacing:'1px'}}>COMMUNITY CARDS</div>
+                <div style={{display:'flex',gap:'6px',justifyContent:'center',minHeight:'68px'}}>
+                    {community.map((c, i) => renderCard(c, false, i))}
+                    {[...Array(5 - community.length)].map((_, i) => <div key={`e${i}`} style={{width:48,height:68,borderRadius:6,border:'1.5px dashed rgba(255,255,255,0.15)',margin:'0 2px'}}/>)}
+                </div>
+                <div style={{marginTop:'10px',fontWeight:700,color:'#fbbf24',fontSize:'18px'}}>Pot: ${pot}</div>
+            </div>
+            {/* AI Players */}
+            <div style={{display:'grid',gridTemplateColumns:'repeat(3,1fr)',gap:'8px',marginBottom:'12px'}}>
+                {players.slice(1).map((p, i) => (
+                    <div key={i} style={{background:p.folded?'rgba(100,100,100,0.1)':'var(--bg-card)',borderRadius:'10px',padding:'10px',border:`1.5px solid ${p.folded?'var(--border)':activePlayer===i+1?'#fbbf24':'var(--border)'}`,opacity:p.folded?0.5:1}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'6px'}}>
+                            <span style={{fontWeight:600,fontSize:'13px'}}>{p.name}</span>
+                            <span style={{fontSize:'12px',color:'#fbbf24'}}>${p.chips}</span>
+                        </div>
+                        <div style={{display:'flex',gap:'2px'}}>
+                            {p.hand.map((c, ci) => renderCard(c, phase !== 'showdown', ci))}
+                        </div>
+                        {p.folded && <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>Folded</div>}
+                        {phase === 'showdown' && !p.folded && p.handName && <div style={{fontSize:'11px',color:'#4ade80',marginTop:'4px',fontWeight:600}}>{p.handName}</div>}
+                    </div>
+                ))}
+            </div>
+            {/* Your hand */}
+            <div style={{background:'var(--bg-card)',borderRadius:'12px',padding:'16px',border:`2px solid ${activePlayer===0?'#4ade80':'var(--border)'}`,marginBottom:'12px'}}>
+                <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                    <span style={{fontWeight:700}}>Your Hand</span>
+                    <span style={{color:'#fbbf24',fontWeight:700}}>${players[0]?.chips || chips}</span>
+                </div>
+                <div style={{display:'flex',gap:'4px'}}>
+                    {players[0]?.hand.map((c, i) => renderCard(c, false, i))}
+                </div>
+                {phase === 'showdown' && !players[0]?.folded && community.length === 5 && (
+                    <div style={{fontSize:'13px',color:'#4ade80',marginTop:'6px',fontWeight:600}}>{getHandName(handStrength(players[0].hand, community))}</div>
+                )}
+            </div>
+            {/* Message */}
+            <div style={{textAlign:'center',fontWeight:600,marginBottom:'12px',color:message.includes('wins')?'#4ade80':'var(--text)'}}>{message}</div>
+            {/* Controls */}
+            {gamePhase === 'playing' && activePlayer === 0 && !players[0]?.folded && (
+                <div style={{display:'flex',gap:'8px',justifyContent:'center'}}>
+                    {currentBet === players[0]?.bet ? (
+                        <button onClick={() => doAction('check')} className="btn btn-secondary">Check</button>
+                    ) : (
+                        <button onClick={() => doAction('call')} className="btn btn-primary">Call ${currentBet - (players[0]?.bet||0)}</button>
+                    )}
+                    <button onClick={() => doAction('raise', Math.min(currentBet + 40, (players[0]?.chips||0) + (players[0]?.bet||0)))} className="btn btn-primary" disabled={(players[0]?.chips||0) <= currentBet - (players[0]?.bet||0)}>Raise</button>
+                    <button onClick={() => doAction('fold')} className="btn btn-secondary" style={{color:'#ef4444'}}>Fold</button>
+                </div>
+            )}
+            {gamePhase === 'over' && (
+                <div style={{display:'flex',justifyContent:'center',gap:'8px'}}>
+                    <button onClick={() => { setDealerIdx((dealerIdx+1)%4); setGamePhase('idle'); }} className="btn btn-primary">Next Hand</button>
+                </div>
+            )}
+        </div>
+    );
+}
+
+
+// ZOMBIE SURVIVAL - Top-down wave-based shooter
+function ZombieSurvival({ addScore }) {
+    const canvasRef = useRef(null);
+    const W = 750, H = 550;
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
+
+    const WEAPONS = [
+        { name: 'Pistol', dmg: 1, fireRate: 15, spread: 0.05, bullets: 1, speed: 14, color: '#fbbf24', cost: 0, pierce: false },
+        { name: 'Shotgun', dmg: 1, fireRate: 30, spread: 0.3, bullets: 5, speed: 12, color: '#f97316', cost: 200, pierce: false },
+        { name: 'SMG', dmg: 1, fireRate: 5, spread: 0.12, bullets: 1, speed: 16, color: '#4ade80', cost: 500, pierce: false },
+        { name: 'Rifle', dmg: 3, fireRate: 25, spread: 0.02, bullets: 1, speed: 20, color: '#3b82f6', cost: 800, pierce: true },
+        { name: 'Minigun', dmg: 1, fireRate: 3, spread: 0.15, bullets: 1, speed: 16, color: '#ef4444', cost: 1500, pierce: false },
+    ];
+
+    const init = () => {
+        stateRef.current = {
+            phase: 'playing', // playing, shop, over
+            player: { x: W/2, y: H/2, hp: 100, maxHp: 100, angle: 0, speed: 3.5, cooldown: 0, invincible: 0 },
+            zombies: [], bullets: [], particles: [], drops: [],
+            wave: 0, zombiesLeft: 0, waveDelay: 120,
+            score: 0, money: 0,
+            weapon: 0, ownedWeapons: [true, false, false, false, false],
+            keys: {}, mouse: { x: W/2, y: 0, down: false },
+            killStreak: 0, streakTimer: 0,
+        };
+        nextWave(stateRef.current);
+        forceUpdate(n => n + 1);
+    };
+
+    const nextWave = (s) => {
+        s.wave++;
+        const count = 5 + s.wave * 3 + Math.floor(s.wave * s.wave * 0.3);
+        s.zombiesLeft = count;
+        s.waveDelay = 90;
+        // Spawn zombies around edges
+        for (let i = 0; i < count; i++) {
+            setTimeout(() => {
+                if (!stateRef.current || stateRef.current.phase === 'over') return;
+                const side = Math.floor(Math.random() * 4);
+                let x, y;
+                if (side === 0) { x = -20; y = Math.random() * H; }
+                else if (side === 1) { x = W + 20; y = Math.random() * H; }
+                else if (side === 2) { x = Math.random() * W; y = -20; }
+                else { x = Math.random() * W; y = H + 20; }
+                const type = Math.random() < 0.1 + s.wave * 0.02 ? (Math.random() < 0.3 ? 'tank' : 'fast') : 'normal';
+                const hp = type === 'tank' ? 5 + s.wave : type === 'fast' ? 1 : 2 + Math.floor(s.wave * 0.5);
+                const spd = type === 'fast' ? 2.5 + s.wave * 0.1 : type === 'tank' ? 0.8 : 1.2 + s.wave * 0.08;
+                stateRef.current.zombies.push({ x, y, hp, maxHp: hp, speed: spd, type, hit: 0, size: type === 'tank' ? 18 : 12 });
+            }, i * (Math.max(100, 600 - s.wave * 30)));
+        }
+    };
+
+    const loop = () => {
+        const s = stateRef.current;
+        if (!s) { animRef.current = requestAnimationFrame(loop); return; }
+        if (s.phase === 'over' || s.phase === 'shop') { draw(); animRef.current = requestAnimationFrame(loop); return; }
+        const p = s.player;
+
+        // Player movement
+        let dx = 0, dy = 0;
+        if (s.keys['w'] || s.keys['ArrowUp']) dy -= 1;
+        if (s.keys['s'] || s.keys['ArrowDown']) dy += 1;
+        if (s.keys['a'] || s.keys['ArrowLeft']) dx -= 1;
+        if (s.keys['d'] || s.keys['ArrowRight']) dx += 1;
+        if (dx || dy) { const len = Math.hypot(dx, dy); p.x += (dx/len) * p.speed; p.y += (dy/len) * p.speed; }
+        p.x = Math.max(12, Math.min(W - 12, p.x));
+        p.y = Math.max(12, Math.min(H - 12, p.y));
+        p.angle = Math.atan2(s.mouse.y - p.y, s.mouse.x - p.x);
+        if (p.cooldown > 0) p.cooldown--;
+        if (p.invincible > 0) p.invincible--;
+        if (s.streakTimer > 0) { s.streakTimer--; if (s.streakTimer <= 0) s.killStreak = 0; }
+
+        // Shoot
+        if (s.mouse.down && p.cooldown <= 0) {
+            const w = WEAPONS[s.weapon];
+            p.cooldown = w.fireRate;
+            for (let i = 0; i < w.bullets; i++) {
+                const spread = (Math.random() - 0.5) * w.spread * 2;
+                const angle = p.angle + spread;
+                s.bullets.push({ x: p.x + Math.cos(p.angle) * 16, y: p.y + Math.sin(p.angle) * 16, vx: Math.cos(angle) * w.speed, vy: Math.sin(angle) * w.speed, dmg: w.dmg, life: 50, color: w.color, pierce: w.pierce });
+            }
+        }
+
+        // Move bullets
+        s.bullets = s.bullets.filter(b => {
+            b.x += b.vx; b.y += b.vy; b.life--;
+            if (b.x < -10 || b.x > W + 10 || b.y < -10 || b.y > H + 10 || b.life <= 0) return false;
+            for (let i = s.zombies.length - 1; i >= 0; i--) {
+                const z = s.zombies[i];
+                if (Math.hypot(b.x - z.x, b.y - z.y) < z.size + 4) {
+                    z.hp -= b.dmg; z.hit = 6;
+                    for (let j = 0; j < 3; j++) s.particles.push({ x: b.x, y: b.y, vx: (Math.random()-0.5)*4, vy: (Math.random()-0.5)*4, life: 10, color: '#4ade80', size: 2 });
+                    if (z.hp <= 0) {
+                        const pts = z.type === 'tank' ? 30 : z.type === 'fast' ? 15 : 10;
+                        s.score += pts; s.money += pts;
+                        s.killStreak++; s.streakTimer = 60;
+                        for (let j = 0; j < 8; j++) s.particles.push({ x: z.x, y: z.y, vx: (Math.random()-0.5)*6, vy: (Math.random()-0.5)*6, life: 20, color: z.type === 'tank' ? '#8b5cf6' : '#22c55e', size: 3 });
+                        // Random health drop
+                        if (Math.random() < 0.08) s.drops.push({ x: z.x, y: z.y, type: 'health', timer: 300 });
+                        s.zombies.splice(i, 1);
+                    }
+                    if (!b.pierce) return false;
+                }
+            }
+            return true;
+        });
+
+        // Move zombies
+        s.zombies.forEach(z => {
+            const dx = p.x - z.x, dy = p.y - z.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist > 0) { z.x += (dx / dist) * z.speed; z.y += (dy / dist) * z.speed; }
+            if (z.hit > 0) z.hit--;
+            // Hit player
+            if (dist < z.size + 10 && p.invincible <= 0) {
+                const dmg = z.type === 'tank' ? 15 : 8;
+                p.hp -= dmg; p.invincible = 20;
+                for (let j = 0; j < 5; j++) s.particles.push({ x: p.x, y: p.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, life: 12, color: '#ef4444', size: 3 });
+                if (p.hp <= 0) { s.phase = 'over'; addScore(s.score); forceUpdate(n=>n+1); }
+            }
+        });
+
+        // Pickups
+        s.drops = s.drops.filter(d => {
+            d.timer--;
+            if (Math.hypot(p.x - d.x, p.y - d.y) < 20) {
+                if (d.type === 'health') p.hp = Math.min(p.maxHp, p.hp + 25);
+                return false;
+            }
+            return d.timer > 0;
+        });
+
+        // Wave complete
+        if (s.zombies.length === 0 && s.waveDelay <= 0 && s.zombiesLeft <= s.zombies.length) {
+            s.phase = 'shop'; forceUpdate(n => n + 1);
+        }
+        if (s.waveDelay > 0) s.waveDelay--;
+
+        s.particles = s.particles.filter(pp => { pp.x += pp.vx; pp.y += pp.vy; pp.life--; return pp.life > 0; });
+        draw();
+        animRef.current = requestAnimationFrame(loop);
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        const s = stateRef.current;
+        ctx.fillStyle = '#111418'; ctx.fillRect(0, 0, W, H);
+        // Grid
+        ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 0.5;
+        for (let x = 0; x < W; x += 40) { ctx.beginPath(); ctx.moveTo(x,0); ctx.lineTo(x,H); ctx.stroke(); }
+        for (let y = 0; y < H; y += 40) { ctx.beginPath(); ctx.moveTo(0,y); ctx.lineTo(W,y); ctx.stroke(); }
+        if (!s) { ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🧟 Zombie Survival', W/2, H/2-30); ctx.font = '16px sans-serif'; ctx.fillStyle = '#94a3b8'; ctx.fillText('WASD to move • Mouse to aim and shoot', W/2, H/2+10); ctx.fillStyle = '#4ade80'; ctx.fillText('Click to start', W/2, H/2+50); return; }
+        const p = s.player;
+        // Drops
+        s.drops.forEach(d => {
+            ctx.fillStyle = '#ef4444'; ctx.shadowColor = '#ef4444'; ctx.shadowBlur = 6;
+            ctx.font = '16px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('❤️', d.x, d.y + 5);
+            ctx.shadowBlur = 0;
+        });
+        // Zombies
+        s.zombies.forEach(z => {
+            const color = z.type === 'tank' ? '#7c3aed' : z.type === 'fast' ? '#dc2626' : '#22c55e';
+            ctx.fillStyle = z.hit > 0 ? '#fff' : color;
+            ctx.shadowColor = color; ctx.shadowBlur = z.hit > 0 ? 12 : 4;
+            ctx.beginPath(); ctx.arc(z.x, z.y, z.size, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+            // Eyes
+            const dx = p.x - z.x, dy = p.y - z.y, a = Math.atan2(dy, dx);
+            ctx.fillStyle = '#fff';
+            ctx.beginPath(); ctx.arc(z.x + Math.cos(a-0.3)*5, z.y + Math.sin(a-0.3)*5, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(z.x + Math.cos(a+0.3)*5, z.y + Math.sin(a+0.3)*5, 2.5, 0, Math.PI*2); ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(z.x + Math.cos(a-0.3)*6, z.y + Math.sin(a-0.3)*6, 1.2, 0, Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(z.x + Math.cos(a+0.3)*6, z.y + Math.sin(a+0.3)*6, 1.2, 0, Math.PI*2); ctx.fill();
+            // HP bar for tanks
+            if (z.type === 'tank') {
+                ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(z.x-14, z.y-24, 28, 4);
+                ctx.fillStyle = '#8b5cf6'; ctx.fillRect(z.x-14, z.y-24, 28*(z.hp/z.maxHp), 4);
+            }
+        });
+        // Player
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
+        if (p.invincible > 0 && p.invincible % 4 < 2) { ctx.globalAlpha = 0.4; }
+        ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.arc(0, 0, 12, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = WEAPONS[s.weapon].color; ctx.fillRect(8, -2.5, 14, 5); // gun
+        ctx.globalAlpha = 1; ctx.restore();
+        // Bullets
+        s.bullets.forEach(b => {
+            ctx.fillStyle = b.color; ctx.shadowColor = b.color; ctx.shadowBlur = 4;
+            ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill();
+        });
+        ctx.shadowBlur = 0;
+        // Particles
+        s.particles.forEach(pp => { ctx.globalAlpha = pp.life / 20; ctx.fillStyle = pp.color; ctx.beginPath(); ctx.arc(pp.x, pp.y, pp.size, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
+        // HP
+        ctx.fillStyle = 'rgba(0,0,0,0.5)'; ctx.fillRect(15, 12, 150, 14);
+        ctx.fillStyle = p.hp > 30 ? '#4ade80' : '#ef4444'; ctx.fillRect(15, 12, 150 * (p.hp / p.maxHp), 14);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 11px sans-serif'; ctx.fillText(`HP: ${p.hp}`, 20, 23);
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`Wave ${s.wave}`, 15, 45);
+        ctx.fillStyle = '#fbbf24'; ctx.fillText(`$${s.money}`, 15, 63);
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif'; ctx.fillText(WEAPONS[s.weapon].name, 15, 78);
+        ctx.textAlign = 'right'; ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`Score: ${s.score}`, W - 15, 25);
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+        ctx.fillText(`Zombies: ${s.zombies.length}`, W - 15, 42);
+        if (s.killStreak >= 3) { ctx.fillStyle = '#ef4444'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(`${s.killStreak}x KILL STREAK 🔥`, W/2, 25); }
+        // Game over
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', W/2, H/2-30);
+            ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif';
+            ctx.fillText(`Score: ${s.score} • Wave: ${s.wave}`, W/2, H/2+10);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif';
+            ctx.fillText('Click to restart', W/2, H/2+50);
+        }
+    };
+
+    useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => cancelAnimationFrame(animRef.current); }, []);
+    useEffect(() => {
+        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','1','2','3','4','5'].includes(e.key)) e.preventDefault(); if (stateRef.current) stateRef.current.keys[e.key] = true; if (e.key >= '1' && e.key <= '5' && stateRef.current?.ownedWeapons[parseInt(e.key)-1]) stateRef.current.weapon = parseInt(e.key)-1; };
+        const up = (e) => { if (stateRef.current) stateRef.current.keys[e.key] = false; };
+        const mouseMove = (e) => { if (!canvasRef.current || !stateRef.current) return; const r = canvasRef.current.getBoundingClientRect(); stateRef.current.mouse.x = e.clientX - r.left; stateRef.current.mouse.y = e.clientY - r.top; };
+        const mouseDown = (e) => { if (!stateRef.current) { init(); return; } if (stateRef.current.phase === 'over') { init(); return; } stateRef.current.mouse.down = true; };
+        const mouseUp = () => { if (stateRef.current) stateRef.current.mouse.down = false; };
+        window.addEventListener('keydown', down); window.addEventListener('keyup', up);
+        canvasRef.current?.addEventListener('mousemove', mouseMove);
+        canvasRef.current?.addEventListener('mousedown', mouseDown);
+        canvasRef.current?.addEventListener('mouseup', mouseUp);
+        canvasRef.current?.addEventListener('mouseleave', mouseUp);
+        return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+    }, []);
+
+    // Shop UI
+    if (stateRef.current?.phase === 'shop') {
+        const s = stateRef.current;
+        return (
+            <div style={{maxWidth:'700px'}}>
+                <div style={{textAlign:'center',marginBottom:'20px'}}>
+                    <div style={{fontSize:'24px',fontWeight:700}}>🛒 Wave {s.wave} Complete!</div>
+                    <div style={{color:'#fbbf24',fontSize:'18px',fontWeight:600,marginTop:'4px'}}>Money: ${s.money}</div>
+                </div>
+                <div style={{display:'grid',gridTemplateColumns:'repeat(3, 1fr)',gap:'10px',marginBottom:'20px'}}>
+                    {WEAPONS.map((w, i) => (
+                        <div key={i} style={{background:'var(--bg-card)',borderRadius:'10px',padding:'14px',border:`2px solid ${s.weapon === i ? '#4ade80' : 'var(--border)'}`,opacity:s.ownedWeapons[i]?1:0.8}}>
+                            <div style={{fontWeight:700,fontSize:'14px',color:w.color}}>{w.name}</div>
+                            <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>DMG: {w.dmg} • Rate: {Math.round(60/w.fireRate)}/s{w.pierce ? ' • Pierce' : ''}</div>
+                            {s.ownedWeapons[i] ? (
+                                <button onClick={() => { s.weapon = i; forceUpdate(n=>n+1); }} className={`btn ${s.weapon===i?'btn-primary':'btn-secondary'}`} style={{marginTop:'8px',width:'100%',fontSize:'12px'}}>{s.weapon === i ? 'Equipped' : 'Equip'}</button>
+                            ) : (
+                                <button onClick={() => { if (s.money >= w.cost) { s.money -= w.cost; s.ownedWeapons[i] = true; s.weapon = i; forceUpdate(n=>n+1); } }} className="btn btn-primary" style={{marginTop:'8px',width:'100%',fontSize:'12px'}} disabled={s.money < w.cost}>${w.cost}</button>
+                            )}
+                        </div>
+                    ))}
+                    <div style={{background:'var(--bg-card)',borderRadius:'10px',padding:'14px',border:'2px solid var(--border)'}}>
+                        <div style={{fontWeight:700,fontSize:'14px',color:'#ef4444'}}>❤️ Heal</div>
+                        <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>Restore 50 HP</div>
+                        <button onClick={() => { if (s.money >= 100) { s.money -= 100; s.player.hp = Math.min(s.player.maxHp, s.player.hp + 50); forceUpdate(n=>n+1); } }} className="btn btn-primary" style={{marginTop:'8px',width:'100%',fontSize:'12px'}} disabled={s.money < 100 || s.player.hp >= s.player.maxHp}>$100</button>
+                    </div>
+                </div>
+                <div style={{textAlign:'center'}}>
+                    <button onClick={() => { s.phase = 'playing'; nextWave(s); forceUpdate(n=>n+1); }} className="btn btn-primary" style={{fontSize:'16px',padding:'10px 32px'}}>Next Wave →</button>
+                </div>
+            </div>
+        );
+    }
+
+    return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',cursor:'crosshair'}}/>;
+}
+
+// TOWER DEFENSE - Place turrets, upgrade, survive waves
+function TowerDefense({ addScore }) {
+    const canvasRef = useRef(null);
+    const W = 750, H = 550;
+    const CELL = 50;
+    const COLS = Math.floor(W / CELL), ROWS = Math.floor(H / CELL);
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
+
+    // Path waypoints
+    const PATH = [
+        {x:0, y:5}, {x:3, y:5}, {x:3, y:2}, {x:7, y:2}, {x:7, y:8}, {x:11, y:8}, {x:11, y:3}, {x:14, y:3}
+    ].map(p => ({ x: p.x * CELL + CELL/2, y: p.y * CELL + CELL/2 }));
+
+    const TURRETS = [
+        { name: 'Gun', cost: 50, range: 120, dmg: 1, fireRate: 20, color: '#4ade80', bulletColor: '#4ade80', bulletSpeed: 8 },
+        { name: 'Cannon', cost: 100, range: 100, dmg: 3, fireRate: 45, color: '#f97316', bulletColor: '#f97316', bulletSpeed: 6, splash: 40 },
+        { name: 'Sniper', cost: 150, range: 200, dmg: 5, fireRate: 60, color: '#3b82f6', bulletColor: '#3b82f6', bulletSpeed: 16 },
+        { name: 'Freeze', cost: 120, range: 110, dmg: 0.5, fireRate: 15, color: '#06b6d4', bulletColor: '#06b6d4', bulletSpeed: 10, slow: 0.4 },
+    ];
+
+    const isOnPath = (gx, gy) => {
+        for (let i = 0; i < PATH.length - 1; i++) {
+            const a = PATH[i], b = PATH[i+1];
+            const ax = Math.floor(a.x / CELL), ay = Math.floor(a.y / CELL);
+            const bx = Math.floor(b.x / CELL), by = Math.floor(b.y / CELL);
+            const minX = Math.min(ax, bx), maxX = Math.max(ax, bx);
+            const minY = Math.min(ay, by), maxY = Math.max(ay, by);
+            if (gx >= minX && gx <= maxX && gy >= minY && gy <= maxY) return true;
+        }
+        return false;
+    };
+
+    const init = () => {
+        stateRef.current = {
+            phase: 'playing',
+            money: 200, lives: 20, score: 0, wave: 0,
+            turrets: [], bullets: [], enemies: [], particles: [],
+            selectedTurret: 0, hoveredCell: null,
+            waveActive: false, spawnTimer: 0, spawnCount: 0, spawnTotal: 0,
+        };
+        forceUpdate(n => n + 1);
+    };
+
+    const startWave = (s) => {
+        s.wave++;
+        s.waveActive = true;
+        s.spawnCount = 0;
+        s.spawnTotal = 8 + s.wave * 3;
+        s.spawnTimer = 0;
+    };
+
+    const loop = () => {
+        const s = stateRef.current;
+        if (!s) { draw(); animRef.current = requestAnimationFrame(loop); return; }
+
+        // Spawn enemies
+        if (s.waveActive) {
+            s.spawnTimer++;
+            const spawnRate = Math.max(15, 40 - s.wave * 2);
+            if (s.spawnTimer >= spawnRate && s.spawnCount < s.spawnTotal) {
+                s.spawnTimer = 0; s.spawnCount++;
+                const type = Math.random() < 0.1 + s.wave * 0.03 ? (Math.random() < 0.4 ? 'boss' : 'fast') : 'normal';
+                const hp = type === 'boss' ? 15 + s.wave * 5 : type === 'fast' ? 2 + s.wave : 4 + s.wave * 2;
+                const speed = type === 'fast' ? 2.5 : type === 'boss' ? 0.8 : 1.5;
+                const reward = type === 'boss' ? 30 : type === 'fast' ? 8 : 12;
+                s.enemies.push({ x: PATH[0].x, y: PATH[0].y, hp, maxHp: hp, speed, baseSpeed: speed, type, pathIdx: 0, reward, slow: 0 });
+            }
+            if (s.spawnCount >= s.spawnTotal && s.enemies.length === 0) { s.waveActive = false; }
+        }
+
+        // Move enemies
+        s.enemies = s.enemies.filter(e => {
+            if (e.slow > 0) { e.slow--; e.speed = e.baseSpeed * 0.4; } else { e.speed = e.baseSpeed; }
+            const target = PATH[e.pathIdx + 1];
+            if (!target) { s.lives--; if (s.lives <= 0) { s.phase = 'over'; addScore(s.score); forceUpdate(n=>n+1); } return false; }
+            const dx = target.x - e.x, dy = target.y - e.y;
+            const dist = Math.hypot(dx, dy);
+            if (dist < e.speed * 2) { e.pathIdx++; return true; }
+            e.x += (dx / dist) * e.speed; e.y += (dy / dist) * e.speed;
+            return true;
+        });
+
+        // Turrets shoot
+        s.turrets.forEach(t => {
+            if (t.cooldown > 0) { t.cooldown--; return; }
+            const type = TURRETS[t.type];
+            let closest = null, closestDist = type.range;
+            s.enemies.forEach(e => { const d = Math.hypot(e.x - t.x, e.y - t.y); if (d < closestDist) { closest = e; closestDist = d; } });
+            if (closest) {
+                t.cooldown = Math.round(type.fireRate / (t.level || 1));
+                t.targetAngle = Math.atan2(closest.y - t.y, closest.x - t.x);
+                const speed = type.bulletSpeed;
+                s.bullets.push({ x: t.x, y: t.y, vx: Math.cos(t.targetAngle) * speed, vy: Math.sin(t.targetAngle) * speed, dmg: type.dmg * (t.level || 1), life: 40, color: type.bulletColor, splash: type.splash, slow: type.slow, turretType: t.type });
+            }
+        });
+
+        // Move bullets
+        s.bullets = s.bullets.filter(b => {
+            b.x += b.vx; b.y += b.vy; b.life--;
+            if (b.life <= 0) return false;
+            for (let i = s.enemies.length - 1; i >= 0; i--) {
+                const e = s.enemies[i];
+                if (Math.hypot(b.x - e.x, b.y - e.y) < 16) {
+                    e.hp -= b.dmg;
+                    if (b.slow) e.slow = 30;
+                    if (b.splash) {
+                        s.enemies.forEach(e2 => { if (e2 !== e && Math.hypot(b.x - e2.x, b.y - e2.y) < b.splash) { e2.hp -= b.dmg * 0.5; } });
+                        for (let j = 0; j < 6; j++) s.particles.push({ x: b.x, y: b.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, life: 12, color: b.color, size: 3 });
+                    }
+                    if (e.hp <= 0) {
+                        s.money += e.reward; s.score += e.reward;
+                        for (let j = 0; j < 6; j++) s.particles.push({ x: e.x, y: e.y, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, life: 15, color: '#ef4444', size: 3 });
+                        s.enemies.splice(i, 1);
+                    }
+                    return false;
+                }
+            }
+            return true;
+        });
+
+        s.particles = s.particles.filter(p => { p.x += p.vx; p.y += p.vy; p.life--; return p.life > 0; });
+        draw();
+        animRef.current = requestAnimationFrame(loop);
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        const s = stateRef.current;
+        ctx.fillStyle = '#1a2332'; ctx.fillRect(0, 0, W, H);
+        // Grid
+        for (let gx = 0; gx < COLS; gx++) for (let gy = 0; gy < ROWS; gy++) {
+            const onPath = isOnPath(gx, gy);
+            ctx.fillStyle = onPath ? '#2a3040' : '#1e2838';
+            ctx.fillRect(gx * CELL + 1, gy * CELL + 1, CELL - 2, CELL - 2);
+        }
+        // Path line
+        ctx.strokeStyle = 'rgba(255,255,255,0.1)'; ctx.lineWidth = CELL * 0.8; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
+        ctx.beginPath(); PATH.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.stroke();
+        ctx.strokeStyle = 'rgba(255,255,255,0.05)'; ctx.lineWidth = CELL * 0.6;
+        ctx.beginPath(); PATH.forEach((p, i) => { if (i === 0) ctx.moveTo(p.x, p.y); else ctx.lineTo(p.x, p.y); }); ctx.stroke();
+        // Entry/Exit markers
+        ctx.fillStyle = '#4ade80'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+        ctx.fillText('START', PATH[0].x, PATH[0].y - 20);
+        ctx.fillStyle = '#ef4444'; ctx.fillText('END', PATH[PATH.length-1].x, PATH[PATH.length-1].y - 20);
+
+        if (!s) { ctx.fillStyle = '#fff'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('🏰 Tower Defense', W/2, H/2-20); ctx.font = '14px sans-serif'; ctx.fillStyle = '#94a3b8'; ctx.fillText('Click to start', W/2, H/2+15); return; }
+
+        // Turrets
+        s.turrets.forEach(t => {
+            const type = TURRETS[t.type];
+            ctx.fillStyle = type.color;
+            ctx.beginPath(); ctx.arc(t.x, t.y, 14, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = 'rgba(0,0,0,0.3)';
+            ctx.beginPath(); ctx.arc(t.x, t.y, 10, 0, Math.PI * 2); ctx.fill();
+            // Barrel
+            const angle = t.targetAngle || 0;
+            ctx.strokeStyle = type.color; ctx.lineWidth = 4; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(t.x, t.y); ctx.lineTo(t.x + Math.cos(angle) * 16, t.y + Math.sin(angle) * 16); ctx.stroke();
+            // Level
+            if (t.level > 1) { ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText('★'.repeat(t.level - 1), t.x, t.y + 22); }
+        });
+
+        // Hover
+        if (s.hoveredCell && !isOnPath(s.hoveredCell.gx, s.hoveredCell.gy) && !s.turrets.find(t => Math.floor(t.x / CELL) === s.hoveredCell.gx && Math.floor(t.y / CELL) === s.hoveredCell.gy)) {
+            const type = TURRETS[s.selectedTurret];
+            ctx.fillStyle = 'rgba(74,222,128,0.15)'; ctx.fillRect(s.hoveredCell.gx * CELL, s.hoveredCell.gy * CELL, CELL, CELL);
+            ctx.strokeStyle = 'rgba(74,222,128,0.3)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.arc(s.hoveredCell.gx * CELL + CELL/2, s.hoveredCell.gy * CELL + CELL/2, type.range, 0, Math.PI * 2); ctx.stroke();
+        }
+
+        // Enemies
+        s.enemies.forEach(e => {
+            const color = e.type === 'boss' ? '#ef4444' : e.type === 'fast' ? '#fbbf24' : '#8b5cf6';
+            const size = e.type === 'boss' ? 14 : 10;
+            ctx.fillStyle = e.slow > 0 ? '#06b6d4' : color;
+            ctx.beginPath(); ctx.arc(e.x, e.y, size, 0, Math.PI * 2); ctx.fill();
+            // HP bar
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(e.x - 12, e.y - size - 6, 24, 4);
+            ctx.fillStyle = e.hp / e.maxHp > 0.5 ? '#4ade80' : '#ef4444'; ctx.fillRect(e.x - 12, e.y - size - 6, 24 * (e.hp / e.maxHp), 4);
+        });
+
+        // Bullets
+        s.bullets.forEach(b => { ctx.fillStyle = b.color; ctx.beginPath(); ctx.arc(b.x, b.y, 3, 0, Math.PI * 2); ctx.fill(); });
+        // Particles
+        s.particles.forEach(p => { ctx.globalAlpha = p.life / 15; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+
+        // HUD
+        ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, 35);
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillStyle = '#fbbf24'; ctx.fillText(`💰 $${s.money}`, 15, 23);
+        ctx.fillStyle = '#ef4444'; ctx.fillText(`❤️ ${s.lives}`, 120, 23);
+        ctx.fillStyle = '#fff'; ctx.fillText(`Wave: ${s.wave}`, 210, 23);
+        ctx.fillStyle = '#94a3b8'; ctx.fillText(`Score: ${s.score}`, 310, 23);
+        // Turret selection
+        ctx.textAlign = 'right';
+        TURRETS.forEach((t, i) => {
+            const tx = W - 15 - (TURRETS.length - 1 - i) * 85;
+            ctx.fillStyle = s.selectedTurret === i ? 'rgba(74,222,128,0.2)' : 'rgba(0,0,0,0.3)';
+            ctx.fillRect(tx - 40, 3, 78, 28);
+            ctx.fillStyle = t.color; ctx.font = 'bold 11px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`${i+1}:${t.name}`, tx, 15);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '10px sans-serif';
+            ctx.fillText(`$${t.cost}`, tx, 27);
+        });
+
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = '#ef4444'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('GAME OVER', W/2, H/2 - 20);
+            ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif';
+            ctx.fillText(`Wave: ${s.wave} • Score: ${s.score}`, W/2, H/2 + 15);
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 14px sans-serif';
+            ctx.fillText('Click to restart', W/2, H/2 + 50);
+        }
+    };
+
+    const handleClick = (e) => {
+        const s = stateRef.current;
+        if (!s) { init(); return; }
+        if (s.phase === 'over') { init(); return; }
+        const rect = canvasRef.current.getBoundingClientRect();
+        const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+        if (my < 35) return; // HUD area
+        const gx = Math.floor(mx / CELL), gy = Math.floor(my / CELL);
+        // Check if clicking existing turret to upgrade
+        const existing = s.turrets.find(t => Math.floor(t.x / CELL) === gx && Math.floor(t.y / CELL) === gy);
+        if (existing) {
+            const upgCost = TURRETS[existing.type].cost * existing.level;
+            if (s.money >= upgCost && existing.level < 4) { s.money -= upgCost; existing.level++; forceUpdate(n=>n+1); }
+            return;
+        }
+        if (isOnPath(gx, gy)) return;
+        const type = TURRETS[s.selectedTurret];
+        if (s.money >= type.cost) {
+            s.money -= type.cost;
+            s.turrets.push({ x: gx * CELL + CELL/2, y: gy * CELL + CELL/2, type: s.selectedTurret, cooldown: 0, targetAngle: 0, level: 1 });
+            forceUpdate(n => n + 1);
+        }
+    };
+
+    const handleMove = (e) => {
+        if (!stateRef.current || !canvasRef.current) return;
+        const rect = canvasRef.current.getBoundingClientRect();
+        stateRef.current.hoveredCell = { gx: Math.floor((e.clientX - rect.left) / CELL), gy: Math.floor((e.clientY - rect.top) / CELL) };
+    };
+
+    useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => cancelAnimationFrame(animRef.current); }, []);
+    useEffect(() => {
+        const handleKey = (e) => {
+            if (!stateRef.current) return;
+            if (e.key >= '1' && e.key <= '4') { stateRef.current.selectedTurret = parseInt(e.key) - 1; forceUpdate(n=>n+1); }
+            if (e.key === 'n' || e.key === 'N') { if (!stateRef.current.waveActive) { startWave(stateRef.current); forceUpdate(n=>n+1); } }
+        };
+        window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
+    }, []);
+
+    return (
+        <div>
+            <canvas ref={canvasRef} width={W} height={H} onClick={handleClick} onMouseMove={handleMove}
+                style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',cursor:'pointer'}}/>
+            <div style={{display:'flex',justifyContent:'space-between',marginTop:'8px',fontSize:'12px',color:'var(--text-muted)'}}>
+                <span>1-4 select turret • Click to place • Click turret to upgrade • N for next wave</span>
+                {stateRef.current && !stateRef.current.waveActive && <button onClick={() => { startWave(stateRef.current); forceUpdate(n=>n+1); }} className="btn btn-primary" style={{fontSize:'12px',padding:'4px 12px'}}>Next Wave</button>}
+            </div>
+        </div>
+    );
+}
+
+
+// DARTS 501 - Aim at the dartboard, score down from 501
+function DartsGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const W = 550, H = 600;
+    const CX = W / 2, CY = 250, R = 200;
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
+
+    const SEGMENTS = [20,1,18,4,13,6,10,15,2,17,3,19,7,16,8,11,14,9,12,5];
+    const SEG_COLORS = ['#1a1a2e', '#dc2626'];
+
+    const init = () => {
+        stateRef.current = {
+            phase: 'aim', // aim, throw, stuck, aiTurn, over
+            playerScore: 501, aiScore: 501,
+            turn: 'player', dartsLeft: 3,
+            cursor: { x: CX, y: CY, wobbleX: 0, wobbleY: 0 },
+            stuckDarts: [],
+            throwAnim: null,
+            message: 'Click to throw! 3 darts per turn',
+            messageTimer: 120,
+            round: 1,
+            lastThrow: '',
+        };
+        forceUpdate(n => n + 1);
+    };
+
+    const getScore = (x, y) => {
+        const dx = x - CX, dy = y - CY;
+        const dist = Math.hypot(dx, dy);
+        const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 99 + 360) % 360;
+        const segIdx = Math.floor(angle / 18);
+        const seg = SEGMENTS[segIdx % 20];
+
+        if (dist < 8) return { score: 50, label: 'BULLSEYE!', ring: 'bull' };
+        if (dist < 20) return { score: 25, label: '25 (Bull)', ring: 'outerbull' };
+        if (dist > R * 0.95) return { score: 0, label: 'Miss!', ring: 'miss' };
+        if (dist > R * 0.8 && dist < R * 0.87) return { score: seg * 3, label: `T${seg} (${seg*3})`, ring: 'treble' };
+        if (dist > R * 0.9) return { score: seg * 2, label: `D${seg} (${seg*2})`, ring: 'double' };
+        return { score: seg, label: `${seg}`, ring: 'single' };
+    };
+
+    const throwDart = (targetX, targetY) => {
+        const s = stateRef.current;
+        // Add wobble for inaccuracy
+        const finalX = targetX + s.cursor.wobbleX;
+        const finalY = targetY + s.cursor.wobbleY;
+        const result = getScore(finalX, finalY);
+        const isPlayer = s.turn === 'player';
+        const currentScore = isPlayer ? s.playerScore : s.aiScore;
+
+        // Can't go below 0, and must finish on double (simplified: just can't go below 0)
+        let newScore = currentScore - result.score;
+        let bust = false;
+        if (newScore < 0) { bust = true; newScore = currentScore; result.label = 'BUST!'; }
+
+        if (isPlayer) s.playerScore = newScore; else s.aiScore = newScore;
+        s.stuckDarts.push({ x: finalX, y: finalY, color: isPlayer ? '#4ade80' : '#ef4444' });
+        s.lastThrow = result.label;
+        s.dartsLeft--;
+        s.message = `${isPlayer ? 'You' : 'AI'}: ${result.label}${bust ? ' (Bust!)' : ''}`;
+        s.messageTimer = 60;
+
+        if (newScore === 0) {
+            s.phase = 'over';
+            s.message = isPlayer ? '🎉 You win!' : '😢 AI wins!';
+            s.messageTimer = 999;
+            if (isPlayer) addScore(501);
+            forceUpdate(n => n + 1);
+            return;
+        }
+
+        if (s.dartsLeft <= 0) {
+            s.dartsLeft = 3;
+            s.stuckDarts = [];
+            if (s.turn === 'player') {
+                s.turn = 'ai'; s.phase = 'aiTurn';
+                setTimeout(() => aiThrow(), 800);
+            } else {
+                s.turn = 'player'; s.phase = 'aim'; s.round++;
+            }
+        } else if (s.turn === 'ai') {
+            setTimeout(() => aiThrow(), 600);
+        }
+        forceUpdate(n => n + 1);
+    };
+
+    const aiThrow = () => {
+        const s = stateRef.current;
+        if (!s || s.phase === 'over') return;
+        // AI aims roughly at good scoring areas with some randomness
+        const targets = [];
+        // Aim at treble 20 most of the time
+        const t20angle = (0 * 18 - 99) * Math.PI / 180;
+        const trebleDist = R * 0.83;
+        let tx = CX + Math.cos(t20angle) * trebleDist;
+        let ty = CY + Math.sin(t20angle) * trebleDist;
+        // Add inaccuracy
+        const inaccuracy = 25 + Math.random() * 30;
+        tx += (Math.random() - 0.5) * inaccuracy;
+        ty += (Math.random() - 0.5) * inaccuracy;
+        // Clamp to board area
+        const dist = Math.hypot(tx - CX, ty - CY);
+        if (dist > R) { const a = Math.atan2(ty - CY, tx - CX); tx = CX + Math.cos(a) * R * 0.9; ty = CY + Math.sin(a) * R * 0.9; }
+        throwDart(tx, ty);
+    };
+
+    const loop = () => {
+        const s = stateRef.current;
+        if (s && s.phase === 'aim') {
+            // Wobble cursor
+            const t = Date.now() * 0.003;
+            s.cursor.wobbleX = Math.sin(t * 2.3) * 18 + Math.sin(t * 5.1) * 8;
+            s.cursor.wobbleY = Math.cos(t * 1.7) * 18 + Math.cos(t * 4.3) * 8;
+        }
+        if (s && s.messageTimer > 0) s.messageTimer--;
+        draw();
+        animRef.current = requestAnimationFrame(loop);
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        const s = stateRef.current;
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
+
+        if (!s) {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🎯 Darts 501', W/2, H/2-30);
+            ctx.font = '14px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Score down from 501 • 3 darts per turn', W/2, H/2+5);
+            ctx.fillStyle = '#4ade80'; ctx.fillText('Click to start', W/2, H/2+40);
+            return;
+        }
+
+        // Dartboard
+        // Outer ring
+        ctx.fillStyle = '#000'; ctx.beginPath(); ctx.arc(CX, CY, R + 10, 0, Math.PI * 2); ctx.fill();
+        // Segments
+        for (let i = 0; i < 20; i++) {
+            const startAngle = (i * 18 - 99) * Math.PI / 180;
+            const endAngle = ((i + 1) * 18 - 99) * Math.PI / 180;
+            // Outer single
+            ctx.fillStyle = SEG_COLORS[i % 2]; ctx.beginPath();
+            ctx.moveTo(CX, CY); ctx.arc(CX, CY, R * 0.9, startAngle, endAngle); ctx.fill();
+            // Double ring
+            ctx.fillStyle = i % 2 === 0 ? '#16a34a' : '#dc2626'; ctx.beginPath();
+            ctx.arc(CX, CY, R * 0.95, startAngle, endAngle); ctx.arc(CX, CY, R * 0.9, endAngle, startAngle, true); ctx.fill();
+            // Treble ring
+            ctx.fillStyle = i % 2 === 0 ? '#16a34a' : '#dc2626'; ctx.beginPath();
+            ctx.arc(CX, CY, R * 0.87, startAngle, endAngle); ctx.arc(CX, CY, R * 0.8, endAngle, startAngle, true); ctx.fill();
+            // Inner single
+            ctx.fillStyle = i % 2 === 0 ? '#fef3c7' : '#1a1a2e'; ctx.beginPath();
+            ctx.arc(CX, CY, R * 0.8, startAngle, endAngle); ctx.arc(CX, CY, R * 0.2, endAngle, startAngle, true); ctx.fill();
+            // Number
+            const numAngle = (i * 18 - 90) * Math.PI / 180;
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+            ctx.fillText(SEGMENTS[i], CX + Math.cos(numAngle) * (R + 2), CY + Math.sin(numAngle) * (R + 2));
+        }
+        // Bull
+        ctx.fillStyle = '#16a34a'; ctx.beginPath(); ctx.arc(CX, CY, 20, 0, Math.PI * 2); ctx.fill();
+        ctx.fillStyle = '#dc2626'; ctx.beginPath(); ctx.arc(CX, CY, 8, 0, Math.PI * 2); ctx.fill();
+        // Wire lines
+        ctx.strokeStyle = 'rgba(192,192,192,0.4)'; ctx.lineWidth = 0.5;
+        for (let i = 0; i < 20; i++) {
+            const angle = (i * 18 - 99) * Math.PI / 180;
+            ctx.beginPath(); ctx.moveTo(CX + Math.cos(angle) * 20, CY + Math.sin(angle) * 20);
+            ctx.lineTo(CX + Math.cos(angle) * R * 0.95, CY + Math.sin(angle) * R * 0.95); ctx.stroke();
+        }
+        [0.2, 0.8, 0.87, 0.9, 0.95].forEach(r => {
+            ctx.beginPath(); ctx.arc(CX, CY, R * r, 0, Math.PI * 2); ctx.stroke();
+        });
+
+        // Stuck darts
+        s.stuckDarts.forEach(d => {
+            ctx.fillStyle = d.color; ctx.shadowColor = d.color; ctx.shadowBlur = 6;
+            ctx.beginPath(); ctx.arc(d.x, d.y, 5, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#333'; ctx.beginPath(); ctx.arc(d.x, d.y, 2, 0, Math.PI * 2); ctx.fill();
+            ctx.shadowBlur = 0;
+        });
+
+        // Aim cursor
+        if (s.phase === 'aim') {
+            const mx = s.cursor.x + s.cursor.wobbleX;
+            const my = s.cursor.y + s.cursor.wobbleY;
+            ctx.strokeStyle = 'rgba(255,255,255,0.7)'; ctx.lineWidth = 1.5;
+            ctx.beginPath(); ctx.moveTo(mx - 12, my); ctx.lineTo(mx + 12, my); ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(mx, my - 12); ctx.lineTo(mx, my + 12); ctx.stroke();
+            ctx.strokeStyle = 'rgba(255,255,255,0.3)';
+            ctx.beginPath(); ctx.arc(mx, my, 8, 0, Math.PI * 2); ctx.stroke();
+        }
+
+        // Scoreboard
+        ctx.textBaseline = 'alphabetic';
+        ctx.fillStyle = 'rgba(0,0,0,0.6)';
+        ctx.beginPath(); ctx.roundRect(20, H - 100, W - 40, 85, 10); ctx.fill();
+        ctx.fillStyle = '#4ade80'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(s.playerScore.toString(), 50, H - 55);
+        ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.fillText('YOU', 50, H - 75);
+        ctx.fillStyle = '#ef4444'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'right';
+        ctx.fillText(s.aiScore.toString(), W - 50, H - 55);
+        ctx.fillStyle = '#fff'; ctx.font = '13px sans-serif'; ctx.fillText('AI', W - 50, H - 75);
+        // Darts left
+        ctx.textAlign = 'center'; ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 14px sans-serif';
+        ctx.fillText(`${'🎯'.repeat(s.dartsLeft)}`, W/2, H - 55);
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+        ctx.fillText(`Round ${s.round} • ${s.turn === 'player' ? 'Your turn' : 'AI turn'}`, W/2, H - 75);
+        // Last throw
+        if (s.lastThrow) { ctx.fillStyle = '#fff'; ctx.font = 'bold 16px sans-serif'; ctx.fillText(s.lastThrow, W/2, H - 30); }
+
+        // Message
+        if (s.messageTimer > 0 && s.phase !== 'over') {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(s.message, W/2, CY + R + 35);
+        }
+        // Game over
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.7)'; ctx.fillRect(0, 0, W, H);
+            ctx.fillStyle = s.message.includes('You') ? '#4ade80' : '#ef4444';
+            ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(s.message, W/2, H/2);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif';
+            ctx.fillText('Click to play again', W/2, H/2 + 40);
+        }
+    };
+
+    useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => cancelAnimationFrame(animRef.current); }, []);
+    useEffect(() => {
+        const handleMove = (e) => {
+            if (!stateRef.current || !canvasRef.current) return;
+            const rect = canvasRef.current.getBoundingClientRect();
+            stateRef.current.cursor.x = e.clientX - rect.left;
+            stateRef.current.cursor.y = e.clientY - rect.top;
+        };
+        const handleClick = () => {
+            const s = stateRef.current;
+            if (!s) { init(); return; }
+            if (s.phase === 'over') { init(); return; }
+            if (s.phase === 'aim') {
+                throwDart(s.cursor.x, s.cursor.y);
+            }
+        };
+        canvasRef.current?.addEventListener('mousemove', handleMove);
+        canvasRef.current?.addEventListener('click', handleClick);
+        return () => {
+            canvasRef.current?.removeEventListener('mousemove', handleMove);
+            canvasRef.current?.removeEventListener('click', handleClick);
+        };
+    }, []);
+
+    return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',cursor:'none'}}/>;
+}
+
+// FISHING - Cast, reel, catch fish
+function FishingGame({ addScore }) {
+    const canvasRef = useRef(null);
+    const W = 650, H = 550;
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
+
+    const FISH_TYPES = [
+        { name: 'Bluegill', weight: [0.2, 1.5], value: 10, color: '#3b82f6', speed: 1.5, size: 18, depth: [0.3, 0.6], rarity: 0.35 },
+        { name: 'Bass', weight: [1, 5], value: 30, color: '#22c55e', speed: 2, size: 24, depth: [0.4, 0.8], rarity: 0.25 },
+        { name: 'Catfish', weight: [2, 12], value: 50, color: '#92400e', speed: 1, size: 30, depth: [0.7, 1.0], rarity: 0.15 },
+        { name: 'Pike', weight: [3, 15], value: 70, color: '#6b7280', speed: 2.5, size: 32, depth: [0.3, 0.7], rarity: 0.1 },
+        { name: 'Trout', weight: [0.5, 4], value: 25, color: '#f97316', speed: 3, size: 20, depth: [0.2, 0.5], rarity: 0.1 },
+        { name: 'Golden Fish', weight: [1, 3], value: 200, color: '#fbbf24', speed: 3.5, size: 22, depth: [0.5, 0.9], rarity: 0.03 },
+        { name: 'Shark!', weight: [20, 50], value: 500, color: '#64748b', speed: 2, size: 45, depth: [0.8, 1.0], rarity: 0.02 },
+    ];
+
+    const init = () => {
+        stateRef.current = {
+            phase: 'idle', // idle, casting, waiting, bite, reeling, caught, lost
+            castPower: 0, powerDir: 1,
+            hookX: 0, hookY: 0, hookDepth: 0,
+            lineX: 120, lineY: 200,
+            fish: [], caughtFish: [],
+            totalValue: 0, castCount: 0,
+            currentFish: null,
+            reelProgress: 0, tension: 50, maxTension: 100,
+            fishPull: 0, fishDir: 0,
+            biteTimer: 0, bobber: { x: 0, y: 0, bob: 0 },
+            particles: [],
+            waterOffset: 0,
+            time: 0,
+        };
+        // Spawn fish
+        for (let i = 0; i < 15; i++) spawnFish(stateRef.current);
+        forceUpdate(n => n + 1);
+    };
+
+    const spawnFish = (s) => {
+        const waterTop = 280, waterH = H - waterTop;
+        const rand = Math.random();
+        let cumulative = 0;
+        let type = FISH_TYPES[0];
+        for (const ft of FISH_TYPES) { cumulative += ft.rarity; if (rand < cumulative) { type = ft; break; } }
+        const depth = type.depth[0] + Math.random() * (type.depth[1] - type.depth[0]);
+        const y = waterTop + depth * waterH;
+        s.fish.push({
+            x: 100 + Math.random() * (W - 200), y,
+            type, vx: (Math.random() - 0.5) * type.speed, vy: 0,
+            weight: type.weight[0] + Math.random() * (type.weight[1] - type.weight[0]),
+            tailPhase: Math.random() * Math.PI * 2,
+        });
+    };
+
+    const loop = () => {
+        const s = stateRef.current;
+        if (!s) { draw(); animRef.current = requestAnimationFrame(loop); return; }
+        s.time++;
+        s.waterOffset = Math.sin(s.time * 0.02) * 3;
+
+        // Cast power bar
+        if (s.phase === 'casting') {
+            s.castPower += s.powerDir * 2;
+            if (s.castPower >= 100) s.powerDir = -1;
+            if (s.castPower <= 0) s.powerDir = 1;
+        }
+
+        // Waiting for bite
+        if (s.phase === 'waiting') {
+            s.bobber.bob = Math.sin(s.time * 0.08) * 2;
+            s.biteTimer--;
+            // Check if fish near hook
+            s.fish.forEach(f => {
+                if (s.currentFish) return;
+                const dist = Math.hypot(f.x - s.hookX, f.y - s.hookY);
+                if (dist < 40 && s.biteTimer <= 0) {
+                    s.currentFish = f;
+                    s.phase = 'bite';
+                    s.biteTimer = 60; // Time to react
+                    forceUpdate(n => n + 1);
+                }
+            });
+            if (s.biteTimer <= -200 && !s.currentFish) {
+                // Auto-nibble chance
+                if (Math.random() < 0.02) {
+                    const nearby = s.fish.filter(f => Math.hypot(f.x - s.hookX, f.y - s.hookY) < 120);
+                    if (nearby.length > 0) {
+                        s.currentFish = nearby[Math.floor(Math.random() * nearby.length)];
+                        s.phase = 'bite';
+                        s.biteTimer = 60;
+                        forceUpdate(n => n + 1);
+                    }
+                }
+            }
+        }
+
+        // Bite - player must click to hook
+        if (s.phase === 'bite') {
+            s.biteTimer--;
+            s.bobber.bob = Math.sin(s.time * 0.5) * 8; // frantic bobbing
+            if (s.biteTimer <= 0) {
+                s.currentFish = null; s.phase = 'waiting'; s.biteTimer = 100;
+                s.message = 'Too slow! Fish got away'; s.messageTimer = 60;
+            }
+        }
+
+        // Reeling
+        if (s.phase === 'reeling') {
+            const f = s.currentFish;
+            // Fish pulls
+            s.fishPull = Math.sin(s.time * 0.1 + f.type.speed) * f.type.speed * 2;
+            f.x += Math.cos(s.fishDir) * s.fishPull * 0.5;
+            if (f.x < 50) f.x = 50; if (f.x > W - 50) f.x = W - 50;
+
+            // Tension management
+            if (Math.abs(s.fishPull) > f.type.speed) {
+                s.tension += 0.8; // Fish pulling hard
+            } else {
+                s.tension -= 0.3;
+            }
+            s.tension = Math.max(0, Math.min(s.maxTension, s.tension));
+
+            if (s.tension >= s.maxTension) {
+                s.phase = 'lost'; s.currentFish = null;
+                s.message = 'Line snapped! 💔'; s.messageTimer = 90;
+                setTimeout(() => { if (stateRef.current) { stateRef.current.phase = 'idle'; forceUpdate(n=>n+1); } }, 1500);
+                forceUpdate(n => n + 1);
+            }
+
+            // Reel progress
+            if (s.reelProgress >= 100) {
+                const val = Math.round(f.type.value * f.weight);
+                s.caughtFish.push({ ...f.type, weight: f.weight, val });
+                s.totalValue += val;
+                s.fish = s.fish.filter(ff => ff !== f);
+                spawnFish(s);
+                s.currentFish = null;
+                s.phase = 'caught';
+                s.message = `Caught ${f.type.name}! ${f.weight.toFixed(1)}lb — $${val}`;
+                s.messageTimer = 120;
+                addScore(val);
+                for (let i = 0; i < 10; i++) s.particles.push({ x: s.lineX, y: 270, vx: (Math.random()-0.5)*5, vy: -Math.random()*4, life: 20, color: '#06b6d4', size: 3 });
+                setTimeout(() => { if (stateRef.current) { stateRef.current.phase = 'idle'; stateRef.current.reelProgress = 0; stateRef.current.tension = 50; forceUpdate(n=>n+1); } }, 2000);
+                forceUpdate(n => n + 1);
+            }
+        }
+
+        // Move fish
+        s.fish.forEach(f => {
+            f.tailPhase += 0.1;
+            f.x += f.vx;
+            if (f.x < 30 || f.x > W - 30) f.vx *= -1;
+            f.x = Math.max(30, Math.min(W - 30, f.x));
+            // Random direction changes
+            if (Math.random() < 0.01) f.vx = (Math.random() - 0.5) * f.type.speed;
+        });
+
+        s.particles = s.particles.filter(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.1; p.life--; return p.life > 0; });
+
+        draw();
+        animRef.current = requestAnimationFrame(loop);
+    };
+
+    const draw = () => {
+        const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        const s = stateRef.current;
+        const waterTop = 280;
+
+        // Sky
+        const skyGrad = ctx.createLinearGradient(0, 0, 0, waterTop);
+        skyGrad.addColorStop(0, '#0c4a6e'); skyGrad.addColorStop(1, '#0ea5e9');
+        ctx.fillStyle = skyGrad; ctx.fillRect(0, 0, W, waterTop);
+        // Sun
+        ctx.fillStyle = '#fbbf24'; ctx.shadowColor = '#fbbf24'; ctx.shadowBlur = 30;
+        ctx.beginPath(); ctx.arc(W - 80, 60, 30, 0, Math.PI * 2); ctx.fill();
+        ctx.shadowBlur = 0;
+        // Clouds
+        ctx.fillStyle = 'rgba(255,255,255,0.3)';
+        [[100,40],[300,60],[500,35]].forEach(([cx,cy]) => {
+            ctx.beginPath(); ctx.arc(cx,cy,20,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx+25,cy-5,16,0,Math.PI*2); ctx.fill();
+            ctx.beginPath(); ctx.arc(cx-20,cy+3,14,0,Math.PI*2); ctx.fill();
+        });
+
+        // Water
+        const waterGrad = ctx.createLinearGradient(0, waterTop, 0, H);
+        waterGrad.addColorStop(0, '#0369a1'); waterGrad.addColorStop(0.5, '#075985'); waterGrad.addColorStop(1, '#0c2d48');
+        ctx.fillStyle = waterGrad; ctx.fillRect(0, waterTop, W, H - waterTop);
+        // Water surface waves
+        ctx.strokeStyle = 'rgba(14,165,233,0.4)'; ctx.lineWidth = 2;
+        for (let i = 0; i < 3; i++) {
+            ctx.beginPath();
+            for (let x = 0; x < W; x += 2) {
+                const y = waterTop + i * 3 + Math.sin(x * 0.02 + s?.time * 0.03 + i) * 3;
+                if (x === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+        }
+
+        // Shore/dock
+        ctx.fillStyle = '#92400e'; ctx.fillRect(60, waterTop - 30, 120, 35);
+        ctx.fillStyle = '#78350f'; ctx.fillRect(60, waterTop - 30, 120, 5);
+        // Dock posts
+        ctx.fillStyle = '#451a03'; ctx.fillRect(65, waterTop, 8, 25); ctx.fillRect(172, waterTop, 8, 25);
+
+        if (!s) {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🎣 Fishing', W/2, H/2-20);
+            ctx.font = '14px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Click to cast • Click on bite to hook • Hold click to reel', W/2, H/2+15);
+            ctx.fillStyle = '#4ade80'; ctx.fillText('Click to start', W/2, H/2+45);
+            return;
+        }
+
+        // Fisher person
+        ctx.fillStyle = '#fbbf24'; ctx.beginPath(); ctx.arc(120, waterTop - 55, 10, 0, Math.PI * 2); ctx.fill(); // head
+        ctx.fillStyle = '#3b82f6'; ctx.fillRect(114, waterTop - 44, 12, 18); // body
+
+        // Fishing rod
+        if (s.phase !== 'idle') {
+            ctx.strokeStyle = '#92400e'; ctx.lineWidth = 3; ctx.lineCap = 'round';
+            ctx.beginPath(); ctx.moveTo(120, waterTop - 40); ctx.lineTo(s.lineX, waterTop - 80); ctx.stroke();
+            // Line
+            ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
+            ctx.beginPath(); ctx.moveTo(s.lineX, waterTop - 80);
+            ctx.lineTo(s.hookX, s.phase === 'waiting' || s.phase === 'bite' ? waterTop + (s.bobber?.bob || 0) : s.hookY);
+            ctx.stroke();
+        }
+
+        // Bobber
+        if (s.phase === 'waiting' || s.phase === 'bite') {
+            const by = waterTop + (s.bobber?.bob || 0);
+            ctx.fillStyle = '#ef4444'; ctx.beginPath(); ctx.arc(s.hookX, by - 4, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.beginPath(); ctx.arc(s.hookX, by - 8, 4, 0, Math.PI, true); ctx.fill();
+            if (s.phase === 'bite') {
+                ctx.fillStyle = '#fbbf24'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
+                ctx.fillText('🐟 BITE! Click now!', s.hookX, by - 25);
+            }
+        }
+
+        // Fish (underwater)
+        s.fish.forEach(f => {
+            ctx.save();
+            ctx.translate(f.x, f.y);
+            const dir = f.vx >= 0 ? 1 : -1;
+            ctx.scale(dir, 1);
+            // Body
+            ctx.fillStyle = f.type.color;
+            ctx.globalAlpha = 0.7;
+            ctx.beginPath();
+            ctx.ellipse(0, 0, f.type.size * 0.6, f.type.size * 0.35, 0, 0, Math.PI * 2);
+            ctx.fill();
+            // Tail
+            const tailWag = Math.sin(f.tailPhase) * 0.3;
+            ctx.beginPath();
+            ctx.moveTo(-f.type.size * 0.5, 0);
+            ctx.lineTo(-f.type.size * 0.8, -f.type.size * 0.25 + tailWag * 5);
+            ctx.lineTo(-f.type.size * 0.8, f.type.size * 0.25 + tailWag * 5);
+            ctx.closePath(); ctx.fill();
+            // Eye
+            ctx.fillStyle = '#fff'; ctx.globalAlpha = 0.9;
+            ctx.beginPath(); ctx.arc(f.type.size * 0.3, -3, 3, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle = '#000';
+            ctx.beginPath(); ctx.arc(f.type.size * 0.32, -3, 1.5, 0, Math.PI * 2); ctx.fill();
+            ctx.globalAlpha = 1;
+            ctx.restore();
+        });
+
+        // Particles
+        s.particles.forEach(p => { ctx.globalAlpha = p.life / 20; ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill(); });
+        ctx.globalAlpha = 1;
+
+        // Cast power bar
+        if (s.phase === 'casting') {
+            const barW = 200, barH = 20, bx = W/2 - barW/2, by = waterTop - 110;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.beginPath(); ctx.roundRect(bx-2, by-2, barW+4, barH+4, 6); ctx.fill();
+            ctx.fillStyle = '#333'; ctx.beginPath(); ctx.roundRect(bx, by, barW, barH, 4); ctx.fill();
+            const pct = s.castPower / 100;
+            ctx.fillStyle = pct > 0.7 ? '#ef4444' : pct > 0.4 ? '#eab308' : '#4ade80';
+            ctx.beginPath(); ctx.roundRect(bx, by, barW * pct, barH, 4); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`POWER: ${Math.round(s.castPower)}%`, W/2, by + 15);
+        }
+
+        // Reel UI
+        if (s.phase === 'reeling') {
+            // Tension bar
+            const barW = 180, barH = 16, bx = W/2 - barW/2, by = 15;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx - 2, by - 2, barW + 4, barH + 4);
+            ctx.fillStyle = '#333'; ctx.fillRect(bx, by, barW, barH);
+            const tPct = s.tension / s.maxTension;
+            ctx.fillStyle = tPct > 0.8 ? '#ef4444' : tPct > 0.5 ? '#eab308' : '#4ade80';
+            ctx.fillRect(bx, by, barW * tPct, barH);
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(`TENSION`, W/2, by + 12);
+            // Reel progress
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(bx - 2, by + 22, barW + 4, barH + 4);
+            ctx.fillStyle = '#333'; ctx.fillRect(bx, by + 24, barW, barH);
+            ctx.fillStyle = '#3b82f6'; ctx.fillRect(bx, by + 24, barW * (s.reelProgress / 100), barH);
+            ctx.fillStyle = '#fff'; ctx.fillText(`REEL: ${Math.round(s.reelProgress)}%`, W/2, by + 36);
+            // Fish name
+            if (s.currentFish) {
+                ctx.fillStyle = s.currentFish.type.color; ctx.font = 'bold 14px sans-serif';
+                ctx.fillText(`${s.currentFish.type.name} (${s.currentFish.weight.toFixed(1)}lb)`, W/2, by + 60);
+            }
+        }
+
+        // HUD
+        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
+        ctx.fillText(`💰 $${s.totalValue}`, 15, 25);
+        ctx.fillText(`🐟 ${s.caughtFish.length}`, 15, 45);
+        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
+        ctx.fillText(`Casts: ${s.castCount}`, 15, 62);
+
+        // Catch list
+        if (s.caughtFish.length > 0) {
+            ctx.textAlign = 'right';
+            const recent = s.caughtFish.slice(-4);
+            recent.forEach((f, i) => {
+                ctx.fillStyle = f.color; ctx.font = '11px sans-serif';
+                ctx.fillText(`${f.name} ${f.weight.toFixed(1)}lb $${f.val}`, W - 15, 20 + i * 16);
+            });
+        }
+
+        // Message
+        if (s.message && s.messageTimer > 0) {
+            s.messageTimer--;
+            ctx.fillStyle = 'rgba(0,0,0,0.6)'; const msgW = ctx.measureText(s.message).width + 24;
+            ctx.beginPath(); ctx.roundRect(W/2 - msgW/2, waterTop - 20, msgW, 28, 6); ctx.fill();
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(s.message, W/2, waterTop - 2);
+        }
+    };
+
+    useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => cancelAnimationFrame(animRef.current); }, []);
+    useEffect(() => {
+        const handleClick = () => {
+            const s = stateRef.current;
+            if (!s) { init(); return; }
+            if (s.phase === 'idle') { s.phase = 'casting'; s.castPower = 0; s.powerDir = 1; forceUpdate(n=>n+1); return; }
+            if (s.phase === 'casting') {
+                const dist = 150 + s.castPower * 3;
+                s.hookX = s.lineX + dist;
+                s.hookY = 300 + s.castPower * 0.5;
+                s.hookDepth = s.castPower;
+                s.phase = 'waiting'; s.biteTimer = 60 + Math.floor(Math.random() * 120);
+                s.castCount++;
+                forceUpdate(n=>n+1); return;
+            }
+            if (s.phase === 'bite') {
+                s.phase = 'reeling'; s.reelProgress = 0; s.tension = 40;
+                s.fishDir = Math.random() * Math.PI * 2;
+                forceUpdate(n=>n+1); return;
+            }
+        };
+        const handleMouseDown = () => {
+            const s = stateRef.current;
+            if (s && s.phase === 'reeling') s._reeling = true;
+        };
+        const handleMouseUp = () => {
+            const s = stateRef.current;
+            if (s) s._reeling = false;
+        };
+        // Reel with holding mouse
+        const reelInterval = setInterval(() => {
+            const s = stateRef.current;
+            if (s && s.phase === 'reeling' && s._reeling) {
+                s.reelProgress = Math.min(100, s.reelProgress + 1.5);
+                s.tension += 0.5;
+            } else if (s && s.phase === 'reeling') {
+                s.tension = Math.max(0, s.tension - 0.8);
+            }
+        }, 50);
+        canvasRef.current?.addEventListener('click', handleClick);
+        canvasRef.current?.addEventListener('mousedown', handleMouseDown);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => { clearInterval(reelInterval); window.removeEventListener('mouseup', handleMouseUp); };
+    }, []);
+
+    return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',cursor:'pointer'}}/>;
+}
 
 
 ReactDOM.createRoot(document.getElementById('root')).render(<AuthWrapper/>);
