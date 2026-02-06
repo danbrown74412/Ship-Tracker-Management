@@ -980,7 +980,19 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
     const [activityLog, setActivityLog] = useFirestore('activityLog', defaultActivityLog);
     const [suggestions, setSuggestions] = useFirestore('suggestions', []);
     const [gameLeaderboards, setGameLeaderboards] = useFirestore('gameLeaderboards', []);
-    const [gameRooms, setGameRooms] = useFirestore('gameRooms', []);
+    const [gameRooms, setGameRooms] = useState([]);
+    // Real-time gameRooms collection listener (NOT useFirestore - that does batch rewrites which break multiplayer)
+    useEffect(() => {
+        const unsub = db.collection('gameRooms').onSnapshot((snapshot) => {
+            if (!snapshot.empty) {
+                const rooms = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                setGameRooms(rooms);
+            } else {
+                setGameRooms([]);
+            }
+        });
+        return () => unsub();
+    }, []);
     const [onlineUsers, setOnlineUsers] = useState([]);
     // Local-only settings (not shared)
     const [toasts, setToasts] = useState([]);
@@ -1210,7 +1222,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
                 </div>
                 <div className="form-group">
                     <label className="form-label">Your Suggestion</label>
-                    <textarea className="form-textarea" style={{minHeight:'120px'}} placeholder="Describe your idea or issue..." value={feedbackText} onChange={e => setFeedbackText(e.target.value)}/>
+                    <textarea className="form-textarea" style={{minHeight:'120px'}} placeholder="Describe your idea or issue..." value={feedbackText} onChange={e => setFeedbackText(e.target.value)} onKeyDown={e => e.stopPropagation()}/>
                 </div>
                 <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'16px'}}>Submitting as: {currentUser?.username}</div>
                 <div className="btn-group">
@@ -5398,7 +5410,17 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
     
     const categories = ['Arcade', 'Puzzle', 'Quick Play', 'Casino', 'Action', 'Strategy', 'Skill', 'Multiplayer'];
     
-    const getLeaderboard = (gameId) => leaderboards.filter(l => l.gameId === gameId).sort((a, b) => b.score - a.score).slice(0, 10);
+    const getLeaderboard = (gameId) => {
+        const entries = leaderboards.filter(l => l.gameId === gameId);
+        // Deduplicate: keep only best score per user
+        const bestByUser = {};
+        entries.forEach(e => {
+            if (!bestByUser[e.username] || e.score > bestByUser[e.username].score) {
+                bestByUser[e.username] = e;
+            }
+        });
+        return Object.values(bestByUser).sort((a, b) => b.score - a.score).slice(0, 10);
+    };
     
     const addScore = (gameId, score) => {
         if (!currentUser?.username || score <= 0) return;
@@ -5408,58 +5430,194 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
         if (!userBest || score > userBest.score) toast(`🏆 New personal best: ${score}!`, 'success');
     };
     
-    // Room management for multiplayer
+    // Room management - DIRECT Firestore doc writes + separate real-time state
+    const [activeRoomData, setActiveRoomData] = useState(null);
+    
     const createRoom = (gameId) => {
         const code = Math.random().toString(36).substring(2, 6).toUpperCase();
         const room = { id: code, gameId, host: currentUser.username, players: [currentUser.username], state: 'waiting', created: Date.now(), gameState: null };
-        setGameRooms(prev => [...prev, room]);
+        db.collection('gameRooms').doc(code).set(room).catch(e => console.error('Create room error:', e));
+        setActiveRoomData(room);
         setActiveRoom(code);
         setActiveGame(gameId);
-        toast(`Room ${code} created!`, 'success');
+        toast(`Room ${code} created! Share code: ${code}`, 'success');
     };
     
     const joinRoom = (code) => {
-        const room = gameRooms.find(r => r.id === code.toUpperCase());
+        const roomCode = code.toUpperCase();
+        const room = gameRooms.find(r => r.id === roomCode);
         if (!room) { toast('Room not found', 'error'); return; }
-        if (room.players.length >= 2) { toast('Room is full', 'error'); return; }
+        if (room.players?.length >= 2 && !room.players.includes(currentUser.username)) { toast('Room is full', 'error'); return; }
         if (!room.players.includes(currentUser.username)) {
-            setGameRooms(prev => prev.map(r => r.id === room.id ? { ...r, players: [...r.players, currentUser.username] } : r));
+            const newPlayers = [...room.players, currentUser.username];
+            db.collection('gameRooms').doc(roomCode).update({ players: newPlayers, state: 'playing' }).catch(e => console.error('Join room error:', e));
         }
-        setActiveRoom(room.id);
+        setActiveRoom(roomCode);
         setActiveGame(room.gameId);
+        toast('Joined room!', 'success');
     };
     
     const leaveRoom = () => {
         if (activeRoom) {
-            setGameRooms(prev => prev.map(r => r.id === activeRoom ? { ...r, players: r.players.filter(p => p !== currentUser.username) } : r).filter(r => r.players.length > 0));
+            const room = activeRoomData || gameRooms.find(r => r.id === activeRoom);
+            if (room) {
+                const newPlayers = (room.players || []).filter(p => p !== currentUser.username);
+                if (newPlayers.length === 0) {
+                    db.collection('gameRooms').doc(activeRoom).delete().catch(() => {});
+                } else {
+                    db.collection('gameRooms').doc(activeRoom).update({ players: newPlayers, gameState: null }).catch(() => {});
+                }
+            }
         }
+        setActiveRoomData(null);
         setActiveRoom(null);
         setActiveGame(null);
     };
     
-    const updateRoomState = (newState) => {
+    const updateRoomState = useCallback((newState) => {
         if (!activeRoom) return;
-        setGameRooms(prev => prev.map(r => r.id === activeRoom ? { ...r, gameState: newState, lastUpdate: Date.now() } : r));
-    };
+        db.collection('gameRooms').doc(activeRoom).update({ 
+            gameState: newState, 
+            lastUpdate: Date.now() 
+        }).catch(e => console.error('Update room error:', e));
+    }, [activeRoom]);
     
-    const currentRoom = gameRooms.find(r => r.id === activeRoom);
-    
-    // Clean up old rooms
+    // Real-time listener for active room - this is the ONLY source of truth for game sync
     useEffect(() => {
-        const old = Date.now() - 30 * 60 * 1000;
-        setGameRooms(prev => prev.filter(r => r.created > old || r.state === 'playing'));
+        if (!activeRoom) { setActiveRoomData(null); return; }
+        const unsub = db.collection('gameRooms').doc(activeRoom).onSnapshot((doc) => {
+            if (doc.exists) {
+                setActiveRoomData({ id: doc.id, ...doc.data() });
+            } else {
+                // Room was deleted (other player left)
+                setActiveRoomData(null);
+                setActiveRoom(null);
+                setActiveGame(null);
+                toast('Room was closed', 'info');
+            }
+        }, (err) => console.error('Room listener error:', err));
+        return () => unsub();
+    }, [activeRoom]);
+    
+    // Use activeRoomData for everything game-related
+    const currentRoom = activeRoomData;
+    
+    // Clean up old rooms periodically (collection-level)
+    useEffect(() => {
+        const cleanup = () => {
+            const old = Date.now() - 30 * 60 * 1000;
+            gameRooms.forEach(r => {
+                if (r.created < old && r.state !== 'playing') {
+                    db.collection('gameRooms').doc(r.id).delete().catch(() => {});
+                }
+            });
+        };
+        cleanup();
+        const i = setInterval(cleanup, 5 * 60 * 1000);
+        return () => clearInterval(i);
     }, []);
     
+    // Prevent spacebar from scrolling page when in a game
+    useEffect(() => {
+        if (!activeGame) return;
+        const preventScroll = (e) => {
+            if (e.key === ' ' && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA') {
+                e.preventDefault();
+            }
+        };
+        window.addEventListener('keydown', preventScroll);
+        return () => window.removeEventListener('keydown', preventScroll);
+    }, [activeGame]);
+
     if (activeGame) {
         const game = games.find(g => g.id === activeGame);
+        
+        // If this is a multiplayer game and we're in a room but data hasn't loaded yet, show loading
+        if (game?.multiplayer && activeRoom && !currentRoom) {
+            return (
+                <div className="page active">
+                    <div className="page-header">
+                        <div className="page-header-left">
+                            <button onClick={leaveRoom} className="btn btn-secondary" style={{marginRight:'12px'}}>← Back</button>
+                            <h1 className="page-title">{game.emoji} {game.name}</h1>
+                        </div>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'center',padding:'60px'}}>
+                        <div style={{textAlign:'center',color:'var(--text-muted)'}}>
+                            <div style={{fontSize:'32px',marginBottom:'12px'}}>⏳</div>
+                            <div>Connecting to room {activeRoom}...</div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        
+        const isMultiplayer = game?.multiplayer && currentRoom;
+        const playerCount = currentRoom?.players?.length || 0;
+        const isHost = currentRoom?.host === currentUser.username;
+        const opponent = currentRoom?.players?.find(p => p !== currentUser.username) || null;
+        const needsLobby = isMultiplayer && playerCount < 2 && !currentRoom?.soloMode;
+        
+        // Multiplayer lobby - waiting for opponent
+        if (needsLobby) {
+            return (
+                <div className="page active">
+                    <div className="page-header">
+                        <div className="page-header-left">
+                            <button onClick={leaveRoom} className="btn btn-secondary" style={{marginRight:'12px'}}>← Back</button>
+                            <h1 className="page-title">{game.emoji} {game.name}</h1>
+                        </div>
+                    </div>
+                    <div style={{display:'flex',justifyContent:'center',padding:'60px 20px'}}>
+                        <div className="card" style={{maxWidth:'420px',width:'100%',textAlign:'center',padding:'40px'}}>
+                            <div style={{fontSize:'56px',marginBottom:'16px'}}>{game.emoji}</div>
+                            <div style={{fontSize:'22px',fontWeight:700,marginBottom:'8px'}}>{game.name}</div>
+                            <div style={{fontSize:'13px',color:'var(--text-muted)',marginBottom:'24px'}}>Waiting for opponent to join...</div>
+                            
+                            <div style={{background:'var(--bg-input)',borderRadius:'12px',padding:'20px',marginBottom:'24px',border:'1px solid var(--border)'}}>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'8px'}}>ROOM CODE</div>
+                                <div style={{fontSize:'36px',fontWeight:800,letterSpacing:'8px',color:'var(--primary)',fontFamily:'monospace'}}>{currentRoom.id}</div>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'8px'}}>Share this code with another player</div>
+                            </div>
+                            
+                            <div style={{display:'flex',flexDirection:'column',gap:'8px',marginBottom:'24px'}}>
+                                <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px',background:'var(--bg-input)',borderRadius:'8px'}}>
+                                    <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--green)'}}/>
+                                    <span style={{fontWeight:600,fontSize:'13px'}}>{currentUser.username}</span>
+                                    <span style={{marginLeft:'auto',fontSize:'10px',color:'var(--text-muted)'}}>HOST</span>
+                                </div>
+                                <div style={{display:'flex',alignItems:'center',gap:'10px',padding:'10px',background:'var(--bg-input)',borderRadius:'8px',opacity:0.4}}>
+                                    <div style={{width:'8px',height:'8px',borderRadius:'50%',background:'var(--text-muted)',animation:'pulse 1.5s infinite'}}/>
+                                    <span style={{fontSize:'13px',color:'var(--text-muted)',fontStyle:'italic'}}>Waiting for player 2...</span>
+                                </div>
+                            </div>
+                            
+                            <div style={{borderTop:'1px solid var(--border)',paddingTop:'20px'}}>
+                                <button onClick={() => {
+                                    db.collection('gameRooms').doc(currentRoom.id).update({ soloMode: true }).catch(() => {});
+                                }} className="btn btn-secondary" style={{width:'100%'}}>🤖 Play vs AI instead</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            );
+        }
+        
+        // Game is ready to play (either 2 players or solo mode)
+        const mp = isMultiplayer && playerCount >= 2 && !currentRoom?.soloMode;
+        
         return (
             <div className="page active">
                 <div className="page-header">
                     <div className="page-header-left">
                         <button onClick={leaveRoom} className="btn btn-secondary" style={{marginRight:'12px'}}>← Back</button>
                         <h1 className="page-title">{game.emoji} {game.name}</h1>
+                        {mp && <span style={{marginLeft:'12px',padding:'4px 10px',background:'var(--green-glow)',border:'1px solid var(--green)',borderRadius:'12px',fontSize:'11px',color:'var(--green)',fontWeight:600}}>🟢 LIVE — {opponent || 'Player 2'}</span>}
                     </div>
-                    <button onClick={() => setShowLeaderboard(!showLeaderboard)} className="btn btn-secondary">🏆 Leaderboard</button>
+                    <div style={{display:'flex',gap:'8px'}}>
+                        {currentRoom && <span style={{padding:'6px 12px',background:'var(--bg-input)',borderRadius:'6px',fontSize:'12px',fontWeight:600,fontFamily:'monospace',letterSpacing:'2px',border:'1px solid var(--border)'}}>Room: {currentRoom.id}</span>}
+                        <button onClick={() => setShowLeaderboard(!showLeaderboard)} className="btn btn-secondary">🏆 Leaderboard</button>
+                    </div>
                 </div>
                 
                 <div style={{display:'grid',gridTemplateColumns: showLeaderboard ? '1fr 280px' : '1fr',gap:'24px'}}>
@@ -5476,15 +5634,15 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
 
                         {activeGame === 'typing' && <TypingGame addScore={(s) => addScore('typing', s)} currentUser={currentUser}/>}
 
-                        {activeGame === 'beerpong' && <BeerPongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('beerpong', s)} toast={toast}/>}
-                        {activeGame === 'pong' && <PongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('pong', s)}/>}
-                        {activeGame === 'tanks' && <TanksGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('tanks', s)}/>}
-                        {activeGame === 'tron' && <TronGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('tron', s)}/>}
-                        {activeGame === 'racing' && <RacingGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('racing', s)}/>}
-                        {activeGame === 'sumo' && <SumoGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('sumo', s)}/>}
-                        {activeGame === 'battleship' && <BattleshipGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('battleship', s)}/>}
-                        {activeGame === 'chess' && <ChessGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('chess', s)}/>}
-                        {activeGame === 'checkers' && <CheckersGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('checkers', s)}/>}
+                        {activeGame === 'beerpong' && <BeerPongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('beerpong', s)} toast={toast} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'pong' && <PongGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('pong', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'tanks' && <TanksGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('tanks', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'tron' && <TronGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('tron', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'racing' && <RacingGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('racing', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'sumo' && <SumoGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('sumo', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'battleship' && <BattleshipGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('battleship', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'chess' && <ChessGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('chess', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
+                        {activeGame === 'checkers' && <CheckersGame room={currentRoom} updateRoom={updateRoomState} currentUser={currentUser} addScore={(s) => addScore('checkers', s)} isMultiplayer={mp} isHost={isHost} opponent={opponent}/>}
 
                         {activeGame === 'poker' && <PokerGame addScore={(s) => addScore('poker', s)} currentUser={currentUser}/>}
                         {activeGame === 'blackjack' && <BlackjackGame addScore={(s) => addScore('blackjack', s)} currentUser={currentUser}/>}
@@ -5541,6 +5699,37 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
                 </div>
             )}
             
+            {/* Live Rooms - always visible */}
+            <div style={{marginBottom:'32px'}}>
+                <h2 style={{fontSize:'16px',fontWeight:600,marginBottom:'16px',color:'var(--green)'}}>🔴 Open Sessions ({gameRooms.filter(r => (r.state === 'waiting' || r.state === 'playing') && r.players?.length < 2).length})</h2>
+                {gameRooms.filter(r => (r.state === 'waiting' || r.state === 'playing') && r.players?.length < 2).length > 0 ? (
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(220px, 1fr))',gap:'12px'}}>
+                        {gameRooms.filter(r => (r.state === 'waiting' || r.state === 'playing') && r.players?.length < 2).map(room => {
+                            const game = games.find(g => g.id === room.gameId);
+                            const isOwnRoom = room.host === currentUser.username;
+                            return (
+                                <div key={room.id} className="card" style={{padding:'16px',cursor:'pointer',border:`2px solid ${isOwnRoom ? 'var(--primary)' : 'var(--green)'}`,background: isOwnRoom ? 'var(--primary-glow)' : undefined,animation:'pulse 2s infinite'}} onClick={() => isOwnRoom ? (setActiveRoom(room.id), setActiveGame(room.gameId)) : joinRoom(room.id)}>
+                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                        <span style={{fontSize:'28px'}}>{game?.emoji}</span>
+                                        <div style={{textAlign:'right'}}>
+                                            <span style={{fontWeight:700,fontSize:'20px',color:'var(--primary)',fontFamily:'monospace',letterSpacing:'2px'}}>{room.id}</span>
+                                            <div style={{fontSize:'10px',color: isOwnRoom ? 'var(--primary)' : 'var(--green)',fontWeight:600}}>{isOwnRoom ? '⭐ YOUR ROOM' : '🟢 JOIN NOW'}</div>
+                                        </div>
+                                    </div>
+                                    <div style={{marginTop:'10px',fontSize:'13px',fontWeight:600}}>{game?.name}</div>
+                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>Host: {room.host} • Waiting for opponent</div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                ) : (
+                    <div className="card" style={{padding:'24px',textAlign:'center',border:'1px dashed var(--border)'}}>
+                        <div style={{fontSize:'32px',marginBottom:'8px'}}>👥</div>
+                        <div style={{fontSize:'13px',color:'var(--text-muted)'}}>No open sessions right now</div>
+                        <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>Click any multiplayer game to create a room, or use "Join Room" with a code</div>
+                    </div>
+                )}
+            </div>
             {categories.map(cat => (
                 <div key={cat} style={{marginBottom:'32px'}}>
                     <h2 style={{fontSize:'16px',fontWeight:600,marginBottom:'16px',color:'var(--text-muted)'}}>{{'Multiplayer':'👥','Arcade':'🎮','Puzzle':'🧩','Quick Play':'⚡','Casino':'🎰','Action':'💥','Strategy':'🏰','Skill':'🎯'}[cat] || '🎯'} {cat}</h2>
@@ -5561,27 +5750,6 @@ function GamesHub({ leaderboards, setLeaderboards, gameRooms, setGameRooms, curr
                 </div>
             ))}
             
-            {/* Active Rooms */}
-            {gameRooms.filter(r => r.state === 'waiting').length > 0 && (
-                <div style={{marginBottom:'32px'}}>
-                    <h2 style={{fontSize:'16px',fontWeight:600,marginBottom:'16px',color:'var(--text-muted)'}}>🔴 Live Rooms</h2>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:'12px'}}>
-                        {gameRooms.filter(r => r.state === 'waiting').map(room => {
-                            const game = games.find(g => g.id === room.gameId);
-                            return (
-                                <div key={room.id} className="card" style={{padding:'16px',cursor:'pointer',border:'1px solid var(--green)'}} onClick={() => joinRoom(room.id)}>
-                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-                                        <span style={{fontSize:'24px'}}>{game?.emoji}</span>
-                                        <span style={{fontWeight:700,fontSize:'18px',color:'var(--primary)'}}>{room.id}</span>
-                                    </div>
-                                    <div style={{marginTop:'8px',fontSize:'12px'}}>{game?.name}</div>
-                                    <div style={{fontSize:'11px',color:'var(--text-muted)'}}>Host: {room.host} • {room.players.length}/2</div>
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
         </div>
     );
 }
@@ -5732,6 +5900,8 @@ function SnakeGameInner({ addScore, currentUser }) {
 
     useEffect(() => {
         const handleKey = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d',' ','Enter'].includes(e.key)) e.preventDefault();
             const s = stateRef.current;
             if (!s && (e.key === ' ' || e.key === 'Enter')) { init(); return; }
@@ -5818,6 +5988,8 @@ function TetrisGame({ addScore }) {
     useEffect(() => { draw(); }, []);
     useEffect(() => {
         const handleKey = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
             if (gameState !== 'playing') { if (e.key === ' ') init(); return; }
             if (e.key === 'ArrowLeft') move(-1, 0); else if (e.key === 'ArrowRight') move(1, 0); else if (e.key === 'ArrowDown') move(0, 1); else if (e.key === 'ArrowUp') rotatePiece(); else if (e.key === ' ') drop(); draw();
@@ -6783,6 +6955,8 @@ function SpaceInvadersGame({ addScore }) {
     useEffect(() => { draw(); }, []);
     useEffect(() => {
         const handleKey = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (['ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
             if (gameState !== 'playing') { if (e.key === ' ') init(); return; }
             const g = gameRef.current; if (!g) return;
@@ -6935,6 +7109,8 @@ function AsteroidsGame({ addScore }) {
     useEffect(() => { draw(); }, []);
     useEffect(() => {
         const down = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','w','a','s','d'].includes(e.key)) e.preventDefault();
             if (gameRef.current) gameRef.current.keys[e.key] = true;
             if (e.key === ' ') {
@@ -7178,189 +7354,182 @@ function TypingGame({ addScore }) {
     );
 }
 
-function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
+function BeerPongGame({ room, updateRoom, currentUser, addScore, toast, isMultiplayer, isHost, opponent }) {
     const canvasRef = useRef(null);
-    const W = 500, H = 700;
+    const W = 500, H = 700, CUP_R = 18;
     const stateRef = useRef(null);
     const animRef = useRef(null);
     const [, forceUpdate] = useState(0);
+    const syncRef = useRef(0);
+    const myName = currentUser?.username || 'You';
+    const oppName = isMultiplayer ? (opponent || 'Opponent') : 'AI';
 
-    const CUP_R = 18;
-
-    const makeCups = (startX, startY, rows, direction) => {
+    const makeCups = (cx, startY, rows, dir) => {
         const cups = [];
-        for (let row = 0; row < rows; row++) {
-            const count = rows - row;
-            const rowX = startX - (count - 1) * CUP_R;
-            for (let i = 0; i < count; i++) {
-                cups.push({ x: rowX + i * CUP_R * 2, y: startY + row * CUP_R * 1.8 * direction, alive: true });
-            }
-        }
+        for (let r = 0; r < rows; r++) { const c = rows - r; const rx = cx - (c-1)*CUP_R; for (let i = 0; i < c; i++) cups.push({x: rx+i*CUP_R*2, y: startY+r*CUP_R*1.8*dir, alive: true}); }
         return cups;
     };
 
     const init = () => {
         stateRef.current = {
-            phase: 'aim', // aim, charging, flying, aiTurn, aiFly, over
-            playerCups: makeCups(W / 2, H - 80, 4, -1),
-            aiCups: makeCups(W / 2, 80, 4, 1),
-            ball: null,
-            aimX: W / 2, aimY: 120,
-            power: 0, maxPower: 100,
-            charging: false,
-            playerScore: 0, aiScore: 0,
-            turn: 'player',
-            message: 'Aim with mouse, hold click for power, release to throw!',
-            messageTimer: 120,
-            particles: [],
-            splashes: [],
-            trail: [],
-            aiTimer: 0,
+            phase: 'aim', topCups: makeCups(W/2,80,4,1), botCups: makeCups(W/2,H-80,4,-1),
+            ball: null, aimX: W/2, aimY: 120, power: 0, charging: false,
+            topScore: 0, botScore: 0, turn: 'bottom', // bottom = host/player1, top = guest/player2
+            message: 'Aim with mouse, hold click for power!', msgTimer: 120,
+            particles: [], splashes: [], trail: [], aiTimer: 0, waitTimer: 0
         };
+        if (isMultiplayer && isHost) {
+            updateRoom({ topCups: stateRef.current.topCups, botCups: stateRef.current.botCups, topScore:0, botScore:0, turn:'bottom', phase:'aim', ts: Date.now() });
+        }
         forceUpdate(n => n + 1);
     };
 
-    const throwBall = (startX, startY, targetX, targetY, power) => {
+    useEffect(() => { if (isMultiplayer && !stateRef.current) init(); }, [isMultiplayer]);
+
+    // Multiplayer sync - read opponent state
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState) return;
+        const gs = room.gameState;
         const s = stateRef.current;
-        // Power determines how "direct" the arc is - higher power = faster/flatter
-        const speed = 4 + power * 0.08;
-        const dx = targetX - startX;
-        const dy = targetY - startY;
-        const dist = Math.hypot(dx, dy);
-        const vx = (dx / dist) * speed;
-        const vy = (dy / dist) * speed;
-        s.ball = { x: startX, y: startY, vx, vy, gravity: 0.02 + (1 - power / 100) * 0.03 };
-        s.trail = [];
+        if (!s) return;
+        if (isHost) {
+            // Host reads guest's throw action
+            if (gs.guestThrow && s.turn === 'top' && !s.ball) {
+                s.ball = { x: gs.guestThrow.sx, y: gs.guestThrow.sy, vx: gs.guestThrow.vx, vy: gs.guestThrow.vy, gravity: gs.guestThrow.g };
+                s.phase = 'flying'; s.trail = [];
+                // Clear guest throw
+                db.collection('gameRooms').doc(room.id).set({ gameState: { ...room.gameState, guestThrow: null, guestTs: Date.now() } }, { merge: true }).catch(() => {});
+            }
+        } else {
+            // Guest reads game state from host
+            if (gs.topCups) s.topCups = gs.topCups;
+            if (gs.botCups) s.botCups = gs.botCups;
+            if (gs.topScore != null) s.topScore = gs.topScore;
+            if (gs.botScore != null) s.botScore = gs.botScore;
+            if (gs.turn) s.turn = gs.turn;
+            if (gs.phase && gs.phase !== 'aim') s.phase = gs.phase;
+            if (gs.turn === 'top' && gs.phase === 'aim') s.phase = 'aim'; // my turn
+            if (gs.turn === 'bottom' && !isHost) s.phase = 'waitOpp';
+            if (gs.ball) { s.ball = {...gs.ball}; s.phase = 'flying'; }
+            if (gs.message) { s.message = gs.message; s.msgTimer = 60; }
+        }
+    }, [room?.gameState?.ts, room?.gameState?.guestTs]);
+
+    const throwBall = (sx, sy, tx, ty, power) => {
+        const spd = 4 + power * 0.08;
+        const dx = tx - sx, dy = ty - sy, dist = Math.hypot(dx, dy);
+        return { x:sx, y:sy, vx:(dx/dist)*spd, vy:(dy/dist)*spd, gravity: 0.02 + (1-power/100)*0.03 };
+    };
+
+    const myTurn = () => {
+        const s = stateRef.current; if (!s) return false;
+        if (!isMultiplayer) return s.turn === 'bottom';
+        return (isHost && s.turn === 'bottom') || (!isHost && s.turn === 'top');
     };
 
     const loop = () => {
         const s = stateRef.current;
         if (!s) { draw(); animRef.current = requestAnimationFrame(loop); return; }
 
-        // Charging power
-        if (s.phase === 'charging') {
-            s.power = Math.min(s.maxPower, s.power + 1.2);
-        }
+        if (s.phase === 'charging') s.power = Math.min(100, s.power + 1.2);
 
-        // AI turn
-        if (s.phase === 'aiTurn') {
+        // AI turn (only when not multiplayer and it's AI's turn)
+        if (!isMultiplayer && s.turn === 'top' && s.phase === 'aiTurn') {
             s.aiTimer++;
             if (s.aiTimer >= 60) {
                 s.aiTimer = 0;
-                // AI picks a random alive player cup
-                const targets = s.playerCups.filter(c => c.alive);
+                const targets = s.botCups.filter(c => c.alive);
                 if (targets.length > 0) {
-                    const target = targets[Math.floor(Math.random() * targets.length)];
-                    // Add inaccuracy
-                    const tx = target.x + (Math.random() - 0.5) * 30;
-                    const ty = target.y + (Math.random() - 0.5) * 20;
-                    const power = 50 + Math.random() * 40;
-                    throwBall(W / 2 + (Math.random() - 0.5) * 40, 40, tx, ty, power);
-                    s.phase = 'aiFly';
+                    const t = targets[Math.floor(Math.random()*targets.length)];
+                    s.ball = throwBall(W/2+(Math.random()-0.5)*40, 40, t.x+(Math.random()-0.5)*30, t.y+(Math.random()-0.5)*20, 50+Math.random()*40);
+                    s.phase = 'flying'; s.trail = [];
                 }
             }
         }
 
-        // Ball in flight
-        if (s.phase === 'flying' || s.phase === 'aiFly') {
-            const b = s.ball;
-            if (b) {
-                // Trail
-                s.trail.push({ x: b.x, y: b.y, life: 15 });
+        // Waiting for multiplayer opponent
+        if (isMultiplayer && s.phase === 'waitOpp') {
+            // Just render, waiting for sync
+        }
 
-                b.x += b.vx;
-                b.vy += b.gravity;
-                b.y += b.vy;
+        // Ball physics (host or solo runs this)
+        if (s.ball && (s.phase === 'flying') && (isHost || !isMultiplayer)) {
+            s.trail.push({x:s.ball.x, y:s.ball.y, life:15});
+            s.ball.x += s.ball.vx; s.ball.vy += s.ball.gravity; s.ball.y += s.ball.vy;
+            if (s.ball.x < 8) { s.ball.x = 8; s.ball.vx = Math.abs(s.ball.vx)*0.7; }
+            if (s.ball.x > W-8) { s.ball.x = W-8; s.ball.vx = -Math.abs(s.ball.vx)*0.7; }
 
-                // Wall bounces
-                if (b.x < 8) { b.x = 8; b.vx = Math.abs(b.vx) * 0.7; }
-                if (b.x > W - 8) { b.x = W - 8; b.vx = -Math.abs(b.vx) * 0.7; }
+            // Sync ball to Firestore for guest to see
+            if (isMultiplayer) {
+                syncRef.current++;
+                if (syncRef.current >= 3) { syncRef.current = 0; updateRoom({...room?.gameState, ball:{...s.ball}, ts:Date.now()}); }
+            }
 
-                // Check cup collisions
-                const cups = s.phase === 'flying' ? s.aiCups : s.playerCups;
-                let hit = false;
-                cups.forEach(cup => {
-                    if (!cup.alive) return;
-                    const dist = Math.hypot(b.x - cup.x, b.y - cup.y);
-                    if (dist < CUP_R + 6) {
-                        cup.alive = false;
-                        hit = true;
-                        if (s.phase === 'flying') { s.playerScore++; s.message = '🎯 Sunk it!'; }
-                        else { s.aiScore++; s.message = 'AI sinks a cup!'; }
-                        s.messageTimer = 60;
-                        // Splash particles
-                        for (let i = 0; i < 12; i++) {
-                            s.particles.push({
-                                x: cup.x, y: cup.y,
-                                vx: (Math.random() - 0.5) * 6, vy: (Math.random() - 0.5) * 6 - 2,
-                                life: 20, color: '#fbbf24', size: 3 + Math.random() * 3
-                            });
-                        }
-                        // Splash ring
-                        s.splashes.push({ x: cup.x, y: cup.y, radius: CUP_R, maxRadius: CUP_R + 20, timer: 0 });
-                    }
-                });
-
-                if (hit) {
-                    s.ball = null;
-                    // Check win
-                    if (s.aiCups.every(c => !c.alive)) {
-                        s.phase = 'over'; s.message = '🎉 You Win!'; s.messageTimer = 999;
-                        addScore(s.playerScore * 100);
-                        forceUpdate(n => n + 1);
-                    } else if (s.playerCups.every(c => !c.alive)) {
-                        s.phase = 'over'; s.message = '😢 AI Wins!'; s.messageTimer = 999;
-                        forceUpdate(n => n + 1);
-                    } else {
-                        // Switch turns after delay
-                        setTimeout(() => {
-                            if (!stateRef.current) return;
-                            if (stateRef.current.turn === 'player') {
-                                stateRef.current.turn = 'ai';
-                                stateRef.current.phase = 'aiTurn';
-                                stateRef.current.message = 'AI is throwing...';
-                                stateRef.current.messageTimer = 60;
-                            } else {
-                                stateRef.current.turn = 'player';
-                                stateRef.current.phase = 'aim';
-                                stateRef.current.message = 'Your turn! Aim and hold click for power';
-                                stateRef.current.messageTimer = 90;
-                            }
-                            forceUpdate(n => n + 1);
-                        }, 600);
-                        s.phase = s.phase === 'flying' ? 'aim' : 'aiTurn'; // temp
-                        s.phase = 'wait';
-                    }
+            const cups = s.turn === 'bottom' ? s.topCups : s.botCups;
+            let hit = false;
+            cups.forEach(cup => {
+                if (!cup.alive) return;
+                if (Math.hypot(s.ball.x-cup.x, s.ball.y-cup.y) < CUP_R+6) {
+                    cup.alive = false; hit = true;
+                    if (s.turn === 'bottom') s.botScore++; else s.topScore++;
+                    s.message = hit ? (s.turn === 'bottom' ? '🎯 Sunk!' : (isMultiplayer ? oppName+' sinks a cup!' : 'AI sinks!')) : '';
+                    s.msgTimer = 60;
+                    for (let i=0;i<12;i++) s.particles.push({x:cup.x,y:cup.y,vx:(Math.random()-0.5)*6,vy:(Math.random()-0.5)*6-2,life:20,color:'#fbbf24',size:3+Math.random()*3});
+                    s.splashes.push({x:cup.x,y:cup.y,radius:CUP_R,timer:0});
                 }
+            });
 
-                // Ball out of bounds (miss)
-                if (!hit && b && (b.y < -20 || b.y > H + 20 || b.x < -20 || b.x > W + 20)) {
-                    s.ball = null;
-                    s.message = s.turn === 'player' ? 'Miss!' : 'AI misses!';
-                    s.messageTimer = 40;
-                    setTimeout(() => {
-                        if (!stateRef.current) return;
-                        if (stateRef.current.turn === 'player') {
-                            stateRef.current.turn = 'ai';
-                            stateRef.current.phase = 'aiTurn';
-                        } else {
-                            stateRef.current.turn = 'player';
-                            stateRef.current.phase = 'aim';
-                            stateRef.current.message = 'Your turn!';
-                            stateRef.current.messageTimer = 60;
-                        }
-                        forceUpdate(n => n + 1);
-                    }, 500);
-                    s.phase = 'wait';
+            if (hit) {
+                s.ball = null;
+                if (s.topCups.every(c=>!c.alive)) {
+                    s.phase = 'over'; s.message = isHost || !isMultiplayer ? '🎉 You Win!' : '😢 '+oppName+' Wins!';
+                    s.msgTimer = 999; addScore(s.botScore*100); forceUpdate(n=>n+1);
+                    if (isMultiplayer) updateRoom({topCups:s.topCups,botCups:s.botCups,topScore:s.topScore,botScore:s.botScore,phase:'over',message:s.message,ball:null,ts:Date.now()});
+                } else if (s.botCups.every(c=>!c.alive)) {
+                    s.phase = 'over'; s.message = !isHost && isMultiplayer ? '🎉 You Win!' : '😢 '+(isMultiplayer?oppName:'AI')+' Wins!';
+                    s.msgTimer = 999; forceUpdate(n=>n+1);
+                    if (isMultiplayer) updateRoom({topCups:s.topCups,botCups:s.botCups,topScore:s.topScore,botScore:s.botScore,phase:'over',message:s.message,ball:null,ts:Date.now()});
+                } else {
+                    s.phase = 'switchWait'; s.waitTimer = 40;
                 }
+            } else if (s.ball && (s.ball.y < -20 || s.ball.y > H+20)) {
+                s.ball = null; s.message = myTurn() ? 'Miss!' : (isMultiplayer ? oppName+' misses!' : 'AI misses!');
+                s.msgTimer = 40; s.phase = 'switchWait'; s.waitTimer = 40;
             }
         }
 
-        // Particles
-        s.trail = s.trail.filter(t => { t.life--; return t.life > 0; });
-        s.particles = s.particles.filter(p => { p.x += p.vx; p.y += p.vy; p.vy += 0.15; p.life--; return p.life > 0; });
-        s.splashes = s.splashes.filter(sp => { sp.timer++; sp.radius += 0.8; return sp.timer < 15; });
-        if (s.messageTimer > 0) s.messageTimer--;
+        // Guest also animates ball from synced data
+        if (s.ball && s.phase === 'flying' && !isHost && isMultiplayer) {
+            s.trail.push({x:s.ball.x, y:s.ball.y, life:15});
+            // Ball position comes from sync, but we interpolate
+            s.ball.x += s.ball.vx; s.ball.vy += s.ball.gravity; s.ball.y += s.ball.vy;
+        }
+
+        // Switch turns
+        if (s.phase === 'switchWait') {
+            s.waitTimer--;
+            if (s.waitTimer <= 0) {
+                s.turn = s.turn === 'bottom' ? 'top' : 'bottom';
+                if (!isMultiplayer) {
+                    s.phase = s.turn === 'bottom' ? 'aim' : 'aiTurn';
+                    s.message = s.turn === 'bottom' ? 'Your turn!' : 'AI throwing...';
+                } else {
+                    const isMyTurn = (isHost && s.turn === 'bottom') || (!isHost && s.turn === 'top');
+                    s.phase = isMyTurn ? 'aim' : 'waitOpp';
+                    s.message = isMyTurn ? 'Your turn!' : oppName+'\'s turn...';
+                }
+                s.msgTimer = 60;
+                if (isMultiplayer && isHost) {
+                    updateRoom({topCups:s.topCups,botCups:s.botCups,topScore:s.topScore,botScore:s.botScore,turn:s.turn,phase:'aim',ball:null,message:s.message,ts:Date.now()});
+                }
+                forceUpdate(n=>n+1);
+            }
+        }
+
+        s.trail = s.trail.filter(t=>{t.life--;return t.life>0;});
+        s.particles = s.particles.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.15;p.life--;return p.life>0;});
+        s.splashes = s.splashes.filter(sp=>{sp.timer++;sp.radius=(sp.radius||CUP_R)+0.8;return sp.timer<15;});
+        if (s.msgTimer > 0) s.msgTimer--;
 
         draw();
         animRef.current = requestAnimationFrame(loop);
@@ -7369,257 +7538,346 @@ function BeerPongGame({ room, updateRoom, currentUser, addScore, toast }) {
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
         const s = stateRef.current;
-
-        // Table background
-        const grad = ctx.createLinearGradient(0, 0, 0, H);
-        grad.addColorStop(0, '#1a3a1a'); grad.addColorStop(0.5, '#2d5a2d'); grad.addColorStop(1, '#1a3a1a');
-        ctx.fillStyle = grad; ctx.fillRect(0, 0, W, H);
-        // Table texture lines
-        ctx.strokeStyle = 'rgba(255,255,255,0.03)'; ctx.lineWidth = 1;
-        for (let y = 0; y < H; y += 30) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
-        // Center line
-        ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 2;
-        ctx.setLineDash([8, 8]); ctx.beginPath(); ctx.moveTo(0, H/2); ctx.lineTo(W, H/2); ctx.stroke(); ctx.setLineDash([]);
+        const grad = ctx.createLinearGradient(0,0,0,H);
+        grad.addColorStop(0,'#1a3a1a'); grad.addColorStop(0.5,'#2d5a2d'); grad.addColorStop(1,'#1a3a1a');
+        ctx.fillStyle = grad; ctx.fillRect(0,0,W,H);
+        ctx.strokeStyle='rgba(255,255,255,0.03)'; ctx.lineWidth=1;
+        for(let y=0;y<H;y+=30){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+        ctx.strokeStyle='rgba(255,255,255,0.08)'; ctx.lineWidth=2; ctx.setLineDash([8,8]);
+        ctx.beginPath();ctx.moveTo(0,H/2);ctx.lineTo(W,H/2);ctx.stroke();ctx.setLineDash([]);
 
         if (!s) {
-            ctx.fillStyle = 'rgba(0,0,0,0.6)'; ctx.fillRect(0,0,W,H);
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 36px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText('🍺 Beer Pong', W/2, H/2-40);
-            ctx.font = '14px sans-serif'; ctx.fillStyle = '#94a3b8';
-            ctx.fillText('Aim with mouse • Hold click for power • Release to throw', W/2, H/2);
-            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 14px sans-serif';
-            ctx.fillText('Click to start', W/2, H/2+40);
+            ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H);
+            ctx.fillStyle='#fff';ctx.font='bold 36px sans-serif';ctx.textAlign='center';
+            ctx.fillText('🍺 Beer Pong',W/2,H/2-40);
+            ctx.font='14px sans-serif';ctx.fillStyle='#94a3b8';
+            ctx.fillText('Aim with mouse • Hold click for power',W/2,H/2);
+            ctx.fillStyle='#4ade80';ctx.font='bold 14px sans-serif';
+            ctx.fillText('Click to start',W/2,H/2+40);
             return;
         }
 
-        // Draw cups
-        const drawCup = (cup, isAI) => {
-            if (!cup.alive) {
-                // Ghost cup
-                ctx.strokeStyle = 'rgba(255,255,255,0.08)'; ctx.lineWidth = 1;
-                ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R, 0, Math.PI * 2); ctx.stroke();
-                return;
-            }
-            // Cup body
-            const cupGrad = ctx.createRadialGradient(cup.x - 3, cup.y - 3, 2, cup.x, cup.y, CUP_R);
-            cupGrad.addColorStop(0, isAI ? '#ef4444' : '#3b82f6');
-            cupGrad.addColorStop(1, isAI ? '#991b1b' : '#1e3a5f');
-            ctx.fillStyle = cupGrad;
-            ctx.shadowColor = isAI ? '#ef4444' : '#3b82f6'; ctx.shadowBlur = 6;
-            ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-            // Beer surface
-            ctx.fillStyle = isAI ? 'rgba(255,200,50,0.3)' : 'rgba(200,200,255,0.3)';
-            ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R - 4, 0, Math.PI * 2); ctx.fill();
-            // Rim highlight
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)'; ctx.lineWidth = 1.5;
-            ctx.beginPath(); ctx.arc(cup.x, cup.y, CUP_R, 0, Math.PI * 2); ctx.stroke();
+        const drawCup = (cup, isTop) => {
+            if (!cup.alive) { ctx.strokeStyle='rgba(255,255,255,0.08)';ctx.lineWidth=1;ctx.beginPath();ctx.arc(cup.x,cup.y,CUP_R,0,Math.PI*2);ctx.stroke();return; }
+            const g2 = ctx.createRadialGradient(cup.x-3,cup.y-3,2,cup.x,cup.y,CUP_R);
+            g2.addColorStop(0,isTop?'#ef4444':'#3b82f6'); g2.addColorStop(1,isTop?'#991b1b':'#1e3a5f');
+            ctx.fillStyle=g2; ctx.shadowColor=isTop?'#ef4444':'#3b82f6'; ctx.shadowBlur=6;
+            ctx.beginPath();ctx.arc(cup.x,cup.y,CUP_R,0,Math.PI*2);ctx.fill(); ctx.shadowBlur=0;
+            ctx.fillStyle=isTop?'rgba(255,200,50,0.3)':'rgba(200,200,255,0.3)';
+            ctx.beginPath();ctx.arc(cup.x,cup.y,CUP_R-4,0,Math.PI*2);ctx.fill();
+            ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(cup.x,cup.y,CUP_R,0,Math.PI*2);ctx.stroke();
         };
+        s.topCups.forEach(c=>drawCup(c,true)); s.botCups.forEach(c=>drawCup(c,false));
+        s.splashes.forEach(sp=>{ctx.strokeStyle=`rgba(251,191,36,${1-sp.timer/15})`;ctx.lineWidth=2;ctx.beginPath();ctx.arc(sp.x,sp.y,sp.radius||CUP_R,0,Math.PI*2);ctx.stroke();});
+        s.trail.forEach(t=>{ctx.globalAlpha=t.life/15*0.4;ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(t.x,t.y,4,0,Math.PI*2);ctx.fill();}); ctx.globalAlpha=1;
+        if (s.ball) {ctx.fillStyle='#fff';ctx.shadowColor='#fff';ctx.shadowBlur=8;ctx.beginPath();ctx.arc(s.ball.x,s.ball.y,8,0,Math.PI*2);ctx.fill();ctx.shadowBlur=0;}
 
-        s.aiCups.forEach(c => drawCup(c, true));
-        s.playerCups.forEach(c => drawCup(c, false));
-
-        // Splash effects
-        s.splashes.forEach(sp => {
-            ctx.strokeStyle = `rgba(251,191,36,${1 - sp.timer / 15})`;
-            ctx.lineWidth = 2;
-            ctx.beginPath(); ctx.arc(sp.x, sp.y, sp.radius, 0, Math.PI * 2); ctx.stroke();
-        });
-
-        // Trail
-        s.trail.forEach(t => {
-            ctx.globalAlpha = t.life / 15 * 0.4;
-            ctx.fillStyle = '#fff';
-            ctx.beginPath(); ctx.arc(t.x, t.y, 4, 0, Math.PI * 2); ctx.fill();
-        });
-        ctx.globalAlpha = 1;
-
-        // Ball
-        if (s.ball) {
-            ctx.fillStyle = '#fff';
-            ctx.shadowColor = '#fff'; ctx.shadowBlur = 8;
-            ctx.beginPath(); ctx.arc(s.ball.x, s.ball.y, 8, 0, Math.PI * 2); ctx.fill();
-            ctx.shadowBlur = 0;
-            // Shadow on table
-            ctx.fillStyle = 'rgba(0,0,0,0.2)';
-            ctx.beginPath(); ctx.ellipse(s.ball.x + 5, H - 20, 6, 3, 0, 0, Math.PI * 2); ctx.fill();
-        }
-
-        // Aim crosshair
-        if (s.phase === 'aim' || s.phase === 'charging') {
-            ctx.strokeStyle = 'rgba(255,255,255,0.5)'; ctx.lineWidth = 1;
-            ctx.beginPath(); ctx.moveTo(s.aimX - 15, s.aimY); ctx.lineTo(s.aimX + 15, s.aimY); ctx.stroke();
-            ctx.beginPath(); ctx.moveTo(s.aimX, s.aimY - 15); ctx.lineTo(s.aimX, s.aimY + 15); ctx.stroke();
-            ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-            ctx.beginPath(); ctx.arc(s.aimX, s.aimY, 12, 0, Math.PI * 2); ctx.stroke();
-
-            // Dotted line from throw point to aim
-            ctx.strokeStyle = 'rgba(255,255,255,0.15)'; ctx.lineWidth = 1;
-            ctx.setLineDash([4, 6]);
-            ctx.beginPath(); ctx.moveTo(W / 2, H - 50); ctx.lineTo(s.aimX, s.aimY); ctx.stroke();
-            ctx.setLineDash([]);
-
-            // Power meter
-            if (s.phase === 'charging') {
-                const barW = 20, barH = 150;
-                const bx = W - 40, by = H / 2 - barH / 2;
-                ctx.fillStyle = 'rgba(0,0,0,0.6)';
-                ctx.beginPath(); ctx.roundRect(bx - 2, by - 2, barW + 4, barH + 4, 6); ctx.fill();
-                ctx.fillStyle = '#333'; ctx.fillRect(bx, by, barW, barH);
-                const pct = s.power / s.maxPower;
-                const color = pct > 0.8 ? '#ef4444' : pct > 0.5 ? '#eab308' : '#4ade80';
-                ctx.fillStyle = color;
-                ctx.fillRect(bx, by + barH * (1 - pct), barW, barH * pct);
-                ctx.strokeStyle = 'rgba(255,255,255,0.3)'; ctx.lineWidth = 1;
-                ctx.strokeRect(bx, by, barW, barH);
-                ctx.fillStyle = '#fff'; ctx.font = 'bold 12px sans-serif'; ctx.textAlign = 'center';
-                ctx.fillText(`${Math.round(s.power)}%`, bx + barW / 2, by + barH + 16);
-                ctx.fillText('PWR', bx + barW / 2, by - 6);
+        // Aim crosshair (only when it's my turn)
+        if ((s.phase==='aim'||s.phase==='charging') && myTurn()) {
+            ctx.strokeStyle='rgba(255,255,255,0.5)';ctx.lineWidth=1;
+            ctx.beginPath();ctx.moveTo(s.aimX-15,s.aimY);ctx.lineTo(s.aimX+15,s.aimY);ctx.stroke();
+            ctx.beginPath();ctx.moveTo(s.aimX,s.aimY-15);ctx.lineTo(s.aimX,s.aimY+15);ctx.stroke();
+            ctx.strokeStyle='rgba(255,255,255,0.2)';ctx.beginPath();ctx.arc(s.aimX,s.aimY,12,0,Math.PI*2);ctx.stroke();
+            const fromY = s.turn==='bottom' ? H-50 : 50;
+            ctx.strokeStyle='rgba(255,255,255,0.15)';ctx.lineWidth=1;ctx.setLineDash([4,6]);
+            ctx.beginPath();ctx.moveTo(W/2,fromY);ctx.lineTo(s.aimX,s.aimY);ctx.stroke();ctx.setLineDash([]);
+            if (s.phase==='charging') {
+                const bx=W-40,by=H/2-75,bw=20,bh=150;
+                ctx.fillStyle='rgba(0,0,0,0.6)';ctx.beginPath();ctx.roundRect(bx-2,by-2,bw+4,bh+4,6);ctx.fill();
+                ctx.fillStyle='#333';ctx.fillRect(bx,by,bw,bh);
+                const pct=s.power/100; const clr=pct>0.8?'#ef4444':pct>0.5?'#eab308':'#4ade80';
+                ctx.fillStyle=clr;ctx.fillRect(bx,by+bh*(1-pct),bw,bh*pct);
+                ctx.fillStyle='#fff';ctx.font='bold 12px sans-serif';ctx.textAlign='center';
+                ctx.fillText(Math.round(s.power)+'%',bx+bw/2,by+bh+16);ctx.fillText('PWR',bx+bw/2,by-6);
             }
-
-            // Throw position indicator
-            ctx.fillStyle = 'rgba(255,255,255,0.4)';
-            ctx.beginPath(); ctx.arc(W / 2, H - 50, 6, 0, Math.PI * 2); ctx.fill();
+            ctx.fillStyle='rgba(255,255,255,0.4)';ctx.beginPath();ctx.arc(W/2,s.turn==='bottom'?H-50:50,6,0,Math.PI*2);ctx.fill();
         }
 
-        // Particles
-        s.particles.forEach(p => {
-            ctx.globalAlpha = p.life / 20;
-            ctx.fillStyle = p.color;
-            ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI * 2); ctx.fill();
-        });
-        ctx.globalAlpha = 1;
+        s.particles.forEach(p=>{ctx.globalAlpha=p.life/20;ctx.fillStyle=p.color;ctx.beginPath();ctx.arc(p.x,p.y,p.size,0,Math.PI*2);ctx.fill();}); ctx.globalAlpha=1;
 
         // HUD
-        ctx.fillStyle = 'rgba(0,0,0,0.5)';
-        ctx.beginPath(); ctx.roundRect(10, 10, W - 20, 40, 8); ctx.fill();
-        ctx.fillStyle = '#3b82f6'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left';
-        ctx.fillText(`You: ${s.playerScore}`, 25, 36);
-        const playerCupsLeft = s.playerCups.filter(c => c.alive).length;
-        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
-        ctx.fillText(`(${playerCupsLeft} cups left)`, 80, 36);
-        ctx.fillStyle = '#ef4444'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'right';
-        ctx.fillText(`AI: ${s.aiScore}`, W - 25, 36);
-        const aiCupsLeft = s.aiCups.filter(c => c.alive).length;
-        ctx.fillStyle = '#94a3b8'; ctx.font = '12px sans-serif';
-        ctx.fillText(`(${aiCupsLeft} cups left)`, W - 80, 36);
-        // Turn indicator
-        ctx.textAlign = 'center';
-        ctx.fillStyle = s.turn === 'player' ? '#4ade80' : '#ef4444';
-        ctx.font = 'bold 13px sans-serif';
-        ctx.fillText(s.turn === 'player' ? '▼ YOUR TURN' : '▲ AI TURN', W / 2, 36);
+        ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.roundRect(10,10,W-20,40,8);ctx.fill();
+        ctx.fillStyle='#3b82f6';ctx.font='bold 14px sans-serif';ctx.textAlign='left';
+        ctx.fillText((isHost||!isMultiplayer?myName:oppName)+': '+s.botScore,25,36);
+        ctx.fillStyle='#ef4444';ctx.textAlign='right';
+        ctx.fillText((!isHost&&isMultiplayer?myName:oppName)+': '+s.topScore,W-25,36);
+        ctx.textAlign='center';ctx.fillStyle=myTurn()?'#4ade80':'#ef4444';ctx.font='bold 12px sans-serif';
+        ctx.fillText(myTurn()?'▼ YOUR TURN':'▲ '+oppName.toUpperCase(),W/2,36);
 
-        // Message
-        if (s.messageTimer > 0) {
-            ctx.fillStyle = 'rgba(0,0,0,0.5)';
-            const tw = ctx.measureText(s.message).width + 24;
-            ctx.beginPath(); ctx.roundRect(W/2 - tw/2, H/2 - 16, tw, 32, 6); ctx.fill();
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillText(s.message, W / 2, H / 2 + 4);
+        if (s.msgTimer > 0) {
+            const tw=ctx.measureText(s.message).width+24;
+            ctx.fillStyle='rgba(0,0,0,0.5)';ctx.beginPath();ctx.roundRect(W/2-tw/2,H/2-16,tw,32,6);ctx.fill();
+            ctx.fillStyle='#fff';ctx.font='bold 14px sans-serif';ctx.textAlign='center';ctx.fillText(s.message,W/2,H/2+4);
         }
-
-        // Game over
-        if (s.phase === 'over') {
-            ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0, 0, W, H);
-            ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
-            ctx.fillStyle = s.message.includes('You') ? '#4ade80' : '#ef4444';
-            ctx.fillText(s.message, W / 2, H / 2 - 20);
-            ctx.fillStyle = '#fff'; ctx.font = '16px sans-serif';
-            ctx.fillText(`${s.playerScore} - ${s.aiScore}`, W / 2, H / 2 + 15);
-            ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif';
-            ctx.fillText('Click to play again', W / 2, H / 2 + 50);
+        if (s.phase==='over') {
+            ctx.fillStyle='rgba(0,0,0,0.75)';ctx.fillRect(0,0,W,H);
+            ctx.font='bold 32px sans-serif';ctx.textAlign='center';ctx.fillStyle=s.message.includes('You Win')?'#4ade80':'#ef4444';
+            ctx.fillText(s.message,W/2,H/2-20);ctx.fillStyle='#fff';ctx.font='16px sans-serif';
+            ctx.fillText(s.botScore+' - '+s.topScore,W/2,H/2+15);
+            ctx.fillStyle='#94a3b8';ctx.font='14px sans-serif';ctx.fillText('Click to play again',W/2,H/2+50);
+        }
+        if (s.phase==='waitOpp') {
+            ctx.fillStyle='rgba(0,0,0,0.3)';ctx.fillRect(0,0,W,H);
+            ctx.fillStyle='#fbbf24';ctx.font='bold 16px sans-serif';ctx.textAlign='center';
+            ctx.fillText('Waiting for '+oppName+'...',W/2,H/2);
         }
     };
 
-    useEffect(() => {
-        animRef.current = requestAnimationFrame(loop);
-        return () => { if (animRef.current) cancelAnimationFrame(animRef.current); };
-    }, []);
+    useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => { if (animRef.current) cancelAnimationFrame(animRef.current); }; }, []);
 
     useEffect(() => {
-        const canvas = canvasRef.current; if (!canvas) return;
+        const c = canvasRef.current; if (!c) return;
         const handleMove = (e) => {
-            const s = stateRef.current; if (!s || (s.phase !== 'aim' && s.phase !== 'charging')) return;
-            const rect = canvas.getBoundingClientRect();
+            const s = stateRef.current; if (!s || !myTurn() || (s.phase!=='aim'&&s.phase!=='charging')) return;
+            const rect = c.getBoundingClientRect();
             s.aimX = e.clientX - rect.left;
-            s.aimY = e.clientY - rect.top;
-            // Restrict aim to upper half of table (AI side)
-            s.aimY = Math.min(H / 2, Math.max(30, s.aimY));
+            s.aimY = Math.max(30, Math.min(s.turn==='bottom' ? H/2 : H-30, e.clientY - rect.top));
         };
-        const handleDown = (e) => {
+        const handleDown = () => {
             const s = stateRef.current;
             if (!s) { init(); return; }
-            if (s.phase === 'over') { init(); return; }
-            if (s.phase === 'aim') {
-                s.phase = 'charging'; s.power = 0; s.charging = true;
+            if (s.phase==='over') { init(); return; }
+            if (s.phase==='aim' && myTurn()) { s.phase='charging'; s.power=0; }
+        };
+        const handleUp = () => {
+            const s = stateRef.current;
+            if (!s || s.phase!=='charging') return;
+            const fromY = s.turn==='bottom' ? H-50 : 50;
+            const b = throwBall(W/2, fromY, s.aimX, s.aimY, s.power);
+            if (isMultiplayer && !isHost) {
+                // Guest sends throw to host
+                db.collection('gameRooms').doc(room.id).set({ gameState: { ...room.gameState, guestThrow: { sx:b.x, sy:b.y, vx:b.vx, vy:b.vy, g:b.gravity }, guestTs: Date.now() } }, { merge: true }).catch(() => {});
+                s.phase = 'waitOpp';
+            } else {
+                s.ball = b; s.phase = 'flying'; s.trail = [];
             }
         };
-        const handleUp = (e) => {
-            const s = stateRef.current;
-            if (!s || s.phase !== 'charging') return;
-            // Fire!
-            throwBall(W / 2, H - 50, s.aimX, s.aimY, s.power);
-            s.phase = 'flying';
-            s.charging = false;
-        };
-        canvas.addEventListener('mousemove', handleMove);
-        canvas.addEventListener('mousedown', handleDown);
-        canvas.addEventListener('mouseup', handleUp);
-        canvas.addEventListener('mouseleave', (e) => { const s = stateRef.current; if (s && s.phase === 'charging') { s.phase = 'aim'; s.charging = false; } });
-        return () => { canvas.removeEventListener('mousemove', handleMove); canvas.removeEventListener('mousedown', handleDown); canvas.removeEventListener('mouseup', handleUp); };
+        c.addEventListener('mousemove',handleMove); c.addEventListener('mousedown',handleDown); c.addEventListener('mouseup',handleUp);
+        c.addEventListener('mouseleave',()=>{const s=stateRef.current;if(s&&s.phase==='charging'){s.phase='aim';}});
+        return()=>{c.removeEventListener('mousemove',handleMove);c.removeEventListener('mousedown',handleDown);c.removeEventListener('mouseup',handleUp);};
     }, []);
 
     return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block',cursor:'crosshair'}}/>;
 }
 
-function PongGame({ room, updateRoom, currentUser, addScore }) {
+function PongGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const canvasRef = useRef(null);
-    const [score, setScore] = useState([0, 0]);
-    const gameRef = useRef({ p1: 250, p2: 250, ball: {x:375,y:250,dx:5,dy:3} });
+    const stateRef = useRef(null);
+    const animRef = useRef(null);
+    const [, forceUpdate] = useState(0);
     const W = 750, H = 500;
-    
-    const loop = () => {
-        const g = gameRef.current;
-        g.ball.x += g.ball.dx; g.ball.y += g.ball.dy;
-        if (g.ball.y <= 5 || g.ball.y >= H-5) g.ball.dy *= -1;
-        if (g.ball.x <= 30 && g.ball.y > g.p1-50 && g.ball.y < g.p1+50) { g.ball.dx = Math.abs(g.ball.dx) * 1.02; g.ball.dy += (g.ball.y - g.p1) * 0.05; }
-        if (g.ball.x >= W-30 && g.ball.y > g.p2-50 && g.ball.y < g.p2+50) { g.ball.dx = -Math.abs(g.ball.dx) * 1.02; g.ball.dy += (g.ball.y - g.p2) * 0.05; }
-        if (g.ball.x < 0) { setScore(s => [s[0], s[1]+1]); g.ball = {x:375,y:250,dx:5,dy:3}; }
-        if (g.ball.x > W) { setScore(s => [s[0]+1, s[1]]); g.ball = {x:375,y:250,dx:-5,dy:3}; }
-        if (g.ball.x > W/2) g.p2 += (g.ball.y - g.p2) * 0.08;
-        draw();
+    const syncCounter = useRef(0);
+    const myName = currentUser?.username || 'You';
+    const oppName = isMultiplayer ? (opponent || 'Opponent') : 'AI';
+
+    const init = () => {
+        stateRef.current = {
+            p1: H/2, p2: H/2, ball: {x:W/2,y:H/2,dx:5,dy:3},
+            s1: 0, s2: 0, phase: 'playing',
+            mouseY: H/2,
+        };
+        if (isMultiplayer && isHost) {
+            updateRoom({ p1: H/2, p2: H/2, ball: {x:W/2,y:H/2,dx:5,dy:3}, s1: 0, s2: 0, phase: 'playing', ts: Date.now() });
+        }
     };
+
+    // Read multiplayer state
     
+    // Auto-start for multiplayer
+    useEffect(() => { if (isMultiplayer && !stateRef.current) init(); }, [isMultiplayer]);
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState) return;
+        const gs = room.gameState;
+        const s = stateRef.current;
+        if (!s) return;
+        if (isHost) {
+            // Host reads guest paddle position
+            if (gs.guestPaddle != null) s.p2 = gs.guestPaddle;
+        } else {
+            // Guest reads everything from host
+            if (gs.ball) s.ball = {...gs.ball};
+            if (gs.p1 != null) s.p1 = gs.p1;
+            if (gs.p2 != null) s.p2 = gs.p2;
+            if (gs.s1 != null) s.s1 = gs.s1;
+            if (gs.s2 != null) s.s2 = gs.s2;
+        }
+    }, [room?.gameState?.ts, room?.gameState?.guestTs]);
+
+    const loop = () => {
+        const s = stateRef.current;
+        if (!s) { draw(); animRef.current = requestAnimationFrame(loop); return; }
+        
+        // Only host (or solo player) runs physics
+        if (isHost || !isMultiplayer) {
+            const g = s;
+            g.ball.x += g.ball.dx; g.ball.y += g.ball.dy;
+            if (g.ball.y <= 5 || g.ball.y >= H-5) g.ball.dy *= -1;
+            if (g.ball.x <= 30 && g.ball.y > g.p1-50 && g.ball.y < g.p1+50) { g.ball.dx = Math.abs(g.ball.dx) * 1.02; g.ball.dy += (g.ball.y - g.p1) * 0.05; }
+            if (g.ball.x >= W-30 && g.ball.y > g.p2-50 && g.ball.y < g.p2+50) { g.ball.dx = -Math.abs(g.ball.dx) * 1.02; g.ball.dy += (g.ball.y - g.p2) * 0.05; }
+            if (g.ball.x < 0) { g.s2++; g.ball = {x:W/2,y:H/2,dx:5,dy:3}; }
+            if (g.ball.x > W) { g.s1++; g.ball = {x:W/2,y:H/2,dx:-5,dy:3}; }
+            // AI for right paddle (only in solo mode)
+            if (!isMultiplayer) g.p2 += (g.ball.y - g.p2) * 0.08;
+            // Host paddle follows mouse
+            g.p1 = Math.max(50, Math.min(H-50, s.mouseY));
+            // Sync to Firestore every 5 frames
+            if (isMultiplayer) {
+                syncCounter.current++;
+                if (syncCounter.current >= 5) {
+                    syncCounter.current = 0;
+                    updateRoom({ ball: {...g.ball}, p1: g.p1, p2: g.p2, s1: g.s1, s2: g.s2, phase: 'playing', ts: Date.now() });
+                }
+            }
+        } else {
+            // Guest: update own paddle position and send to Firestore
+            s.p2 = Math.max(50, Math.min(H-50, s.mouseY));
+            syncCounter.current++;
+            if (syncCounter.current >= 5) {
+                syncCounter.current = 0;
+                // Merge just the guest paddle into the room doc
+                if (room?.id) {
+                    db.collection('gameRooms').doc(room.id).set({ gameState: { guestPaddle: s.p2, guestTs: Date.now() } }, { merge: true }).catch(() => {});
+                }
+            }
+        }
+        
+        // Win check
+        if (s.s1 >= 7 || s.s2 >= 7) {
+            s.phase = 'over';
+            const iWon = (isHost || !isMultiplayer) ? s.s1 >= 7 : s.s2 >= 7;
+            if (iWon) addScore(100);
+            forceUpdate(n => n + 1);
+        }
+
+        draw();
+        animRef.current = requestAnimationFrame(loop);
+    };
+
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
+        const s = stateRef.current;
         ctx.fillStyle = '#0f172a'; ctx.fillRect(0, 0, W, H);
-        ctx.setLineDash([10,10]); ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2; ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
-        const g = gameRef.current;
-        ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.roundRect(12, g.p1-50, 12, 100, 6); ctx.fill();
-        ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.roundRect(W-24, g.p2-50, 12, 100, 6); ctx.fill();
+        ctx.setLineDash([10,10]); ctx.strokeStyle = '#1e293b'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(W/2,0); ctx.lineTo(W/2,H); ctx.stroke(); ctx.setLineDash([]);
+        if (!s) {
+            ctx.fillStyle = '#fff'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🏓 Pong', W/2, H/2-20);
+            ctx.font = '14px sans-serif'; ctx.fillStyle = '#94a3b8';
+            ctx.fillText('Move mouse to control paddle • First to 7 wins', W/2, H/2+15);
+            ctx.fillStyle = '#4ade80'; ctx.fillText('Click to start', W/2, H/2+45);
+            return;
+        }
+        // Paddles
+        ctx.fillStyle = '#4ade80'; ctx.beginPath(); ctx.roundRect(12, s.p1-50, 12, 100, 6); ctx.fill();
+        ctx.fillStyle = '#3b82f6'; ctx.beginPath(); ctx.roundRect(W-24, s.p2-50, 12, 100, 6); ctx.fill();
+        // Ball
         ctx.fillStyle = '#fff'; ctx.shadowColor = '#fff'; ctx.shadowBlur = 10;
-        ctx.beginPath(); ctx.arc(g.ball.x, g.ball.y, 10, 0, Math.PI*2); ctx.fill();
+        ctx.beginPath(); ctx.arc(s.ball.x, s.ball.y, 10, 0, Math.PI*2); ctx.fill();
         ctx.shadowBlur = 0;
+        // Scores
         ctx.font = 'bold 56px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.2)'; ctx.textAlign = 'center';
-        ctx.fillText(score[0], W/4, 70); ctx.fillText(score[1], W*3/4, 70);
+        ctx.fillText(s.s1, W/4, 70); ctx.fillText(s.s2, W*3/4, 70);
+        // Player names
+        ctx.font = 'bold 12px sans-serif'; ctx.fillStyle = 'rgba(255,255,255,0.4)';
+        const leftName = (isHost || !isMultiplayer) ? myName : oppName;
+        const rightName = (isHost || !isMultiplayer) ? oppName : myName;
+        ctx.textAlign = 'left'; ctx.fillText(leftName, 12, H - 12);
+        ctx.textAlign = 'right'; ctx.fillText(rightName, W - 12, H - 12);
+        // Multiplayer badge
+        if (isMultiplayer) {
+            ctx.fillStyle = 'rgba(74,222,128,0.15)'; ctx.beginPath(); ctx.roundRect(W/2-45, H-28, 90, 20, 4); ctx.fill();
+            ctx.fillStyle = '#4ade80'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText('🟢 LIVE MATCH', W/2, H-14);
+        }
+        // Game over
+        if (s.phase === 'over') {
+            ctx.fillStyle = 'rgba(0,0,0,0.75)'; ctx.fillRect(0,0,W,H);
+            const iWon = (isHost || !isMultiplayer) ? s.s1 >= 7 : s.s2 >= 7;
+            ctx.fillStyle = iWon ? '#4ade80' : '#ef4444'; ctx.font = 'bold 32px sans-serif'; ctx.textAlign = 'center';
+            ctx.fillText(iWon ? '🎉 You Win!' : `😢 ${oppName} Wins!`, W/2, H/2 - 10);
+            ctx.fillStyle = '#fff'; ctx.font = '18px sans-serif';
+            ctx.fillText(`${s.s1} - ${s.s2}`, W/2, H/2 + 25);
+            ctx.fillStyle = '#94a3b8'; ctx.font = '14px sans-serif';
+            ctx.fillText('Click to play again', W/2, H/2 + 55);
+        }
     };
-    
-    useEffect(() => { const i = setInterval(loop, 16); return () => clearInterval(i); }, []);
+
+    useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => { if (animRef.current) cancelAnimationFrame(animRef.current); }; }, []);
     useEffect(() => {
-        const move = (e) => { const rect = canvasRef.current?.getBoundingClientRect(); if (rect) gameRef.current.p1 = Math.max(50, Math.min(H-50, e.clientY - rect.top)); };
-        window.addEventListener('mousemove', move); return () => window.removeEventListener('mousemove', move);
+        const canvas = canvasRef.current; if (!canvas) return;
+        const move = (e) => { const r = canvas.getBoundingClientRect(); if (stateRef.current) stateRef.current.mouseY = e.clientY - r.top; };
+        const click = () => { if (!stateRef.current || stateRef.current.phase === 'over') init(); };
+        canvas.addEventListener('mousemove', move);
+        canvas.addEventListener('click', click);
+        return () => { canvas.removeEventListener('mousemove', move); canvas.removeEventListener('click', click); };
     }, []);
-    
+
     return <canvas ref={canvasRef} width={W} height={H} style={{borderRadius:'10px',border:'2px solid var(--border)',display:'block'}}/>;
 }
 
 // TANK BATTLE - Top-down arena shooter vs AI
-function TanksGame({ room, updateRoom, currentUser, addScore }) {
+function TanksGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const canvasRef = useRef(null);
     const W = 800, H = 550;
     const stateRef = useRef(null);
     const animRef = useRef(null);
     const [, forceUpdate] = useState(0);
+    const oppName = isMultiplayer ? (opponent || 'P2') : 'AI';
+    const syncRef = useRef(0);
+
+    // Sync game state for multiplayer
+    const syncGameState = (s) => {
+        if (!isMultiplayer) return;
+        // Serialize terrain as string to reduce payload
+        const terrainSampled = []; for(let i=0;i<s.terrain.length;i+=4) terrainSampled.push(Math.round(s.terrain[i]));
+        updateRoom({ 
+            p1:{x:s.p1.x,angle:s.p1.angle,power:s.p1.power,hp:s.p1.hp}, 
+            p2:{x:s.p2.x,angle:s.p2.angle,power:s.p2.power,hp:s.p2.hp},
+            turn: s.turn, phase: s.phase, wind: s.wind, score: s.score, round: s.round,
+            projectile: s.projectile ? {x:s.projectile.x,y:s.projectile.y,vx:s.projectile.vx,vy:s.projectile.vy,owner:s.projectile.owner} : null,
+            ts: Date.now() 
+        });
+    };
+
+    // Read multiplayer state
+    
+    // Auto-start for multiplayer
+    useEffect(() => { if (isMultiplayer && !stateRef.current) init(); }, [isMultiplayer]);
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState) return;
+        const gs = room.gameState;
+        const s = stateRef.current;
+        if (!s) return;
+        if (isHost) {
+            // Host reads guest's aim/fire action
+            if (gs.guestAction === 'fire' && s.phase === 'waitGuest') {
+                s.p2.angle = gs.guestAngle || s.p2.angle;
+                s.p2.power = gs.guestPower || s.p2.power;
+                fire(s, 2);
+                forceUpdate(n => n + 1);
+            }
+            if (gs.guestAngle != null && s.turn === 2) {
+                s.p2.angle = gs.guestAngle;
+                s.p2.power = gs.guestPower || s.p2.power;
+            }
+        } else {
+            // Guest reads everything from host
+            if (gs.p1) { s.p1.angle=gs.p1.angle; s.p1.power=gs.p1.power; s.p1.hp=gs.p1.hp; }
+            if (gs.p2) { s.p2.angle=gs.p2.angle; s.p2.power=gs.p2.power; s.p2.hp=gs.p2.hp; }
+            if (gs.turn != null) s.turn = gs.turn;
+            if (gs.phase) {
+                if (gs.phase === 'aim' && !isHost) s.phase = 'waitHost';
+                else if (gs.phase === 'waitGuest' && !isHost) s.phase = 'aim';
+                else s.phase = gs.phase;
+            }
+            if (gs.wind != null) s.wind = gs.wind;
+            if (gs.score) s.score = gs.score;
+            if (gs.round) s.round = gs.round;
+            if (gs.projectile) s.projectile = {...gs.projectile};
+        }
+    }, [room?.gameState?.ts, room?.gameState?.guestTs]);
 
     const generateTerrain = () => {
         // Generate hilly terrain using layered sine waves
@@ -7766,7 +8024,7 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
         } else { s.shakeX = 0; s.shakeY = 0; }
 
         // AI aiming phase
-        if (s.phase === 'aiAim') {
+        if (s.phase === 'aiAim' || s.phase === 'waitGuest') {
             s.aiTimer++;
             if (s.aiTimer < 30) {
                 // AI "thinks" - adjusts angle and power toward player
@@ -7814,7 +8072,7 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
                         if (dist < blastRadius + 15) {
                             const dmg = Math.round(Math.max(0, (1 - dist / (blastRadius + 15)) * 50 + 10));
                             tank.hp = Math.max(0, tank.hp - dmg);
-                            s.message = `${ti === 0 ? 'You took' : 'AI took'} ${dmg} damage!`;
+                            s.message = `${ti === 0 ? 'You took' : oppName+' took'} ${dmg} damage!`;
                             s.messageTimer = 90;
                         }
                     });
@@ -7844,7 +8102,7 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
                 // Check win
                 if (s.p1.hp <= 0) {
                     s.score[1]++;
-                    s.phase = 'over'; s.message = '💀 AI Wins the round!'; s.messageTimer = 999;
+                    s.phase = 'over'; s.message = '💀 ' + oppName + ' Wins the round!'; s.messageTimer = 999;
                     addScore(s.score[0] * 100);
                     forceUpdate(n => n + 1);
                 } else if (s.p2.hp <= 0) {
@@ -7857,15 +8115,27 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
                     if (s.turn === 1) {
                         s.turn = 2;
                         s.wind = (Math.random() - 0.5) * 0.08;
-                        s.phase = 'aiAim';
-                        s.message = 'AI is aiming...';
+                        if (isMultiplayer) {
+                            s.phase = 'waitGuest';
+                            s.message = `${oppName}'s turn...`;
+                            syncGameState(s);
+                        } else {
+                            s.phase = 'aiAim';
+                            s.message = 'AI is aiming...';
+                        }
                         s.messageTimer = 120;
                     } else {
                         s.turn = 1;
                         s.wind = (Math.random() - 0.5) * 0.08;
-                        s.phase = 'aim';
-                        s.message = '← → angle, ↑ ↓ power, SPACE fire';
+                        if (isMultiplayer) {
+                            s.phase = isHost ? 'aim' : 'waitHost';
+                            s.message = isHost ? '← → angle, ↑ ↓ power, SPACE fire' : `${oppName}'s turn...`;
+                        } else {
+                            s.phase = 'aim';
+                            s.message = '← → angle, ↑ ↓ power, SPACE fire';
+                        }
                         s.messageTimer = 120;
+                        if (isMultiplayer) syncGameState(s);
                     }
                 }
             }
@@ -8100,8 +8370,8 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
         ctx.fillText(`${windDir} ${(Math.abs(s.wind) * 100).toFixed(0)}%`, W/2, 44);
 
         // Angle/Power display for active player
-        if (s.phase === 'aim') {
-            const tank = s.p1;
+        if (s.phase === 'aim' || (isMultiplayer && !isHost && s.turn === 2)) {
+            const tank = (!isMultiplayer || isHost) ? s.p1 : s.p2;
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.beginPath(); ctx.roundRect(15, H - 55, 200, 45, 8); ctx.fill();
             ctx.fillStyle = '#fff'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'left';
@@ -8121,8 +8391,8 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
             ctx.fillStyle = 'rgba(0,0,0,0.6)';
             ctx.beginPath(); ctx.roundRect(W - 215, H - 55, 200, 45, 8); ctx.fill();
             ctx.fillStyle = '#ef4444'; ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'right';
-            ctx.fillText(`AI Angle: ${Math.round(s.p2.angle)}°`, W - 25, H - 35);
-            ctx.fillText(`AI Power: ${Math.round(s.p2.power)}%`, W - 25, H - 18);
+            ctx.fillText(`${oppName} Angle: ${Math.round(s.p2.angle)}°`, W - 25, H - 35);
+            ctx.fillText(`${oppName} Power: ${Math.round(s.p2.power)}%`, W - 25, H - 18);
         }
 
         // Message
@@ -8155,6 +8425,8 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
     // Input handling
     useEffect(() => {
         const handleKey = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (['ArrowLeft','ArrowRight','ArrowUp','ArrowDown',' ','a','d','w','s'].includes(e.key)) e.preventDefault();
             const s = stateRef.current;
             if (!s && e.key === ' ') { init(); return; }
@@ -8168,13 +8440,26 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
                 stateRef.current.round = round;
                 return;
             }
+            if (isMultiplayer && !isHost) {
+                // Guest controls player 2
+                if (s.phase !== 'aim' || s.turn !== 2) return;
+                const tank = s.p2;
+                if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') tank.angle = Math.max(90, tank.angle - 2);
+                if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') tank.angle = Math.min(170, tank.angle + 2);
+                if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') tank.power = Math.min(100, tank.power + 2);
+                if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') tank.power = Math.max(5, tank.power - 2);
+                if (e.key === ' ') {
+                    if (room?.id) db.collection('gameRooms').doc(room.id).set({gameState:{guestAngle:tank.angle,guestPower:tank.power,guestAction:'fire',guestTs:Date.now()}},{merge:true}).catch(()=>{});
+                }
+                return;
+            }
             if (s.phase !== 'aim') return;
             const tank = s.p1;
             if (e.key === 'ArrowLeft' || e.key === 'a' || e.key === 'A') tank.angle = Math.min(170, tank.angle + 2);
             if (e.key === 'ArrowRight' || e.key === 'd' || e.key === 'D') tank.angle = Math.max(10, tank.angle - 2);
             if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') tank.power = Math.min(100, tank.power + 2);
             if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') tank.power = Math.max(5, tank.power - 2);
-            if (e.key === ' ') fire(s, 1);
+            if (e.key === ' ') { fire(s, 1); if (isMultiplayer) syncGameState(stateRef.current); }
         };
         window.addEventListener('keydown', handleKey);
         return () => window.removeEventListener('keydown', handleKey);
@@ -8197,13 +8482,15 @@ function TanksGame({ room, updateRoom, currentUser, addScore }) {
 }
 
 // TRON - Light bikes vs AI
-function TronGame({ room, updateRoom, currentUser, addScore }) {
+function TronGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState([0, 0]);
     const W = 600, H = 500;
     const CELL = 5;
     const gameRef = useRef(null);
+    const syncRef = useRef(0);
+    const oppName = isMultiplayer ? (opponent || 'P2') : 'AI';
 
     const init = () => {
         gameRef.current = {
@@ -8212,61 +8499,111 @@ function TronGame({ room, updateRoom, currentUser, addScore }) {
             grid: new Set()
         };
         setGameState('playing');
+        if (isMultiplayer && isHost) {
+            updateRoom({ p1: {x:100,y:H/2,dir:'right'}, p2: {x:W-100,y:H/2,dir:'left'}, phase:'playing', ts: Date.now() });
+        }
     };
+
+    // Read multiplayer state
+    
+    // Auto-start for multiplayer
+    useEffect(() => { if (isMultiplayer && !stateRef.current) init(); }, [isMultiplayer]);
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState || !gameRef.current) return;
+        const gs = room.gameState;
+        if (isHost && gs.guestDir) {
+            gameRef.current.p2.dir = gs.guestDir;
+        } else if (!isHost && gs.p1 && gs.p2) {
+            const g = gameRef.current;
+            // Sync trail data from host
+            if (gs.trails) {
+                g.p1.trail = gs.trails.p1 || [];
+                g.p2.trail = gs.trails.p2 || [];
+                g.p1.x = gs.p1.x; g.p1.y = gs.p1.y;
+                g.p2.x = gs.p2.x; g.p2.y = gs.p2.y;
+                g.grid = new Set([...g.p1.trail.map(t=>`${t.x},${t.y}`), ...g.p2.trail.map(t=>`${t.x},${t.y}`)]);
+            }
+            if (gs.phase === 'over') {
+                g.p1.alive = gs.p1alive !== false;
+                g.p2.alive = gs.p2alive !== false;
+            }
+        }
+    }, [room?.gameState?.ts, room?.gameState?.guestTs]);
 
     const loop = () => {
         if (gameState !== 'playing') return;
         const g = gameRef.current;
         const { p1, p2 } = g;
-        // Move
-        const move = (p) => {
-            if (p.dir === 'right') p.x += CELL; else if (p.dir === 'left') p.x -= CELL;
-            else if (p.dir === 'up') p.y -= CELL; else if (p.dir === 'down') p.y += CELL;
-            const key = `${p.x},${p.y}`;
-            if (p.x < 0 || p.x >= W || p.y < 0 || p.y >= H || g.grid.has(key)) { p.alive = false; return; }
-            g.grid.add(key); p.trail.push({ x: p.x, y: p.y });
-        };
-        // AI - look ahead and avoid walls
-        p2.aiTimer++;
-        if (p2.aiTimer % 3 === 0) {
-            const dirs = ['up', 'down', 'left', 'right'];
-            const opp = { up: 'down', down: 'up', left: 'right', right: 'left' };
-            const valid = dirs.filter(d => d !== opp[p2.dir]);
-            let bestDir = p2.dir, bestDist = 0;
-            valid.forEach(d => {
-                let tx = p2.x, ty = p2.y, dist = 0;
-                for (let i = 0; i < 30; i++) {
-                    if (d === 'right') tx += CELL; else if (d === 'left') tx -= CELL;
-                    else if (d === 'up') ty -= CELL; else ty += CELL;
-                    if (tx < 0 || tx >= W || ty < 0 || ty >= H || g.grid.has(`${tx},${ty}`)) break;
-                    dist++;
+
+        // Only host (or solo) runs physics
+        if (isHost || !isMultiplayer) {
+            const move = (p) => {
+                if (p.dir === 'right') p.x += CELL; else if (p.dir === 'left') p.x -= CELL;
+                else if (p.dir === 'up') p.y -= CELL; else if (p.dir === 'down') p.y += CELL;
+                const key = `${p.x},${p.y}`;
+                if (p.x < 0 || p.x >= W || p.y < 0 || p.y >= H || g.grid.has(key)) { p.alive = false; return; }
+                g.grid.add(key); p.trail.push({ x: p.x, y: p.y });
+            };
+            // AI for p2 (only in solo mode)
+            if (!isMultiplayer) {
+                p2.aiTimer++;
+                if (p2.aiTimer % 3 === 0) {
+                    const dirs = ['up', 'down', 'left', 'right'];
+                    const opp = { up: 'down', down: 'up', left: 'right', right: 'left' };
+                    const valid = dirs.filter(d => d !== opp[p2.dir]);
+                    let bestDir = p2.dir, bestDist = 0;
+                    valid.forEach(d => {
+                        let tx = p2.x, ty = p2.y, dist = 0;
+                        for (let i = 0; i < 30; i++) {
+                            if (d === 'right') tx += CELL; else if (d === 'left') tx -= CELL;
+                            else if (d === 'up') ty -= CELL; else ty += CELL;
+                            if (tx < 0 || tx >= W || ty < 0 || ty >= H || g.grid.has(`${tx},${ty}`)) break;
+                            dist++;
+                        }
+                        if (dist > bestDist) { bestDist = dist; bestDir = d; }
+                    });
+                    if (bestDist < 3) {
+                        const safe = valid.find(d => { let tx=p2.x,ty=p2.y; if(d==='right')tx+=CELL;else if(d==='left')tx-=CELL;else if(d==='up')ty-=CELL;else ty+=CELL; return tx>=0&&tx<W&&ty>=0&&ty<H&&!g.grid.has(`${tx},${ty}`); });
+                        if (safe) bestDir = safe;
+                    }
+                    p2.dir = bestDir;
                 }
-                // Bias toward player direction for aggression
-                const toP1 = Math.abs(p1.x - p2.x) + Math.abs(p1.y - p2.y);
-                let nx = p2.x, ny = p2.y;
-                if (d === 'right') nx += CELL * 5; else if (d === 'left') nx -= CELL * 5;
-                else if (d === 'up') ny -= CELL * 5; else ny += CELL * 5;
-                const newDist = Math.abs(p1.x - nx) + Math.abs(p1.y - ny);
-                if (dist > bestDist || (dist === bestDist && newDist < toP1)) { bestDist = dist; bestDir = d; }
-            });
-            if (bestDist < 3) { // Emergency: pick any safe direction
-                const safe = valid.find(d => {
-                    let tx = p2.x, ty = p2.y;
-                    if (d === 'right') tx += CELL; else if (d === 'left') tx -= CELL;
-                    else if (d === 'up') ty -= CELL; else ty += CELL;
-                    return tx >= 0 && tx < W && ty >= 0 && ty < H && !g.grid.has(`${tx},${ty}`);
-                });
-                if (safe) bestDir = safe;
             }
-            p2.dir = bestDir;
-        }
-        move(p1); move(p2);
-        if (!p1.alive || !p2.alive) {
-            if (!p1.alive && !p2.alive) { /* draw */ }
-            else if (!p1.alive) setScore(s => [s[0], s[1] + 1]);
-            else setScore(s => [s[0] + 1, s[1]]);
-            setGameState('over');
-            addScore(score[0] > score[1] ? 100 : 0);
+            move(p1); move(p2);
+            if (!p1.alive || !p2.alive) {
+                if (!p1.alive && !p2.alive) { }
+                else if (!p1.alive) setScore(s => [s[0], s[1] + 1]);
+                else setScore(s => [s[0] + 1, s[1]]);
+                setGameState('over');
+                addScore(p1.alive ? 100 : 0);
+                if (isMultiplayer) updateRoom({ p1:{x:p1.x,y:p1.y}, p2:{x:p2.x,y:p2.y}, p1alive:p1.alive, p2alive:p2.alive, phase:'over', ts:Date.now() });
+            }
+            // Sync to Firestore every 2 ticks
+            if (isMultiplayer && p1.alive && p2.alive) {
+                syncRef.current++;
+                if (syncRef.current >= 2) {
+                    syncRef.current = 0;
+                    // Only send last N trail points to keep payload small
+                    const lastN = 200;
+                    updateRoom({ p1:{x:p1.x,y:p1.y}, p2:{x:p2.x,y:p2.y}, trails:{p1:p1.trail.slice(-lastN),p2:p2.trail.slice(-lastN)}, phase:'playing', ts:Date.now() });
+                }
+            }
+        } else {
+            // Guest: send direction input
+            syncRef.current++;
+            if (syncRef.current >= 2) {
+                syncRef.current = 0;
+                if (room?.id) db.collection('gameRooms').doc(room.id).set({ gameState: { guestDir: p2.dir, guestTs: Date.now() } }, { merge: true }).catch(() => {});
+            }
+            // Guest checks for game over from host
+            if (room?.gameState?.phase === 'over') {
+                if (!p1.alive || !p2.alive) {
+                    setGameState('over');
+                    const iWon = isHost ? p1.alive : p2.alive;
+                    addScore(iWon ? 100 : 0);
+                }
+            }
         }
         draw();
     };
@@ -8274,117 +8611,147 @@ function TronGame({ room, updateRoom, currentUser, addScore }) {
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
         ctx.fillStyle = '#080c18'; ctx.fillRect(0, 0, W, H);
-        // Grid lines
         ctx.strokeStyle = 'rgba(59,130,246,0.08)'; ctx.lineWidth = 0.5;
         for (let x = 0; x < W; x += 20) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, H); ctx.stroke(); }
         for (let y = 0; y < H; y += 20) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(W, y); ctx.stroke(); }
         const g = gameRef.current; if (!g) return;
-        // Trails
         ctx.shadowBlur = 4;
         g.p1.trail.forEach(t => { ctx.fillStyle = '#4ade80'; ctx.shadowColor = '#4ade80'; ctx.fillRect(t.x, t.y, CELL, CELL); });
         g.p2.trail.forEach(t => { ctx.fillStyle = '#f97316'; ctx.shadowColor = '#f97316'; ctx.fillRect(t.x, t.y, CELL, CELL); });
-        // Heads
         ctx.shadowBlur = 12;
         ctx.fillStyle = '#fff'; ctx.shadowColor = '#4ade80'; ctx.fillRect(g.p1.x - 1, g.p1.y - 1, CELL + 2, CELL + 2);
         ctx.fillStyle = '#fff'; ctx.shadowColor = '#f97316'; ctx.fillRect(g.p2.x - 1, g.p2.y - 1, CELL + 2, CELL + 2);
         ctx.shadowBlur = 0;
-        // Score
-        ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`You: ${score[0]}`, 15, 25);
-        ctx.fillStyle = '#f97316'; ctx.textAlign = 'right'; ctx.fillText(`AI: ${score[1]}`, W - 15, 25);
+        const myLabel = (isHost || !isMultiplayer) ? 'You' : oppName;
+        const oppLabel = (isHost || !isMultiplayer) ? oppName : 'You';
+        ctx.fillStyle = '#4ade80'; ctx.font = 'bold 16px sans-serif'; ctx.textAlign = 'left'; ctx.fillText(`${myLabel}: ${score[0]}`, 15, 25);
+        ctx.fillStyle = '#f97316'; ctx.textAlign = 'right'; ctx.fillText(`${oppLabel}: ${score[1]}`, W - 15, 25);
+        if (isMultiplayer) { ctx.fillStyle='rgba(74,222,128,0.15)'; ctx.beginPath(); ctx.roundRect(W/2-45,H-28,90,20,4); ctx.fill(); ctx.fillStyle='#4ade80'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center'; ctx.fillText('LIVE MATCH',W/2,H-14); }
     };
 
     useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 50); return () => clearInterval(i); } }, [gameState, score]);
     useEffect(() => {
         const handleKey = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
             if (gameState !== 'playing' && (e.key === ' ')) { init(); return; }
             if (!gameRef.current) return;
-            const p = gameRef.current.p1;
+            // In multiplayer, host controls p1, guest controls p2
+            const p = (!isMultiplayer || isHost) ? gameRef.current.p1 : gameRef.current.p2;
             if ((e.key === 'ArrowUp' || e.key === 'w') && p.dir !== 'down') p.dir = 'up';
             else if ((e.key === 'ArrowDown' || e.key === 's') && p.dir !== 'up') p.dir = 'down';
             else if ((e.key === 'ArrowLeft' || e.key === 'a') && p.dir !== 'right') p.dir = 'left';
             else if ((e.key === 'ArrowRight' || e.key === 'd') && p.dir !== 'left') p.dir = 'right';
         };
         window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
-    }, [gameState]);
+    }, [gameState, isMultiplayer, isHost]);
 
     return (
         <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
             <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
             {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>🏍️</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Tron</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to steer • Don't hit walls or trails</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div></>}
-                {gameState === 'over' && <><div style={{fontSize:'24px',fontWeight:700,color:score[0]>score[1]?'#4ade80':'#ef4444'}}>{score[0]>score[1]?'You Win!':'AI Wins!'}</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Press SPACE to play again</div></>}
+                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>🏍️</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Tron</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to steer • Don't hit walls or trails</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div>{isMultiplayer && <div style={{color:'#4ade80',marginTop:'8px',fontWeight:600}}>Playing vs {oppName}</div>}</>}
+                {gameState === 'over' && <><div style={{fontSize:'24px',fontWeight:700,color:score[0]>score[1]?'#4ade80':'#ef4444'}}>{score[0]>score[1]?'You Win!':oppName+' Wins!'}</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Press SPACE to play again</div></>}
             </div>}
         </div>
     );
 }
 
 // RACING - Top-down racing
-function RacingGame({ room, updateRoom, currentUser, addScore }) {
+function RacingGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [lap, setLap] = useState([0, 0]);
     const W = 600, H = 600;
     const gameRef = useRef(null);
     const LAPS = 3;
+    const syncRef = useRef(0);
+    const oppName = isMultiplayer ? (opponent || 'P2') : 'AI';
 
     const init = () => {
         gameRef.current = {
             p1: { x: W/2 - 20, y: H - 100, angle: -Math.PI/2, speed: 0, checkpoint: 0, lap: 0 },
             p2: { x: W/2 + 20, y: H - 100, angle: -Math.PI/2, speed: 0, checkpoint: 0, lap: 0 },
-            keys: {},
-            checkpoints: [
-                { x: W/2, y: 60, r: 60 },
-                { x: 60, y: H/2, r: 60 },
-                { x: W/2, y: H - 60, r: 60 },
-                { x: W - 60, y: H/2, r: 60 },
-            ]
+            keys: {}, guestKeys: {},
+            checkpoints: [{x:W/2,y:60,r:60},{x:60,y:H/2,r:60},{x:W/2,y:H-60,r:60},{x:W-60,y:H/2,r:60}]
         };
         setLap([0, 0]); setGameState('playing');
+        if (isMultiplayer && isHost) updateRoom({ phase:'playing', ts:Date.now() });
     };
+
+    
+    // Auto-start for multiplayer
+    useEffect(() => { if (isMultiplayer && !stateRef.current) init(); }, [isMultiplayer]);
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState || !gameRef.current) return;
+        const gs = room.gameState;
+        if (isHost && gs.guestKeys) { gameRef.current.guestKeys = gs.guestKeys; }
+        else if (!isHost && gs.p1 && gs.p2) {
+            const g = gameRef.current;
+            g.p1.x=gs.p1.x; g.p1.y=gs.p1.y; g.p1.angle=gs.p1.angle; g.p1.speed=gs.p1.speed;
+            g.p2.x=gs.p2.x; g.p2.y=gs.p2.y; g.p2.angle=gs.p2.angle; g.p2.speed=gs.p2.speed;
+            if (gs.laps) setLap(gs.laps);
+        }
+    }, [room?.gameState?.ts, room?.gameState?.guestTs]);
 
     const loop = () => {
         if (gameState !== 'playing') return;
         const g = gameRef.current;
         const { p1, p2 } = g;
-        // Player
-        if (g.keys['ArrowUp'] || g.keys['w']) p1.speed = Math.min(p1.speed + 0.15, 5);
-        else if (g.keys['ArrowDown'] || g.keys['s']) p1.speed = Math.max(p1.speed - 0.1, -2);
-        else p1.speed *= 0.98;
-        if (g.keys['ArrowLeft'] || g.keys['a']) p1.angle -= 0.04 * (Math.abs(p1.speed) > 0.5 ? 1 : 0.3);
-        if (g.keys['ArrowRight'] || g.keys['d']) p1.angle += 0.04 * (Math.abs(p1.speed) > 0.5 ? 1 : 0.3);
-        p1.x += Math.cos(p1.angle) * p1.speed; p1.y += Math.sin(p1.angle) * p1.speed;
-        p1.x = Math.max(15, Math.min(W - 15, p1.x)); p1.y = Math.max(15, Math.min(H - 15, p1.y));
-        // Track boundary (oval)
-        const cx = W/2, cy = H/2, rx = W/2 - 30, ry = H/2 - 30, irx = rx - 100, iry = ry - 100;
-        const px1 = ((p1.x-cx)/rx)**2 + ((p1.y-cy)/ry)**2;
-        const pi1 = ((p1.x-cx)/irx)**2 + ((p1.y-cy)/iry)**2;
-        if (px1 > 1 || pi1 < 1) p1.speed *= 0.9;
+        const updateCar = (p, keys) => {
+            if (keys['ArrowUp']||keys['w']) p.speed = Math.min(p.speed+0.15,5);
+            else if (keys['ArrowDown']||keys['s']) p.speed = Math.max(p.speed-0.1,-2);
+            else p.speed *= 0.98;
+            if (keys['ArrowLeft']||keys['a']) p.angle -= 0.04*(Math.abs(p.speed)>0.5?1:0.3);
+            if (keys['ArrowRight']||keys['d']) p.angle += 0.04*(Math.abs(p.speed)>0.5?1:0.3);
+            p.x += Math.cos(p.angle)*p.speed; p.y += Math.sin(p.angle)*p.speed;
+            p.x = Math.max(15,Math.min(W-15,p.x)); p.y = Math.max(15,Math.min(H-15,p.y));
+            const cx=W/2,cy=H/2,rx=W/2-30,ry=H/2-30,irx=rx-100,iry=ry-100;
+            if(((p.x-cx)/rx)**2+((p.y-cy)/ry)**2>1 || ((p.x-cx)/irx)**2+((p.y-cy)/iry)**2<1) p.speed*=0.9;
+        };
 
-        // AI
-        const targetCP = g.checkpoints[p2.checkpoint % g.checkpoints.length];
-        const aiAngle = Math.atan2(targetCP.y - p2.y, targetCP.x - p2.x);
-        let diff = aiAngle - p2.angle; while (diff > Math.PI) diff -= Math.PI*2; while (diff < -Math.PI) diff += Math.PI*2;
-        p2.angle += Math.sign(diff) * Math.min(Math.abs(diff), 0.05);
-        p2.speed = Math.min(p2.speed + 0.12, 4.2);
-        p2.x += Math.cos(p2.angle) * p2.speed; p2.y += Math.sin(p2.angle) * p2.speed;
-        p2.x = Math.max(15, Math.min(W - 15, p2.x)); p2.y = Math.max(15, Math.min(H - 15, p2.y));
-
-        // Checkpoint detection
-        [p1, p2].forEach((p, pi) => {
-            const cp = g.checkpoints[p.checkpoint % g.checkpoints.length];
-            if (Math.hypot(p.x - cp.x, p.y - cp.y) < cp.r) {
-                p.checkpoint++;
-                if (p.checkpoint % g.checkpoints.length === 0) {
-                    p.lap++;
-                    setLap(l => { const nl = [...l]; nl[pi] = p.lap; return nl; });
-                    if (p.lap >= LAPS) {
-                        setGameState('over');
-                        addScore(pi === 0 ? 500 : 50);
+        if (isHost || !isMultiplayer) {
+            updateCar(p1, g.keys);
+            if (!isMultiplayer) {
+                // AI
+                const targetCP = g.checkpoints[p2.checkpoint % g.checkpoints.length];
+                const aiAngle = Math.atan2(targetCP.y-p2.y,targetCP.x-p2.x);
+                let diff = aiAngle-p2.angle; while(diff>Math.PI)diff-=Math.PI*2; while(diff<-Math.PI)diff+=Math.PI*2;
+                p2.angle += Math.sign(diff)*Math.min(Math.abs(diff),0.05);
+                p2.speed = Math.min(p2.speed+0.12,4.2);
+                p2.x += Math.cos(p2.angle)*p2.speed; p2.y += Math.sin(p2.angle)*p2.speed;
+                p2.x = Math.max(15,Math.min(W-15,p2.x)); p2.y = Math.max(15,Math.min(H-15,p2.y));
+            } else {
+                updateCar(p2, g.guestKeys);
+            }
+            [p1,p2].forEach((p,pi) => {
+                const cp = g.checkpoints[p.checkpoint%g.checkpoints.length];
+                if (Math.hypot(p.x-cp.x,p.y-cp.y)<cp.r) {
+                    p.checkpoint++;
+                    if (p.checkpoint%g.checkpoints.length===0) {
+                        p.lap++;
+                        setLap(l => { const nl=[...l]; nl[pi]=p.lap; return nl; });
+                        if (p.lap>=LAPS) { setGameState('over'); addScore(pi===0?500:50); }
                     }
                 }
+            });
+            if (isMultiplayer) {
+                syncRef.current++;
+                if (syncRef.current >= 3) {
+                    syncRef.current = 0;
+                    updateRoom({p1:{x:p1.x,y:p1.y,angle:p1.angle,speed:p1.speed},p2:{x:p2.x,y:p2.y,angle:p2.angle,speed:p2.speed},laps:[p1.lap,p2.lap],ts:Date.now()});
+                }
             }
-        });
+        } else {
+            // Guest: send keys
+            syncRef.current++;
+            if (syncRef.current >= 3) {
+                syncRef.current = 0;
+                if (room?.id) db.collection('gameRooms').doc(room.id).set({gameState:{guestKeys:{...g.keys},guestTs:Date.now()}},{merge:true}).catch(()=>{});
+            }
+        }
         draw();
     };
 
@@ -8392,39 +8759,29 @@ function RacingGame({ room, updateRoom, currentUser, addScore }) {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
         ctx.fillStyle = '#1a5c1a'; ctx.fillRect(0, 0, W, H);
         const cx = W/2, cy = H/2;
-        // Track
         ctx.strokeStyle = '#555'; ctx.lineWidth = 110;
-        ctx.beginPath(); ctx.ellipse(cx, cy, W/2-80, H/2-80, 0, 0, Math.PI*2); ctx.stroke();
+        ctx.beginPath(); ctx.ellipse(cx,cy,W/2-80,H/2-80,0,0,Math.PI*2); ctx.stroke();
         ctx.strokeStyle = '#888'; ctx.lineWidth = 106;
-        ctx.beginPath(); ctx.ellipse(cx, cy, W/2-80, H/2-80, 0, 0, Math.PI*2); ctx.stroke();
-        // Track lines
-        ctx.setLineDash([15, 15]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
-        ctx.beginPath(); ctx.ellipse(cx, cy, W/2-80, H/2-80, 0, 0, Math.PI*2); ctx.stroke();
-        ctx.setLineDash([]);
-        // Start/finish
+        ctx.beginPath(); ctx.ellipse(cx,cy,W/2-80,H/2-80,0,0,Math.PI*2); ctx.stroke();
+        ctx.setLineDash([15,15]); ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.ellipse(cx,cy,W/2-80,H/2-80,0,0,Math.PI*2); ctx.stroke(); ctx.setLineDash([]);
         ctx.fillStyle = '#fff';
-        for (let i = 0; i < 6; i++) for (let j = 0; j < 2; j++) {
-            if ((i + j) % 2 === 0) ctx.fillRect(W/2 - 55 + j * 10, H - 110 + i * 8, 10, 8);
-        }
+        for (let i=0;i<6;i++) for (let j=0;j<2;j++) { if((i+j)%2===0) ctx.fillRect(W/2-55+j*10,H-110+i*8,10,8); }
         const g = gameRef.current; if (!g) return;
-        // Cars
-        const drawCar = (p, color) => {
-            ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.angle);
-            ctx.fillStyle = color; ctx.beginPath(); ctx.roundRect(-14, -8, 28, 16, 4); ctx.fill();
-            ctx.fillStyle = 'rgba(255,255,255,0.3)'; ctx.fillRect(6, -6, 6, 12);
-            ctx.restore();
-        };
+        const drawCar = (p, color) => { ctx.save(); ctx.translate(p.x,p.y); ctx.rotate(p.angle); ctx.fillStyle=color; ctx.beginPath(); ctx.roundRect(-14,-8,28,16,4); ctx.fill(); ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.fillRect(6,-6,6,12); ctx.restore(); };
         drawCar(g.p1, '#4ade80'); drawCar(g.p2, '#ef4444');
-        // HUD
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 14px sans-serif'; ctx.textAlign = 'left';
-        ctx.fillStyle = '#4ade80'; ctx.fillText(`You: Lap ${Math.min(lap[0]+1, LAPS)}/${LAPS}`, 15, 25);
-        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right'; ctx.fillText(`AI: Lap ${Math.min(lap[1]+1, LAPS)}/${LAPS}`, W - 15, 25);
+        ctx.font = 'bold 14px sans-serif';
+        ctx.fillStyle = '#4ade80'; ctx.textAlign = 'left'; ctx.fillText(`You: Lap ${Math.min(lap[0]+1,LAPS)}/${LAPS}`, 15, 25);
+        ctx.fillStyle = '#ef4444'; ctx.textAlign = 'right'; ctx.fillText(`${oppName}: Lap ${Math.min(lap[1]+1,LAPS)}/${LAPS}`, W-15, 25);
+        if (isMultiplayer) { ctx.fillStyle='rgba(74,222,128,0.15)'; ctx.beginPath(); ctx.roundRect(W/2-45,H-28,90,20,4); ctx.fill(); ctx.fillStyle='#4ade80'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center'; ctx.fillText('LIVE MATCH',W/2,H-14); }
     };
 
     useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, lap]);
     useEffect(() => {
-        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if (gameRef.current) gameRef.current.keys[e.key] = true; if (e.key === ' ' && gameState !== 'playing') init(); };
-        const up = (e) => { if (gameRef.current) gameRef.current.keys[e.key] = false; };
+        const down = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return; if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if(gameRef.current) gameRef.current.keys[e.key]=true; if(e.key===' '&&gameState!=='playing') init(); };
+        const up = (e) => { if(gameRef.current) gameRef.current.keys[e.key]=false; };
         window.addEventListener('keydown', down); window.addEventListener('keyup', up);
         return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
     }, [gameState]);
@@ -8433,15 +8790,14 @@ function RacingGame({ room, updateRoom, currentUser, addScore }) {
         <div style={{position:'relative',borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)'}}>
             <canvas ref={canvasRef} width={W} height={H} style={{display:'block'}}/>
             {gameState !== 'playing' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
-                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>🏎️</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Racing</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to drive • {LAPS} laps to win</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div></>}
-                {gameState === 'over' && <><div style={{fontSize:'24px',fontWeight:700,color:lap[0]>=LAPS?'#4ade80':'#ef4444'}}>{lap[0]>=LAPS?'You Win!':'AI Wins!'}</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Press SPACE to race again</div></>}
+                {gameState === 'idle' && <><div style={{fontSize:'56px'}}>🏎️</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Racing</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to drive • {LAPS} laps to win</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div>{isMultiplayer && <div style={{color:'#4ade80',marginTop:'8px',fontWeight:600}}>Racing vs {oppName}</div>}</>}
+                {gameState === 'over' && <><div style={{fontSize:'24px',fontWeight:700,color:lap[0]>=LAPS?'#4ade80':'#ef4444'}}>{lap[0]>=LAPS?'You Win!':oppName+' Wins!'}</div><div style={{color:'#94a3b8',marginTop:'8px'}}>Press SPACE to race again</div></>}
             </div>}
         </div>
     );
 }
-
 // SUMO - Push opponent out of ring
-function SumoGame({ room, updateRoom, currentUser, addScore }) {
+function SumoGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const canvasRef = useRef(null);
     const [gameState, setGameState] = useState('idle');
     const [score, setScore] = useState([0, 0]);
@@ -8449,102 +8805,127 @@ function SumoGame({ room, updateRoom, currentUser, addScore }) {
     const W = 500, H = 500;
     const RING_R = 180;
     const gameRef = useRef(null);
+    const syncRef = useRef(0);
+    const oppName = isMultiplayer ? (opponent || 'P2') : 'AI';
 
     const init = () => {
-        gameRef.current = { p1: { x: W/2 - 60, y: H/2, vx: 0, vy: 0, charging: false, charge: 0 }, p2: { x: W/2 + 60, y: H/2, vx: 0, vy: 0 }, keys: {}, particles: [] };
-        setRound(1); setScore([0, 0]); setGameState('playing');
+        gameRef.current = { p1:{x:W/2-60,y:H/2,vx:0,vy:0,charging:false,charge:0}, p2:{x:W/2+60,y:H/2,vx:0,vy:0,charging:false,charge:0}, keys:{}, guestKeys:{}, particles:[] };
+        setRound(1); setScore([0,0]); setGameState('playing');
+        if (isMultiplayer && isHost) updateRoom({phase:'playing',ts:Date.now()});
     };
+    const resetRound = () => { if(!gameRef.current) return; gameRef.current.p1={x:W/2-60,y:H/2,vx:0,vy:0,charging:false,charge:0}; gameRef.current.p2={x:W/2+60,y:H/2,vx:0,vy:0,charging:false,charge:0}; };
 
-    const resetRound = () => {
-        if (!gameRef.current) return;
-        gameRef.current.p1 = { x: W/2 - 60, y: H/2, vx: 0, vy: 0, charging: false, charge: 0 };
-        gameRef.current.p2 = { x: W/2 + 60, y: H/2, vx: 0, vy: 0 };
-    };
+    
+    // Auto-start for multiplayer
+    useEffect(() => { if (isMultiplayer && !stateRef.current) init(); }, [isMultiplayer]);
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState || !gameRef.current) return;
+        const gs = room.gameState;
+        if (isHost && gs.guestKeys) { gameRef.current.guestKeys = gs.guestKeys; }
+        else if (!isHost && gs.p1 && gs.p2) {
+            const g = gameRef.current;
+            Object.assign(g.p1, gs.p1); Object.assign(g.p2, gs.p2);
+            if (gs.score) setScore(gs.score);
+            if (gs.round) setRound(gs.round);
+        }
+    }, [room?.gameState?.ts, room?.gameState?.guestTs]);
 
     const loop = () => {
         if (gameState !== 'playing') return;
         const g = gameRef.current;
         const { p1, p2 } = g;
-        const speed = 2.5;
-        // Player movement
-        if (g.keys['ArrowUp'] || g.keys['w']) p1.vy -= 0.4;
-        if (g.keys['ArrowDown'] || g.keys['s']) p1.vy += 0.4;
-        if (g.keys['ArrowLeft'] || g.keys['a']) p1.vx -= 0.4;
-        if (g.keys['ArrowRight'] || g.keys['d']) p1.vx += 0.4;
-        if (g.keys[' ']) { p1.charging = true; p1.charge = Math.min(p1.charge + 1, 30); }
-        p1.vx *= 0.92; p1.vy *= 0.92; p1.x += p1.vx; p1.y += p1.vy;
-        // AI - chase and try to push
-        const dx = p1.x - p2.x, dy = p1.y - p2.y;
-        const dist = Math.hypot(dx, dy);
-        if (dist > 0) { p2.vx += (dx / dist) * 0.35; p2.vy += (dy / dist) * 0.35; }
-        // AI retreats toward center if near edge
-        const aiDistCenter = Math.hypot(p2.x - W/2, p2.y - H/2);
-        if (aiDistCenter > RING_R * 0.6) { p2.vx += (W/2 - p2.x) * 0.01; p2.vy += (H/2 - p2.y) * 0.01; }
-        p2.vx *= 0.92; p2.vy *= 0.92; p2.x += p2.vx; p2.y += p2.vy;
-        // Collision
-        if (dist < 40 && dist > 0) {
-            const nx = dx / dist, ny = dy / dist;
-            const pushForce = p1.charging && p1.charge > 10 ? 8 + p1.charge * 0.3 : 3;
-            if (p1.charging && p1.charge > 10) {
-                p2.vx += nx * pushForce; p2.vy += ny * pushForce;
-                for (let i = 0; i < 8; i++) g.particles.push({ x: (p1.x+p2.x)/2, y: (p1.y+p2.y)/2, dx: (Math.random()-0.5)*6, dy: (Math.random()-0.5)*6, life: 12, color: '#fbbf24' });
+        
+        if (isHost || !isMultiplayer) {
+            // P1 input
+            if (g.keys['ArrowUp']||g.keys['w']) p1.vy -= 0.4;
+            if (g.keys['ArrowDown']||g.keys['s']) p1.vy += 0.4;
+            if (g.keys['ArrowLeft']||g.keys['a']) p1.vx -= 0.4;
+            if (g.keys['ArrowRight']||g.keys['d']) p1.vx += 0.4;
+            if (g.keys[' ']) { p1.charging=true; p1.charge=Math.min(p1.charge+1,30); }
+            if (p1.charging && !g.keys[' ']) { p1.charging=false; p1.charge=0; }
+            p1.vx*=0.92; p1.vy*=0.92; p1.x+=p1.vx; p1.y+=p1.vy;
+
+            if (!isMultiplayer) {
+                // AI
+                const dx=p1.x-p2.x, dy=p1.y-p2.y, dist=Math.hypot(dx,dy);
+                if(dist>0){p2.vx+=(dx/dist)*0.35;p2.vy+=(dy/dist)*0.35;}
+                const aiDist=Math.hypot(p2.x-W/2,p2.y-H/2);
+                if(aiDist>RING_R*0.6){p2.vx+=(W/2-p2.x)*0.01;p2.vy+=(H/2-p2.y)*0.01;}
             } else {
-                p1.vx -= nx * 2; p1.vy -= ny * 2; p2.vx += nx * 2; p2.vy += ny * 2;
+                // Guest input
+                const gk = g.guestKeys;
+                if (gk['ArrowUp']||gk['w']) p2.vy -= 0.4;
+                if (gk['ArrowDown']||gk['s']) p2.vy += 0.4;
+                if (gk['ArrowLeft']||gk['a']) p2.vx -= 0.4;
+                if (gk['ArrowRight']||gk['d']) p2.vx += 0.4;
+                if (gk[' ']) { p2.charging=true; p2.charge=Math.min(p2.charge+1,30); }
+                if (p2.charging && !gk[' ']) { p2.charging=false; p2.charge=0; }
             }
-            const overlap = 40 - dist;
-            p1.x -= nx * overlap / 2; p1.y -= ny * overlap / 2;
-            p2.x += nx * overlap / 2; p2.y += ny * overlap / 2;
+            p2.vx*=0.92; p2.vy*=0.92; p2.x+=p2.vx; p2.y+=p2.vy;
+
+            // Collision
+            const dx=p1.x-p2.x, dy=p1.y-p2.y, dist=Math.hypot(dx,dy);
+            if (dist<40 && dist>0) {
+                const nx=dx/dist, ny=dy/dist;
+                const p1Push = p1.charging&&p1.charge>10 ? 8+p1.charge*0.3 : 3;
+                const p2Push = p2.charging&&p2.charge>10 ? 8+p2.charge*0.3 : 3;
+                if (p1.charging&&p1.charge>10) { p2.vx+=nx*p1Push; p2.vy+=ny*p1Push; for(let i=0;i<8;i++) g.particles.push({x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,dx:(Math.random()-0.5)*6,dy:(Math.random()-0.5)*6,life:12,color:'#fbbf24'}); }
+                else if (p2.charging&&p2.charge>10) { p1.vx-=nx*p2Push; p1.vy-=ny*p2Push; for(let i=0;i<8;i++) g.particles.push({x:(p1.x+p2.x)/2,y:(p1.y+p2.y)/2,dx:(Math.random()-0.5)*6,dy:(Math.random()-0.5)*6,life:12,color:'#fbbf24'}); }
+                else { p1.vx-=nx*2;p1.vy-=ny*2;p2.vx+=nx*2;p2.vy+=ny*2; }
+                const overlap=40-dist; p1.x-=nx*overlap/2;p1.y-=ny*overlap/2;p2.x+=nx*overlap/2;p2.y+=ny*overlap/2;
+            }
+            const p1Dist=Math.hypot(p1.x-W/2,p1.y-H/2), p2Dist=Math.hypot(p2.x-W/2,p2.y-H/2);
+            if (p1Dist>RING_R||p2Dist>RING_R) {
+                const winner=p2Dist>RING_R?0:1;
+                setScore(s=>{const ns=[...s];ns[winner]++;return ns;});
+                setRound(r=>r+1);
+                if(isMultiplayer) updateRoom({p1:{x:p1.x,y:p1.y,vx:p1.vx,vy:p1.vy},p2:{x:p2.x,y:p2.y,vx:p2.vx,vy:p2.vy},score:score.map((v,i)=>i===winner?v+1:v),round:round+1,ts:Date.now()});
+                setTimeout(resetRound, 800);
+            }
+            if (isMultiplayer) {
+                syncRef.current++;
+                if (syncRef.current>=3) { syncRef.current=0; updateRoom({p1:{x:p1.x,y:p1.y,vx:p1.vx,vy:p1.vy,charging:p1.charging,charge:p1.charge},p2:{x:p2.x,y:p2.y,vx:p2.vx,vy:p2.vy,charging:p2.charging,charge:p2.charge},ts:Date.now()}); }
+            }
+        } else {
+            // Guest: send keys
+            syncRef.current++;
+            if (syncRef.current>=3) { syncRef.current=0; if(room?.id) db.collection('gameRooms').doc(room.id).set({gameState:{guestKeys:{...g.keys},guestTs:Date.now()}},{merge:true}).catch(()=>{}); }
         }
-        // Out of ring check
-        const p1Dist = Math.hypot(p1.x - W/2, p1.y - H/2);
-        const p2Dist = Math.hypot(p2.x - W/2, p2.y - H/2);
-        if (p1Dist > RING_R || p2Dist > RING_R) {
-            const winner = p2Dist > RING_R ? 0 : 1;
-            setScore(s => { const ns = [...s]; ns[winner]++; return ns; });
-            setRound(r => r + 1);
-            for (let i = 0; i < 15; i++) g.particles.push({ x: winner===0?p2.x:p1.x, y: winner===0?p2.y:p1.y, dx: (Math.random()-0.5)*8, dy: (Math.random()-0.5)*8, life: 20, color: winner===0?'#4ade80':'#ef4444' });
-            setTimeout(resetRound, 800);
-        }
-        if (p1.charging && !g.keys[' ']) { p1.charging = false; p1.charge = 0; }
-        g.particles = g.particles.filter(p => { p.x += p.dx; p.y += p.dy; p.life--; return p.life > 0; });
+        g.particles = g.particles.filter(p=>{p.x+=p.dx;p.y+=p.dy;p.life--;return p.life>0;});
         draw();
     };
 
     const draw = () => {
         const ctx = canvasRef.current?.getContext('2d'); if (!ctx) return;
-        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0, 0, W, H);
-        // Ring
-        ctx.beginPath(); ctx.arc(W/2, H/2, RING_R, 0, Math.PI*2);
-        ctx.fillStyle = '#3a2a1a'; ctx.fill();
-        ctx.strokeStyle = '#c4a64a'; ctx.lineWidth = 6; ctx.stroke();
-        ctx.beginPath(); ctx.arc(W/2, H/2, RING_R - 15, 0, Math.PI*2);
-        ctx.strokeStyle = 'rgba(196,166,74,0.3)'; ctx.lineWidth = 2; ctx.stroke();
+        ctx.fillStyle = '#1a1a2e'; ctx.fillRect(0,0,W,H);
+        ctx.beginPath(); ctx.arc(W/2,H/2,RING_R,0,Math.PI*2); ctx.fillStyle='#3a2a1a'; ctx.fill(); ctx.strokeStyle='#c4a64a'; ctx.lineWidth=6; ctx.stroke();
+        ctx.beginPath(); ctx.arc(W/2,H/2,RING_R-15,0,Math.PI*2); ctx.strokeStyle='rgba(196,166,74,0.3)'; ctx.lineWidth=2; ctx.stroke();
         const g = gameRef.current; if (!g) return;
-        // Players
         const drawSumo = (p, color, label) => {
-            ctx.fillStyle = color; ctx.shadowColor = color; ctx.shadowBlur = p === g.p1 && g.p1.charging ? 20 : 0;
-            ctx.beginPath(); ctx.arc(p.x, p.y, 18, 0, Math.PI*2); ctx.fill();
-            ctx.shadowBlur = 0;
-            ctx.fillStyle = '#fff'; ctx.font = 'bold 10px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(label, p.x, p.y + 4);
-            if (p === g.p1 && p.charging) {
-                ctx.strokeStyle = `rgba(251,191,36,${p.charge/30})`; ctx.lineWidth = 3;
-                ctx.beginPath(); ctx.arc(p.x, p.y, 22 + p.charge * 0.3, 0, Math.PI*2); ctx.stroke();
-            }
+            ctx.fillStyle=color; ctx.shadowColor=color; ctx.shadowBlur=p.charging?20:0;
+            ctx.beginPath(); ctx.arc(p.x,p.y,18,0,Math.PI*2); ctx.fill(); ctx.shadowBlur=0;
+            ctx.fillStyle='#fff'; ctx.font='bold 10px sans-serif'; ctx.textAlign='center'; ctx.fillText(label,p.x,p.y+4);
+            if(p.charging){ctx.strokeStyle=`rgba(251,191,36,${p.charge/30})`;ctx.lineWidth=3;ctx.beginPath();ctx.arc(p.x,p.y,22+p.charge*0.3,0,Math.PI*2);ctx.stroke();}
         };
-        drawSumo(g.p1, '#4ade80', 'YOU'); drawSumo(g.p2, '#ef4444', 'AI');
-        g.particles.forEach(p => { ctx.fillStyle = p.color; ctx.globalAlpha = p.life / 20; ctx.beginPath(); ctx.arc(p.x, p.y, 3, 0, Math.PI*2); ctx.fill(); });
-        ctx.globalAlpha = 1;
-        ctx.fillStyle = '#fff'; ctx.font = 'bold 18px sans-serif'; ctx.textAlign = 'center';
-        ctx.fillText(`${score[0]} - ${score[1]}`, W/2, 30);
-        ctx.font = '12px sans-serif'; ctx.fillStyle = '#94a3b8'; ctx.fillText(`Round ${round}`, W/2, 48);
+        const myLabel = (isHost||!isMultiplayer) ? 'YOU' : oppName.substring(0,4).toUpperCase();
+        const oppLabel = (isHost||!isMultiplayer) ? oppName.substring(0,4).toUpperCase() : 'YOU';
+        drawSumo(g.p1,'#4ade80',myLabel); drawSumo(g.p2,'#ef4444',oppLabel);
+        g.particles.forEach(p=>{ctx.fillStyle=p.color;ctx.globalAlpha=p.life/20;ctx.beginPath();ctx.arc(p.x,p.y,3,0,Math.PI*2);ctx.fill();});
+        ctx.globalAlpha=1;
+        ctx.fillStyle='#fff'; ctx.font='bold 18px sans-serif'; ctx.textAlign='center'; ctx.fillText(`${score[0]} - ${score[1]}`,W/2,30);
+        ctx.font='12px sans-serif'; ctx.fillStyle='#94a3b8'; ctx.fillText(`Round ${round}`,W/2,48);
+        if(isMultiplayer){ctx.fillStyle='rgba(74,222,128,0.15)';ctx.beginPath();ctx.roundRect(W/2-45,H-28,90,20,4);ctx.fill();ctx.fillStyle='#4ade80';ctx.font='bold 10px sans-serif';ctx.fillText('LIVE MATCH',W/2,H-14);}
     };
 
     useEffect(() => { if (gameState === 'playing') { const i = setInterval(loop, 16); return () => clearInterval(i); } }, [gameState, score, round]);
     useEffect(() => {
-        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if (gameRef.current) gameRef.current.keys[e.key] = true; if (e.key === ' ' && gameState !== 'playing') init(); };
-        const up = (e) => { if (gameRef.current) gameRef.current.keys[e.key] = false; };
-        window.addEventListener('keydown', down); window.addEventListener('keyup', up);
-        return () => { window.removeEventListener('keydown', down); window.removeEventListener('keyup', up); };
+        const down = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return; if(['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault(); if(gameRef.current) gameRef.current.keys[e.key]=true; if(e.key===' '&&gameState!=='playing') init(); };
+        const up = (e) => { if(gameRef.current) gameRef.current.keys[e.key]=false; };
+        window.addEventListener('keydown',down); window.addEventListener('keyup',up);
+        return () => { window.removeEventListener('keydown',down); window.removeEventListener('keyup',up); };
     }, [gameState]);
 
     return (
@@ -8553,13 +8934,13 @@ function SumoGame({ room, updateRoom, currentUser, addScore }) {
             {gameState === 'idle' && <div style={{position:'absolute',inset:0,background:'rgba(0,0,0,0.85)',display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',color:'#fff'}}>
                 <div style={{fontSize:'56px'}}>🤼</div><div style={{fontSize:'24px',fontWeight:700,marginTop:'8px'}}>Sumo</div>
                 <div style={{color:'#94a3b8',marginTop:'8px'}}>Arrow keys to move • Hold SPACE to charge push</div><div style={{color:'#64748b',marginTop:'4px'}}>Press SPACE to start</div>
+                {isMultiplayer && <div style={{color:'#4ade80',marginTop:'8px',fontWeight:600}}>Fighting vs {oppName}</div>}
             </div>}
         </div>
     );
 }
-
 // BATTLESHIP - Classic grid game vs AI
-function BattleshipGame({ room, updateRoom, currentUser, addScore }) {
+function BattleshipGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const [phase, setPhase] = useState('place'); // place, play, over
     const [playerBoard, setPlayerBoard] = useState(Array(100).fill(0));
     const [aiBoard, setAiBoard] = useState(Array(100).fill(0));
@@ -8571,6 +8952,38 @@ function BattleshipGame({ room, updateRoom, currentUser, addScore }) {
     const [message, setMessage] = useState('Place your ships! Click to place, R to rotate');
     const [turn, setTurn] = useState('player');
     const [aiMemory, setAiMemory] = useState({ hits: [], hunting: false, direction: null, lastHit: null });
+    const oppName = isMultiplayer ? (opponent || 'P2') : 'AI';
+    const isMyTurn = isMultiplayer ? (isHost ? turn === 'player' : turn === 'ai') : turn === 'player';
+
+    
+    // Auto-start for multiplayer
+    useEffect(() => { if (isMultiplayer) initBoard(); }, [isMultiplayer]);
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState) return;
+        const gs = room.gameState;
+        if (isHost) {
+            // Host reads guest's shot
+            if (gs.guestShot != null && turn === 'ai') {
+                const idx = gs.guestShot;
+                const ns = [...aiShots];
+                if (ns[idx] === 0) {
+                    ns[idx] = playerBoard[idx] > 0 ? 2 : 1;
+                    setAiShots(ns);
+                    if (playerBoard.every((v, i) => v === 0 || ns[i] === 2)) { setPhase('over'); setMessage(oppName+' wins!'); addScore(50); return; }
+                    setTurn('player'); setMessage('Your turn!');
+                    updateRoom({ hostShots: playerShots, aiShots: ns, turn: 'player', phase: 'play', ts: Date.now() });
+                }
+            }
+        } else {
+            // Guest reads host's shots and state
+            if (gs.hostShots) setPlayerShots(gs.hostShots);
+            if (gs.aiShots) setAiShots(gs.aiShots);
+            if (gs.turn) setTurn(gs.turn);
+            if (gs.phase === 'over') { setPhase('over'); setMessage(gs.message || 'Game over'); }
+        }
+    }, [room?.gameState?.ts, room?.gameState?.guestTs]);
+
     const SHIP_NAMES = ['Carrier (5)', 'Battleship (4)', 'Cruiser (3)', 'Submarine (3)', 'Destroyer (2)'];
 
     const canPlace = (board, row, col, size, horiz) => {
@@ -8616,16 +9029,27 @@ function BattleshipGame({ room, updateRoom, currentUser, addScore }) {
     };
 
     const handleShot = (idx) => {
-        if (phase !== 'play' || turn !== 'player' || playerShots[idx] !== 0) return;
+        if (phase !== 'play') return;
+        if (isMultiplayer && !isHost) {
+            // Guest fires by sending shot to Firestore
+            if (turn !== 'ai') return; // Guest's turn is when turn === 'ai'
+            if (room?.id) db.collection('gameRooms').doc(room.id).set({gameState:{guestShot:idx,guestTs:Date.now()}},{merge:true}).catch(()=>{});
+            return;
+        }
+        if (turn !== 'player' || playerShots[idx] !== 0) return;
         const ns = [...playerShots];
         ns[idx] = aiBoard[idx] > 0 ? 2 : 1;
         setPlayerShots(ns);
         if (aiBoard[idx] > 0) setMessage('Hit! 💥');
         else setMessage('Miss...');
-        // Check win
-        if (aiBoard.every((v, i) => v === 0 || ns[i] === 2)) { setPhase('over'); setMessage('You win! 🎉'); addScore(500); return; }
+        if (aiBoard.every((v, i) => v === 0 || ns[i] === 2)) { setPhase('over'); setMessage('You win! 🎉'); addScore(500); if(isMultiplayer) updateRoom({phase:'over',message:'You win!',ts:Date.now()}); return; }
         setTurn('ai');
-        setTimeout(aiTurn, 600);
+        if (isMultiplayer) {
+            setMessage(oppName + "'s turn...");
+            updateRoom({ hostShots: ns, turn: 'ai', phase: 'play', ts: Date.now() });
+        } else {
+            setTimeout(aiTurn, 600);
+        }
     };
 
     const aiTurn = () => {
@@ -8657,7 +9081,9 @@ function BattleshipGame({ room, updateRoom, currentUser, addScore }) {
     };
 
     useEffect(() => {
-        const handleKey = (e) => { if (e.key === 'r' || e.key === 'R') setHorizontal(h => !h); };
+        const handleKey = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return; if (e.key === 'r' || e.key === 'R') setHorizontal(h => !h); };
         window.addEventListener('keydown', handleKey); return () => window.removeEventListener('keydown', handleKey);
     }, []);
 
@@ -8694,7 +9120,7 @@ function BattleshipGame({ room, updateRoom, currentUser, addScore }) {
                         </div>
                     </div>
                 ) : (
-                    <>{renderGrid(playerBoard, aiShots, null, false, 'YOUR BOARD')}{renderGrid(aiBoard, playerShots, phase === 'play' ? handleShot : null, true, 'ENEMY BOARD')}</>
+                    <>{renderGrid(playerBoard, aiShots, null, false, 'YOUR BOARD')}{renderGrid(aiBoard, playerShots, phase === 'play' ? handleShot : null, true, isMultiplayer ? oppName.toUpperCase() + ' BOARD' : 'ENEMY BOARD')}</>
                 )}
             </div>
         </div>
@@ -8702,7 +9128,7 @@ function BattleshipGame({ room, updateRoom, currentUser, addScore }) {
 }
 
 // CHECKERS - vs AI
-function CheckersGame({ room, updateRoom, currentUser, addScore }) {
+function CheckersGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const [board, setBoard] = useState([]);
     const [selected, setSelected] = useState(null);
     const [validMoves, setValidMoves] = useState([]);
@@ -8710,6 +9136,28 @@ function CheckersGame({ room, updateRoom, currentUser, addScore }) {
     const [message, setMessage] = useState('Your turn (Red)');
     const [gameOver, setGameOver] = useState(false);
     const CELL = 56;
+    const oppName = isMultiplayer ? (opponent || 'P2') : 'AI';
+    const myColor = (isHost || !isMultiplayer) ? 'red' : 'black';
+    const oppColor = myColor === 'red' ? 'black' : 'red';
+
+    // Sync game state for multiplayer
+    
+    // Auto-start for multiplayer
+    useEffect(() => { if (isMultiplayer) initBoard(); }, [isMultiplayer]);
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState) return;
+        const gs = room.gameState;
+        if (gs.board) setBoard(gs.board);
+        if (gs.turn) setTurn(gs.turn);
+        if (gs.message) setMessage(gs.message.replace('AI', oppName).replace('You', myColor === 'red' ? 'You' : oppName));
+        if (gs.gameOver) setGameOver(gs.gameOver);
+    }, [room?.gameState?.ts]);
+
+    const syncBoard = (newBoard, newTurn, msg, over) => {
+        if (!isMultiplayer) return;
+        updateRoom({ board: newBoard, turn: newTurn, message: msg, gameOver: over || false, ts: Date.now() });
+    };
 
     const initBoard = () => {
         const b = Array(64).fill(null);
@@ -8761,11 +9209,13 @@ function CheckersGame({ room, updateRoom, currentUser, addScore }) {
     };
 
     const handleClick = (idx) => {
-        if (turn !== 'red' || gameOver) return;
+        if (gameOver) return;
+        if (isMultiplayer ? turn !== myColor : turn !== 'red') return;
         const piece = board[idx];
-        if (piece && piece.color === 'red') {
+        const playerColor = isMultiplayer ? myColor : 'red';
+        if (piece && piece.color === playerColor) {
             setSelected(idx);
-            const { moves, mustJump } = getAllMoves(board, 'red');
+            const { moves, mustJump } = getAllMoves(board, playerColor);
             const pieceMoves = moves.filter(m => m.from === idx);
             setValidMoves(pieceMoves);
             return;
@@ -8805,8 +9255,14 @@ function CheckersGame({ room, updateRoom, currentUser, addScore }) {
             return;
         }
         setTurn(nextColor);
-        if (nextColor === 'black') { setMessage('AI thinking...'); setTimeout(() => aiMove(nb), 400); }
-        else setMessage('Your turn (Red)');
+        if (isMultiplayer) {
+            const msg = nextColor === myColor ? 'Your turn!' : oppName + "'s turn...";
+            setMessage(msg);
+            syncBoard(nb, nextColor, msg, false);
+        } else {
+            if (nextColor === 'black') { setMessage('AI thinking...'); setTimeout(() => aiMove(nb), 400); }
+            else setMessage('Your turn (Red)');
+        }
     };
 
     const aiMove = (b) => {
@@ -8860,15 +9316,15 @@ function CheckersGame({ room, updateRoom, currentUser, addScore }) {
                 })}
             </div>
             <div style={{display:'flex',gap:'24px',fontSize:'13px'}}>
-                <div>🔴 Red (You): {board.filter(p=>p&&p.color==='red').length} pieces</div>
-                <div>⚫ Black (AI): {board.filter(p=>p&&p.color==='black').length} pieces</div>
+                <div>🔴 Red {myColor==='red'?'(You)':'('+oppName+')'}: {board.filter(p=>p&&p.color==='red').length} pieces</div>
+                <div>⚫ Black {myColor==='black'?'(You)':'('+oppName+')'}: {board.filter(p=>p&&p.color==='black').length} pieces</div>
             </div>
         </div>
     );
 }
 
 // CHESS - Simplified vs AI
-function ChessGame({ room, updateRoom, currentUser, addScore }) {
+function ChessGame({ room, updateRoom, currentUser, addScore, isMultiplayer, isHost, opponent }) {
     const PIECES = { K:'♔', Q:'♕', R:'♖', B:'♗', N:'♘', P:'♙', k:'♚', q:'♛', r:'♜', b:'♝', n:'♞', p:'♟' };
     const initPos = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR';
     const [board, setBoard] = useState([]);
@@ -8879,6 +9335,23 @@ function ChessGame({ room, updateRoom, currentUser, addScore }) {
     const [gameOver, setGameOver] = useState(false);
     const [captured, setCaptured] = useState({ white: [], black: [] });
     const CELL = 60;
+    const oppName = isMultiplayer ? (opponent || 'P2') : 'AI';
+    const myColor = (isHost || !isMultiplayer) ? 'white' : 'black';
+
+    useEffect(() => {
+        if (!isMultiplayer || !room?.gameState) return;
+        const gs = room.gameState;
+        if (gs.board) setBoard(gs.board);
+        if (gs.turn) setTurn(gs.turn);
+        if (gs.message) setMessage(gs.message);
+        if (gs.gameOver != null) setGameOver(gs.gameOver);
+        if (gs.captured) setCaptured(gs.captured);
+    }, [room?.gameState?.ts]);
+
+    const syncChess = (b, t, msg, over, cap) => {
+        if (!isMultiplayer) return;
+        updateRoom({ board: b, turn: t, message: msg, gameOver: over, captured: cap, ts: Date.now() });
+    };
 
     const parseFen = (fen) => {
         const b = Array(64).fill(null);
@@ -8919,9 +9392,11 @@ function ChessGame({ room, updateRoom, currentUser, addScore }) {
     };
 
     const handleClick = (idx) => {
-        if (turn !== 'white' || gameOver) return;
+        if (gameOver) return;
+        if (isMultiplayer ? turn !== myColor : turn !== 'white') return;
         const piece = board[idx];
-        if (piece && piece.color === 'white') {
+        const playerColor = isMultiplayer ? myColor : 'white';
+        if (piece && piece.color === playerColor) {
             setSelected(idx);
             setValidMoves(getBasicMoves(board, idx));
             return;
@@ -8950,8 +9425,14 @@ function ChessGame({ room, updateRoom, currentUser, addScore }) {
         }
         const nextColor = color === 'white' ? 'black' : 'white';
         setTurn(nextColor);
-        if (nextColor === 'black') { setMessage('AI thinking...'); setTimeout(() => aiMove(nb), 400); }
-        else setMessage('Your turn (White)');
+        if (isMultiplayer) {
+            const msg = nextColor === myColor ? 'Your turn!' : oppName + "'s turn...";
+            setMessage(msg);
+            syncChess(nb, nextColor, msg, false, captured);
+        } else {
+            if (nextColor === 'black') { setMessage('AI thinking...'); setTimeout(() => aiMove(nb), 400); }
+            else setMessage('Your turn (White)');
+        }
     };
 
     const aiMove = (b) => {
@@ -9662,7 +10143,9 @@ function ZombieSurvival({ addScore }) {
 
     useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => cancelAnimationFrame(animRef.current); }, []);
     useEffect(() => {
-        const down = (e) => { if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','1','2','3','4','5'].includes(e.key)) e.preventDefault(); if (stateRef.current) stateRef.current.keys[e.key] = true; if (e.key >= '1' && e.key <= '5' && stateRef.current?.ownedWeapons[parseInt(e.key)-1]) stateRef.current.weapon = parseInt(e.key)-1; };
+        const down = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return; if (['w','a','s','d','ArrowUp','ArrowDown','ArrowLeft','ArrowRight','1','2','3','4','5'].includes(e.key)) e.preventDefault(); if (stateRef.current) stateRef.current.keys[e.key] = true; if (e.key >= '1' && e.key <= '5' && stateRef.current?.ownedWeapons[parseInt(e.key)-1]) stateRef.current.weapon = parseInt(e.key)-1; };
         const up = (e) => { if (stateRef.current) stateRef.current.keys[e.key] = false; };
         const mouseMove = (e) => { if (!canvasRef.current || !stateRef.current) return; const r = canvasRef.current.getBoundingClientRect(); stateRef.current.mouse.x = e.clientX - r.left; stateRef.current.mouse.y = e.clientY - r.top; };
         const mouseDown = (e) => { if (!stateRef.current) { init(); return; } if (stateRef.current.phase === 'over') { init(); return; } stateRef.current.mouse.down = true; };
@@ -9964,6 +10447,8 @@ function TowerDefense({ addScore }) {
     useEffect(() => { animRef.current = requestAnimationFrame(loop); return () => cancelAnimationFrame(animRef.current); }, []);
     useEffect(() => {
         const handleKey = (e) => {
+            if(document.activeElement?.tagName==='INPUT'||document.activeElement?.tagName==='TEXTAREA')return;
+            if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
             if (!stateRef.current) return;
             if (e.key >= '1' && e.key <= '4') { stateRef.current.selectedTurret = parseInt(e.key) - 1; forceUpdate(n=>n+1); }
             if (e.key === 'n' || e.key === 'N') { if (!stateRef.current.waveActive) { startWave(stateRef.current); forceUpdate(n=>n+1); } }
