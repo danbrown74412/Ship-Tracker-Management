@@ -4318,6 +4318,24 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const siteMapInstance = React.useRef(null);
     const [editingPOC, setEditingPOC] = useState(null);
     const [pocForm, setPocForm] = useState({ name:'', role:'', phone:'', email:'', notes:'' });
+    const [showShipping, setShowShipping] = useState(false);
+    const [shipType, setShipType] = useState('unclass'); // 'unclass' or 'class'
+    const [shipForm, setShipForm] = useState({
+        dimL: '', dimW: '', dimH: '', weight: '', location: '', attn: '', serialSSD1: '', serialSSD2: '', serialRTR: '', serialPhone: ''
+    });
+    const classDefaults = {
+        dimL: '6', dimW: '6', dimH: '4', weight: '<10',
+        location: '', attn: 'Document Control PEO IWS PMR Norfolk 9583 Maryland Ave. BLDG X-70 Norfolk, VA 23511-2911',
+        serialSSD1: 'S1AXNSAF606778E', serialSSD2: 'S75BNL0X318559W', serialRTR: 'FLM25471047', serialPhone: 'WMP2603Z53U'
+    };
+    const buildShippingText = () => {
+        const f = shipForm;
+        if (shipType === 'unclass') {
+            return `Unclassified:\nDimensions: ${f.dimL||'___'}L x ${f.dimW||'___'}W x ${f.dimH||'___'}H\nWeight: ${f.weight||'____'} lbs\nLocation: ${f.location||''}\nATTN: ${f.attn||''}`;
+        } else {
+            return `Classified:\nDimensions: ${f.dimL||'6'}x${f.dimW||'6'}x${f.dimH||'4'}\nWeight: ${f.weight||'<10'} lbs\nLocation: ${f.location||''}\nATTN: ${f.attn||''}\nSerial Numbers:\nSSD1: ${f.serialSSD1||''}\nSSD2: ${f.serialSSD2||''}\nRTR:   ${f.serialRTR||''}\nPHONE: ${f.serialPhone||''}`;
+        }
+    };
     const [sitePOCs, setSitePOCs] = useState(() => {
         try { return JSON.parse(localStorage.getItem('sitePOCs') || '{}'); } catch { return {}; }
     });
@@ -4611,6 +4629,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                 {!selectedSite && <div className="btn-group">
                     <button className={`btn ${viewMode==='list'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('list')}>📋 List</button>
                     <button className={`btn ${viewMode==='calendar'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('calendar')}>📅 Calendar</button>
+                    <button className="btn btn-secondary" onClick={() => { setShowShipping(true); setShipType('unclass'); setShipForm({dimL:'',dimW:'',dimH:'',weight:'',location:'',attn:'',serialSSD1:'',serialSSD2:'',serialRTR:'',serialPhone:''}); }}>📦 Shipping</button>
                 </div>}
             </div>
             
@@ -4631,6 +4650,114 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                 </div>
             )}
             
+            {/* Shipping Template Modal */}
+            {showShipping && (
+                <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={(e) => { if(e.target === e.currentTarget) setShowShipping(false); }}>
+                    <div style={{background:'var(--bg-card)',borderRadius:'16px',padding:'28px',width:'540px',maxWidth:'95vw',maxHeight:'85vh',overflow:'auto',border:'1px solid var(--border)',boxShadow:'0 20px 60px rgba(0,0,0,0.4)'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+                            <div>
+                                <div style={{fontSize:'18px',fontWeight:700}}>📦 Shipping Template</div>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>Build &amp; copy email template for shipping dept</div>
+                            </div>
+                            <button className="btn btn-sm btn-secondary" onClick={() => setShowShipping(false)} style={{width:'32px',height:'32px',padding:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%'}}>✕</button>
+                        </div>
+                        
+                        {/* Classification Toggle */}
+                        <div style={{display:'flex',gap:'8px',marginBottom:'20px'}}>
+                            <button style={{flex:1,padding:'12px 16px',borderRadius:'10px',border: shipType==='unclass' ? '2px solid #22c55e' : '1px solid var(--border)',background: shipType==='unclass' ? 'rgba(34,197,94,0.1)' : 'var(--bg-input)',color: shipType==='unclass' ? '#22c55e' : 'var(--text-muted)',fontSize:'13px',fontWeight:700,cursor:'pointer',transition:'all 0.2s',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} onClick={() => { setShipType('unclass'); setShipForm({dimL:'',dimW:'',dimH:'',weight:'',location:'',attn:'',serialSSD1:'',serialSSD2:'',serialRTR:'',serialPhone:''}); }}>
+                                <span style={{width:'10px',height:'10px',borderRadius:'50%',background:'#22c55e',display:'inline-block'}}></span> Unclassified
+                            </button>
+                            <button style={{flex:1,padding:'12px 16px',borderRadius:'10px',border: shipType==='class' ? '2px solid #ef4444' : '1px solid var(--border)',background: shipType==='class' ? 'rgba(239,68,68,0.1)' : 'var(--bg-input)',color: shipType==='class' ? '#ef4444' : 'var(--text-muted)',fontSize:'13px',fontWeight:700,cursor:'pointer',transition:'all 0.2s',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} onClick={() => { setShipType('class'); setShipForm({...classDefaults}); }}>
+                                <span style={{width:'10px',height:'10px',borderRadius:'50%',background:'#ef4444',display:'inline-block'}}></span> Classified
+                            </button>
+                        </div>
+                        
+                        {/* Package Info */}
+                        <div style={{fontSize:'11px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'10px'}}>📐 PACKAGE INFO</div>
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr 1fr',gap:'8px',marginBottom:'14px'}}>
+                            <div>
+                                <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>Length</label>
+                                <input style={{width:'100%',padding:'10px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text)',fontSize:'14px',fontWeight:600,textAlign:'center'}} placeholder="L" value={shipForm.dimL} onChange={e => setShipForm({...shipForm, dimL: e.target.value})} />
+                            </div>
+                            <div>
+                                <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>Width</label>
+                                <input style={{width:'100%',padding:'10px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text)',fontSize:'14px',fontWeight:600,textAlign:'center'}} placeholder="W" value={shipForm.dimW} onChange={e => setShipForm({...shipForm, dimW: e.target.value})} />
+                            </div>
+                            <div>
+                                <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>Height</label>
+                                <input style={{width:'100%',padding:'10px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text)',fontSize:'14px',fontWeight:600,textAlign:'center'}} placeholder="H" value={shipForm.dimH} onChange={e => setShipForm({...shipForm, dimH: e.target.value})} />
+                            </div>
+                            <div>
+                                <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>Weight</label>
+                                <input style={{width:'100%',padding:'10px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text)',fontSize:'14px',fontWeight:600,textAlign:'center'}} placeholder="lbs" value={shipForm.weight} onChange={e => setShipForm({...shipForm, weight: e.target.value})} />
+                            </div>
+                        </div>
+                        
+                        {/* Destination */}
+                        <div style={{fontSize:'11px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'10px',marginTop:'16px'}}>📍 DESTINATION</div>
+                        <div style={{marginBottom:'10px'}}>
+                            <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>Location</label>
+                            <input style={{width:'100%',padding:'10px 12px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text)',fontSize:'13px'}} placeholder="Ship / Building / Site" value={shipForm.location} onChange={e => setShipForm({...shipForm, location: e.target.value})} />
+                        </div>
+                        <div style={{marginBottom:'14px'}}>
+                            <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>ATTN</label>
+                            <textarea style={{width:'100%',padding:'10px 12px',borderRadius:'8px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text)',fontSize:'13px',resize:'vertical',minHeight:'60px',fontFamily:'inherit'}} placeholder="Attention / Full mailing address" value={shipForm.attn} onChange={e => setShipForm({...shipForm, attn: e.target.value})} />
+                        </div>
+                        
+                        {/* Serial Numbers - Classified Only */}
+                        {shipType === 'class' && (
+                            <div>
+                                <div style={{fontSize:'11px',fontWeight:700,color:'#ef4444',letterSpacing:'1px',marginBottom:'10px',marginTop:'16px',display:'flex',alignItems:'center',gap:'6px'}}>
+                                    🔴 SERIAL NUMBERS
+                                </div>
+                                <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'14px'}}>
+                                    <div>
+                                        <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>SSD1</label>
+                                        <input style={{width:'100%',padding:'10px 12px',borderRadius:'8px',border:'1px solid rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.05)',color:'var(--text)',fontSize:'12px',fontFamily:'monospace'}} value={shipForm.serialSSD1} onChange={e => setShipForm({...shipForm, serialSSD1: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>SSD2</label>
+                                        <input style={{width:'100%',padding:'10px 12px',borderRadius:'8px',border:'1px solid rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.05)',color:'var(--text)',fontSize:'12px',fontFamily:'monospace'}} value={shipForm.serialSSD2} onChange={e => setShipForm({...shipForm, serialSSD2: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>RTR</label>
+                                        <input style={{width:'100%',padding:'10px 12px',borderRadius:'8px',border:'1px solid rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.05)',color:'var(--text)',fontSize:'12px',fontFamily:'monospace'}} value={shipForm.serialRTR} onChange={e => setShipForm({...shipForm, serialRTR: e.target.value})} />
+                                    </div>
+                                    <div>
+                                        <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>PHONE</label>
+                                        <input style={{width:'100%',padding:'10px 12px',borderRadius:'8px',border:'1px solid rgba(239,68,68,0.3)',background:'rgba(239,68,68,0.05)',color:'var(--text)',fontSize:'12px',fontFamily:'monospace'}} value={shipForm.serialPhone} onChange={e => setShipForm({...shipForm, serialPhone: e.target.value})} />
+                                    </div>
+                                </div>
+                            </div>
+                        )}
+                        
+                        {/* Live Preview */}
+                        <div style={{fontSize:'11px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'8px',marginTop:'16px'}}>👁️ PREVIEW</div>
+                        <div style={{padding:'16px',background: shipType==='class' ? 'rgba(239,68,68,0.05)' : 'rgba(34,197,94,0.05)',borderRadius:'10px',border: shipType==='class' ? '1px solid rgba(239,68,68,0.2)' : '1px solid rgba(34,197,94,0.2)',fontFamily:'monospace',fontSize:'12px',whiteSpace:'pre-wrap',lineHeight:'1.8',color:'var(--text)'}}>
+                            {buildShippingText()}
+                        </div>
+                        
+                        {/* Action Buttons */}
+                        <div style={{display:'flex',gap:'8px',marginTop:'16px'}}>
+                            <button style={{flex:1,padding:'14px',borderRadius:'10px',border:'none',background:'var(--primary)',color:'#fff',fontSize:'14px',fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} onClick={() => {
+                                const text = buildShippingText();
+                                navigator.clipboard.writeText(text).then(() => { toast('Copied to clipboard!', 'success'); }).catch(() => {
+                                    const ta = document.createElement('textarea'); ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Copied to clipboard!', 'success');
+                                });
+                            }}>
+                                📋 Copy to Clipboard
+                            </button>
+                            <button style={{padding:'14px 20px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text-muted)',fontSize:'13px',fontWeight:600,cursor:'pointer'}} onClick={() => {
+                                if(shipType==='class') setShipForm({...classDefaults});
+                                else setShipForm({dimL:'',dimW:'',dimH:'',weight:'',location:'',attn:'',serialSSD1:'',serialSSD2:'',serialRTR:'',serialPhone:''});
+                            }}>
+                                🔄 Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
             {selectedSite && siteData[selectedSite] && (() => {
                 const site = siteData[selectedSite];
                 const pocs = getSitePOCs(selectedSite);
