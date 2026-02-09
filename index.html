@@ -7,6 +7,7 @@
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310b981'/%3E%3Cpath d='M4 20l4-3h16l4 3H4z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M8 17h16l2-5H6l2 5z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M10 12V9h12v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M14 9V6h4v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M9 20v3h14v-3' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E"/>
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310b981'/%3E%3Cpath d='M4 20l4-3h16l4 3H4z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M8 17h16l2-5H6l2 5z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M10 12V9h12v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M14 9V6h4v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M9 20v3h14v-3' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E"/>
     <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600;700&family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css" />
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
         :root {
@@ -288,6 +289,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -4313,6 +4315,8 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const [selectedDate, setSelectedDate] = useState(null);
     const [topTab, setTopTab] = useState('trips'); // trips | sites
     const [selectedSite, setSelectedSite] = useState(null);
+    const siteMapRef = React.useRef(null);
+    const siteMapInstance = React.useRef(null);
     const [editingPOC, setEditingPOC] = useState(null);
     const [pocForm, setPocForm] = useState({ name:'', role:'', phone:'', email:'', notes:'' });
     const [sitePOCs, setSitePOCs] = useState(() => {
@@ -4332,6 +4336,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         everett: {
             name: 'Naval Station Everett', abbr: 'NAVSTA Everett', city: 'Everett, WA',
             lat: 47.9900, lng: -122.2185, mapZoom: 16,
+            boundary: [[47.9855,-122.2138],[47.9862,-122.2135],[47.987,-122.213],[47.988,-122.2125],[47.989,-122.212],[47.99,-122.2116],[47.991,-122.2112],[47.9918,-122.2108],[47.9925,-122.2108],[47.993,-122.2115],[47.9935,-122.213],[47.994,-122.215],[47.9948,-122.2175],[47.9955,-122.221],[47.9958,-122.224],[47.9955,-122.2258],[47.9948,-122.2265],[47.994,-122.2258],[47.9932,-122.224],[47.9925,-122.222],[47.9918,-122.22],[47.9905,-122.2195],[47.9892,-122.22],[47.9878,-122.2195],[47.9868,-122.2185],[47.9858,-122.217],[47.9852,-122.2155],[47.9853,-122.2142]],
             gate: { lat: 47.9865, lng: -122.2145, label: 'Main Gate (W Marine View Dr at 19th St)' },
             dock: { lat: 47.9930, lng: -122.2250, label: 'Pier Alpha & Bravo (Ship Berths)' },
             parking: { lat: 47.9890, lng: -122.2190, label: 'Visitor Parking (Bldg 2000)' },
@@ -4353,6 +4358,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         sandiego: {
             name: 'Naval Base San Diego', abbr: 'NBSD', city: 'San Diego, CA',
             lat: 32.6852, lng: -117.1251, mapZoom: 15,
+            boundary: [[32.6785,-117.124],[32.68,-117.1238],[32.682,-117.1235],[32.684,-117.1232],[32.686,-117.1228],[32.688,-117.1225],[32.69,-117.1222],[32.692,-117.1218],[32.694,-117.1215],[32.696,-117.121],[32.698,-117.1208],[32.7,-117.121],[32.7005,-117.123],[32.7,-117.126],[32.699,-117.129],[32.698,-117.131],[32.697,-117.134],[32.695,-117.1355],[32.693,-117.1365],[32.691,-117.137],[32.689,-117.1368],[32.687,-117.1362],[32.685,-117.1355],[32.683,-117.1348],[32.681,-117.134],[32.6795,-117.133],[32.6785,-117.1315],[32.678,-117.129],[32.678,-117.126]],
             gate: { lat: 32.6843, lng: -117.1255, label: 'Gate 6 / Main Gate (32nd St)' },
             dock: { lat: 32.6950, lng: -117.1340, label: 'Piers 1-13 (Wet Side / Harbor Dr)' },
             parking: { lat: 32.6863, lng: -117.1290, label: 'Visitor Control / Wet Side Parking' },
@@ -4374,6 +4380,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         pearlharbor: {
             name: 'Joint Base Pearl Harbor-Hickam', abbr: 'JBPHH', city: 'Pearl Harbor, HI',
             lat: 21.3500, lng: -157.9530, mapZoom: 15,
+            boundary: [[21.344,-157.94],[21.3445,-157.943],[21.345,-157.946],[21.3452,-157.95],[21.3458,-157.953],[21.3465,-157.956],[21.3475,-157.959],[21.349,-157.962],[21.35,-157.965],[21.3515,-157.967],[21.353,-157.968],[21.3545,-157.9675],[21.356,-157.9665],[21.3575,-157.964],[21.3585,-157.961],[21.358,-157.957],[21.3572,-157.953],[21.3565,-157.949],[21.3555,-157.946],[21.354,-157.9435],[21.352,-157.9415],[21.35,-157.94],[21.348,-157.939],[21.346,-157.9388],[21.3445,-157.9395]],
             gate: { lat: 21.3464, lng: -157.9423, label: 'Nimitz Gate / Pass & ID (Kamehameha Hwy)' },
             dock: { lat: 21.3510, lng: -157.9632, label: 'PHNSY Dry Docks & Piers' },
             parking: { lat: 21.3530, lng: -157.9523, label: 'PHNSY Visitor Parking' },
@@ -4395,6 +4402,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         mayport: {
             name: 'Naval Station Mayport', abbr: 'NAVSTA Mayport', city: 'Mayport, FL',
             lat: 30.3870, lng: -81.4150, mapZoom: 15,
+            boundary: [[30.384,-81.436],[30.3835,-81.432],[30.383,-81.427],[30.3828,-81.422],[30.383,-81.417],[30.3835,-81.412],[30.384,-81.407],[30.385,-81.402],[30.386,-81.3975],[30.387,-81.3945],[30.3885,-81.393],[30.39,-81.392],[30.392,-81.3918],[30.394,-81.392],[30.3955,-81.393],[30.3965,-81.395],[30.397,-81.3975],[30.3968,-81.401],[30.3965,-81.405],[30.396,-81.41],[30.3955,-81.415],[30.3948,-81.42],[30.3935,-81.425],[30.392,-81.429],[30.39,-81.432],[30.388,-81.4345],[30.386,-81.4362],[30.3845,-81.4365]],
             gate: { lat: 30.3845, lng: -81.4354, label: 'Gate 5 (Perimeter Rd / Mayport Rd)' },
             dock: { lat: 30.3950, lng: -81.3970, label: 'Turning Basin & Ship Piers' },
             parking: { lat: 30.3900, lng: -81.4100, label: 'Visitor Parking (Main Base Area)' },
@@ -4416,6 +4424,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         norfolk: {
             name: 'Naval Station Norfolk', abbr: 'NAVSTA Norfolk', city: 'Norfolk, VA',
             lat: 36.9435, lng: -76.3195, mapZoom: 14,
+            boundary: [[36.9365,-76.317],[36.937,-76.32],[36.9375,-76.323],[36.9385,-76.326],[36.94,-76.3285],[36.942,-76.33],[36.944,-76.3315],[36.946,-76.333],[36.948,-76.334],[36.95,-76.3345],[36.952,-76.334],[36.954,-76.333],[36.956,-76.3315],[36.9575,-76.3295],[36.959,-76.327],[36.96,-76.324],[36.9605,-76.321],[36.96,-76.3175],[36.959,-76.314],[36.9575,-76.311],[36.9555,-76.3085],[36.953,-76.3065],[36.9505,-76.3055],[36.948,-76.305],[36.9455,-76.3055],[36.943,-76.3065],[36.941,-76.308],[36.9395,-76.31],[36.938,-76.312],[36.937,-76.3145]],
             gate: { lat: 36.9374, lng: -76.3197, label: 'Gate 5 (Hampton Blvd / B Ave)' },
             dock: { lat: 36.9547, lng: -76.3278, label: 'Piers 1-14 (Main Waterfront)' },
             parking: { lat: 36.9420, lng: -76.3210, label: 'Visitor Parking (near Gate 5)' },
@@ -4437,6 +4446,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         yokosuka: {
             name: 'Commander Fleet Activities Yokosuka', abbr: 'CFAY / Yoko', city: 'Yokosuka, Japan',
             lat: 35.2850, lng: 139.6640, mapZoom: 16,
+            boundary: [[35.2820,139.6655],[35.2825,139.6670],[35.2830,139.6685],[35.2838,139.6695],[35.2848,139.6700],[35.2858,139.6698],[35.2868,139.6690],[35.2878,139.6675],[35.2885,139.6655],[35.2890,139.6630],[35.2892,139.6608],[35.2888,139.6585],[35.2880,139.6568],[35.2870,139.6558],[35.2858,139.6555],[35.2845,139.6560],[35.2835,139.6570],[35.2828,139.6585],[35.2822,139.6605],[35.2818,139.6625],[35.2818,139.6645]],
             gate: { lat: 35.2828, lng: 139.6659, label: 'Main Gate (Honcho / Blue St)' },
             dock: { lat: 35.2867, lng: 139.6622, label: 'SRF-JRMC Piers & Dry Docks' },
             parking: { lat: 35.2845, lng: 139.6645, label: 'Visitor Parking (Main Base)' },
@@ -4458,6 +4468,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         rota: {
             name: 'Naval Station Rota', abbr: 'NAVSTA Rota', city: 'Rota, Spain',
             lat: 36.6374, lng: -6.3465, mapZoom: 14,
+            boundary: [[36.6245,-6.3350],[36.6225,-6.3380],[36.6210,-6.3420],[36.6200,-6.3460],[36.6195,-6.3500],[36.6200,-6.3540],[36.6215,-6.3575],[36.6235,-6.3600],[36.6260,-6.3620],[36.6290,-6.3635],[36.6320,-6.3645],[36.6350,-6.3650],[36.6380,-6.3648],[36.6410,-6.3640],[36.6435,-6.3625],[36.6455,-6.3600],[36.6470,-6.3570],[36.6478,-6.3535],[36.6480,-6.3495],[36.6475,-6.3455],[36.6465,-6.3420],[36.6448,-6.3390],[36.6425,-6.3365],[36.6400,-6.3348],[36.6375,-6.3338],[36.6350,-6.3332],[36.6320,-6.3330],[36.6295,-6.3335],[36.6270,-6.3340]],
             gate: { lat: 36.6280, lng: -6.3370, label: 'Main Gate (Dual Spanish/US Check)' },
             dock: { lat: 36.6420, lng: -6.3550, label: 'Pier Area / Ship Berths' },
             parking: { lat: 36.6350, lng: -6.3460, label: 'Visitor Parking (Main Lot)' },
@@ -4477,6 +4488,65 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
             ]
         }
     };
+    
+    // Leaflet map for site detail view
+    useEffect(() => {
+        if (!selectedSite || !siteData[selectedSite] || topTab !== 'sites') return;
+        // Small delay to ensure React has rendered the div
+        const timer = setTimeout(() => {
+            const el = document.getElementById('site-leaflet-map');
+            if (!el) return;
+            // Cleanup previous map
+            if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; }
+            
+            const site = siteData[selectedSite];
+            const map = L.map(el, { zoomControl: true, scrollWheelZoom: true }).setView([site.lat, site.lng], site.mapZoom || 16);
+            siteMapInstance.current = map;
+            
+            // Satellite tiles (ESRI)
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '&copy; Esri', maxZoom: 19
+            }).addTo(map);
+            // Labels overlay
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
+                maxZoom: 19, opacity: 0.6
+            }).addTo(map);
+            
+            // Base boundary outline
+            if (site.boundary && site.boundary.length > 2) {
+                L.polygon(site.boundary, {
+                    color: '#00d4ff', weight: 3, fillColor: '#00d4ff', fillOpacity: 0.08,
+                    dashArray: '8,6', lineCap: 'round'
+                }).addTo(map);
+            }
+            
+            // Custom icons
+            const makeIcon = (color, emoji) => L.divIcon({
+                className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
+                html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:' + color + ';border:2px solid #fff;border-radius:50%;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,0.5)">' + emoji + '</div>'
+            });
+            
+            // Gate marker
+            L.marker([site.gate.lat, site.gate.lng], {icon: makeIcon('#ef4444','🚧')})
+                .bindPopup('<b style="color:#ef4444">GATE</b><br/>' + site.gate.label + '<br/><small>' + site.gate_info.substring(0,80) + '</small>')
+                .addTo(map);
+            // Parking marker
+            L.marker([site.parking.lat, site.parking.lng], {icon: makeIcon('#3b82f6','🅿️')})
+                .bindPopup('<b style="color:#3b82f6">PARKING</b><br/>' + site.parking.label + '<br/><small>' + site.parking_info.substring(0,80) + '</small>')
+                .addTo(map);
+            // Pier/Dock marker
+            L.marker([site.dock.lat, site.dock.lng], {icon: makeIcon('#22c55e','⚓')})
+                .bindPopup('<b style="color:#22c55e">PIER / DOCK</b><br/>' + site.dock.label)
+                .addTo(map);
+            
+            // Fit bounds to show full base
+            if (site.boundary && site.boundary.length > 2) {
+                map.fitBounds(site.boundary, { padding: [30, 30] });
+            }
+        }, 100);
+        
+        return () => { clearTimeout(timer); if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; } };
+    }, [selectedSite, topTab]);
     
     const getSitePOCs = (siteKey) => sitePOCs[siteKey] || siteData[siteKey]?.pocs_default || [];
     const savePOC = (siteKey) => {
@@ -4592,41 +4662,41 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                         <button className="btn btn-secondary" style={{marginBottom:'16px'}} onClick={() => {setSelectedSite(null);setEditingPOC(null);}}>← All Sites</button>
                         
                         {/* Base Map - Satellite Reference */}
-                        <div id="site-map-print" className="card" style={{padding:'20px',marginBottom:'16px'}}>
+                        <div className="card" style={{padding:'20px',marginBottom:'16px'}}>
                             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
                                 <div>
                                     <span className="card-title">🗺️ Base Layout — {site.abbr}</span>
                                     <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{selectedSite==='yokosuka'?'🇯🇵':selectedSite==='rota'?'🇪🇸':'🇺🇸'} {site.name}</div>
                                 </div>
                                 <button className="btn btn-sm btn-secondary" onClick={() => {
-                                    const el = document.getElementById('site-map-print');
-                                    const win = window.open('','','width=900,height=800');
-                                    win.document.write('<html><head><title>' + site.abbr + ' - Base Map</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222}h2{margin:0 0 4px}h4{margin:12px 0 6px;color:#555}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}.card{padding:10px;border:1px solid #ccc;border-radius:6px;font-size:12px}.card b{display:block;margin-bottom:4px}.route{padding:10px;background:#f5f5f5;border-radius:6px;margin:12px 0;font-size:12px}@media print{body{margin:0}}</style></head><body>');
-                                    win.document.write('<h2>' + site.abbr + ' — ' + site.name + '</h2>');
-                                    win.document.write('<p style="font-size:12px;color:#666;margin:4px 0">Base reference map — print & bring onsite</p>');
-                                    win.document.write('<img src="https://maps.googleapis.com/maps/api/staticmap?center=' + site.lat + ',' + site.lng + '&zoom=' + (site.mapZoom||16) + '&size=850x500&maptype=satellite&key=" style="width:100%;border:1px solid #ccc;border-radius:6px" onerror="this.style.display=\'none\'" />');
-                                    win.document.write('<p style="font-size:11px;color:#888;margin:4px 0">Satellite imagery — if image fails to load, use the interactive map in-app to screenshot</p>');
+                                    const win = window.open('','','width=900,height=700');
+                                    win.document.write('<html><head><title>' + site.abbr + ' - Base Reference</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222}h2{margin:0 0 4px}h4{margin:12px 0 6px;color:#555}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}.card{padding:10px;border:1px solid #ccc;border-radius:6px;font-size:12px}.card b{display:block;margin-bottom:4px}.route{padding:12px;background:#f0f0f0;border-radius:6px;margin:12px 0;font-size:13px}@media print{body{margin:10px}}</style></head><body>');
+                                    win.document.write('<h2>🗺️ ' + site.abbr + ' — ' + site.name + '</h2>');
+                                    win.document.write('<p style="font-size:12px;color:#666;margin:4px 0 12px">Base reference — print & bring onsite. Screenshot the satellite map from the app for visual reference.</p>');
                                     win.document.write('<div class="grid">');
                                     win.document.write('<div class="card" style="border-left:4px solid #ef4444"><b style="color:#ef4444">🚧 GATE</b>' + site.gate.label + '<br/><span style="color:#666">' + site.gate_info + '</span></div>');
                                     win.document.write('<div class="card" style="border-left:4px solid #3b82f6"><b style="color:#3b82f6">🅿️ PARKING</b>' + site.parking.label + '<br/><span style="color:#666">' + site.parking_info + '</span></div>');
                                     win.document.write('<div class="card" style="border-left:4px solid #22c55e"><b style="color:#22c55e">⚓ PIER</b>' + site.dock.label + '</div>');
                                     win.document.write('</div>');
-                                    win.document.write('<div class="route"><b>🚗 ON-BASE: GATE → PARKING → PIER</b>' + site.route_info + '</div>');
-                                    win.document.write('</body></html>');
+                                    win.document.write('<div class="route"><b>🚗 ON-BASE: GATE → PARKING → PIER</b><br/>' + site.route_info + '</div>');
+                                    if (pocs.filter(p=>p.name).length > 0) {
+                                        win.document.write('<h4>👤 Contacts</h4>');
+                                        pocs.filter(p=>p.name).forEach(p => {
+                                            win.document.write('<div style="font-size:12px;margin:4px 0"><b>' + p.name + '</b> — ' + p.role + (p.phone ? ' | 📞 ' + p.phone : '') + (p.email ? ' | ✉️ ' + p.email : '') + '</div>');
+                                        });
+                                    }
+                                    win.document.write('<h4>📦 Shipping</h4>');
+                                    win.document.write('<div class="grid" style="grid-template-columns:1fr 1fr">');
+                                    win.document.write('<div class="card" style="border-left:3px solid green;font-family:monospace;font-size:11px">' + site.addresses.unclass.lines.join('<br/>') + '</div>');
+                                    win.document.write('<div class="card" style="border-left:3px solid red;font-family:monospace;font-size:11px">' + site.addresses.class.lines.join('<br/>') + '</div>');
+                                    win.document.write('</div></body></html>');
                                     win.document.close();
                                     setTimeout(() => win.print(), 300);
-                                }}>🖨️ Print Map</button>
+                                }}>🖨️ Print Reference</button>
                             </div>
-                            <div style={{borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)',height:'500px'}}>
-                                <iframe 
-                                    width="100%" height="500" frameBorder="0"
-                                    src={`https://maps.google.com/maps?q=${site.lat},${site.lng}&t=k&z=${site.mapZoom || 16}&output=embed`}
-                                    style={{border:0}}
-                                    allowFullScreen
-                                />
-                            </div>
+                            <div id="site-leaflet-map" style={{borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)',height:'500px',background:'#1a1a2e'}}></div>
                             <div style={{marginTop:'8px',fontSize:'11px',color:'var(--text-muted)',textAlign:'center'}}>
-                                🛰️ Satellite view — zoom & pan to see base layout, piers, and gate locations
+                                🛰️ Satellite view — base perimeter outlined in blue • click markers for details
                             </div>
                             
                             {/* Key Locations */}
