@@ -4331,12 +4331,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const siteData = {
         everett: {
             name: 'Naval Station Everett', abbr: 'NAVSTA Everett', city: 'Everett, WA',
-            lat: 47.9900, lng: -122.2185,
+            lat: 47.9900, lng: -122.2185, mapZoom: 16,
             gate: { lat: 47.9865, lng: -122.2145, label: 'Main Gate (W Marine View Dr at 19th St)' },
             dock: { lat: 47.9930, lng: -122.2250, label: 'Pier Alpha & Bravo (Ship Berths)' },
             parking: { lat: 47.9890, lng: -122.2190, label: 'Visitor Parking (Bldg 2000)' },
-            mapUrl: 'https://maps.google.com/maps?saddr=47.9865,-122.2145&daddr=47.9890,-122.2190+to:47.9930,-122.2250&dirflg=d&t=k&z=16&output=embed',
-            directionsUrl: 'https://www.google.com/maps/dir/47.9865,-122.2145/47.9890,-122.2190/47.9930,-122.2250/@47.990,-122.220,16z/data=!3m1!1e3',
             base_info: 'Home port for Carrier Strike Group, Destroyer Squadron, and multiple DDGs. Located on the Puget Sound waterfront.',
             gate_info: 'Main Gate: W Marine View Dr (19th St). North Gate: 18th St. Both 24/7. Visitor Control right side before gate.',
             parking_info: 'Visitor lot near Bldg 2000. Fleet parking along interior road. Pier-side parking with ship coordination.',
@@ -4354,12 +4352,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         sandiego: {
             name: 'Naval Base San Diego', abbr: 'NBSD', city: 'San Diego, CA',
-            lat: 32.6852, lng: -117.1251,
+            lat: 32.6852, lng: -117.1251, mapZoom: 15,
             gate: { lat: 32.6843, lng: -117.1255, label: 'Gate 6 / Main Gate (32nd St)' },
             dock: { lat: 32.6950, lng: -117.1340, label: 'Piers 1-13 (Wet Side / Harbor Dr)' },
             parking: { lat: 32.6863, lng: -117.1290, label: 'Visitor Control / Wet Side Parking' },
-            mapUrl: 'https://maps.google.com/maps?saddr=32.6843,-117.1255&daddr=32.6863,-117.1290+to:32.6950,-117.1340&dirflg=d&t=k&z=15&output=embed',
-            directionsUrl: 'https://www.google.com/maps/dir/32.6843,-117.1255/32.6863,-117.1290/32.6950,-117.1340/@32.690,-117.130,15z/data=!3m1!1e3',
             base_info: 'Largest naval base on the West Coast. Principal homeport of the Pacific Fleet surface combatants. Multiple piers and repair facilities.',
             gate_info: 'Gate 6 (Main): 32nd St — 24/7. Gate 43: 32nd St north — 24/7. Gate 7: Harbor Dr & Vesta — weekdays. CAC/Military ID required.',
             parking_info: 'Wet side parking along Harbor Dr — dynamic, may be repurposed for ship loadout. Coordinate with ship duty officer for pier parking.',
@@ -4377,12 +4373,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         pearlharbor: {
             name: 'Joint Base Pearl Harbor-Hickam', abbr: 'JBPHH', city: 'Pearl Harbor, HI',
-            lat: 21.3500, lng: -157.9530,
+            lat: 21.3500, lng: -157.9530, mapZoom: 15,
             gate: { lat: 21.3464, lng: -157.9423, label: 'Nimitz Gate / Pass & ID (Kamehameha Hwy)' },
             dock: { lat: 21.3510, lng: -157.9632, label: 'PHNSY Dry Docks & Piers' },
             parking: { lat: 21.3530, lng: -157.9523, label: 'PHNSY Visitor Parking' },
-            mapUrl: 'https://maps.google.com/maps?saddr=21.3464,-157.9423&daddr=21.3530,-157.9523+to:21.3510,-157.9632&dirflg=d&t=k&z=15&output=embed',
-            directionsUrl: 'https://www.google.com/maps/dir/21.3464,-157.9423/21.3530,-157.9523/21.3510,-157.9632/@21.350,-157.955,15z/data=!3m1!1e3',
             base_info: 'Headquarters of U.S. Pacific Fleet. Joint base with Air Force. Pearl Harbor Naval Shipyard (PHNSY & IMF) provides maintenance and repair.',
             gate_info: 'Nimitz Gate (Main): Kamehameha Hwy — 24/7. Halsey Visitor Center for base passes. All vehicles subject to random inspection.',
             parking_info: 'Visitor parking at Halsey Visitor Center. PHNSY has designated parking — coordinate with shipyard access office ahead of visit.',
@@ -4400,12 +4394,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         mayport: {
             name: 'Naval Station Mayport', abbr: 'NAVSTA Mayport', city: 'Mayport, FL',
-            lat: 30.3870, lng: -81.4150,
+            lat: 30.3870, lng: -81.4150, mapZoom: 15,
             gate: { lat: 30.3845, lng: -81.4354, label: 'Gate 5 (Perimeter Rd / Mayport Rd)' },
             dock: { lat: 30.3950, lng: -81.3970, label: 'Turning Basin & Ship Piers' },
             parking: { lat: 30.3900, lng: -81.4100, label: 'Visitor Parking (Main Base Area)' },
-            mapUrl: 'https://maps.google.com/maps?saddr=30.3845,-81.4354&daddr=30.3900,-81.4100+to:30.3950,-81.3970&dirflg=d&t=k&z=14&output=embed',
-            directionsUrl: 'https://www.google.com/maps/dir/30.3845,-81.4354/30.3900,-81.4100/30.3950,-81.3970/@30.390,-81.415,14z/data=!3m1!1e3',
             base_info: 'Third-largest naval facility in the U.S. Located at the mouth of the St. Johns River. Home to multiple destroyer and cruiser squadrons.',
             gate_info: 'Gate 5 (Main): Perimeter Rd off Mayport Rd/A1A. Gate 5½ also available. Military ID or escort required. Visitor Control at gate.',
             parking_info: 'Visitor lot near Admin Building 1. Pier-side parking available — coordinate with ship quarterdeck.',
@@ -4423,12 +4415,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         norfolk: {
             name: 'Naval Station Norfolk', abbr: 'NAVSTA Norfolk', city: 'Norfolk, VA',
-            lat: 36.9435, lng: -76.3195,
+            lat: 36.9435, lng: -76.3195, mapZoom: 14,
             gate: { lat: 36.9374, lng: -76.3197, label: 'Gate 5 (Hampton Blvd / B Ave)' },
             dock: { lat: 36.9547, lng: -76.3278, label: 'Piers 1-14 (Main Waterfront)' },
             parking: { lat: 36.9420, lng: -76.3210, label: 'Visitor Parking (near Gate 5)' },
-            mapUrl: 'https://maps.google.com/maps?saddr=36.9374,-76.3197&daddr=36.9420,-76.3210+to:36.9547,-76.3278&dirflg=d&t=k&z=14&output=embed',
-            directionsUrl: 'https://www.google.com/maps/dir/36.9374,-76.3197/36.9420,-76.3210/36.9547,-76.3278/@36.946,-76.324,14z/data=!3m1!1e3',
             base_info: 'Largest naval station in the world. Home to NATO Allied Command Transformation. Supports the Atlantic Fleet with 75+ ships and 134+ aircraft.',
             gate_info: 'Gate 5 (Main): Hampton Blvd — 24/7. Gate 2: Terminal Blvd — limited hours. CAC/Military ID required. Visitor Control at Gate 5.',
             parking_info: 'Large visitor lot at Gate 5 / D-22 area. Pier parking by numbered lot — confirm pier assignment with ship POC before driving in.',
@@ -4446,12 +4436,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         yokosuka: {
             name: 'Commander Fleet Activities Yokosuka', abbr: 'CFAY / Yoko', city: 'Yokosuka, Japan',
-            lat: 35.2850, lng: 139.6640,
+            lat: 35.2850, lng: 139.6640, mapZoom: 16,
             gate: { lat: 35.2828, lng: 139.6659, label: 'Main Gate (Honcho / Blue St)' },
             dock: { lat: 35.2867, lng: 139.6622, label: 'SRF-JRMC Piers & Dry Docks' },
             parking: { lat: 35.2845, lng: 139.6645, label: 'Visitor Parking (Main Base)' },
-            mapUrl: 'https://maps.google.com/maps?saddr=35.2828,139.6659&daddr=35.2845,139.6645+to:35.2867,139.6622&dirflg=w&t=k&z=17&output=embed',
-            directionsUrl: 'https://www.google.com/maps/dir/35.2828,139.6659/35.2845,139.6645/35.2867,139.6622/@35.285,139.664,17z/data=!3m1!1e3',
             base_info: 'Only permanently forward-deployed naval base. Home of the U.S. 7th Fleet flagship and forward-deployed naval forces (FDNF). SRF-JRMC ship repair facility onsite.',
             gate_info: 'Main Gate (Honcho/Blue St): East side of base — 24/7. SOFA status or escort required. Womble Gate also available. Ikego Gate for housing.',
             parking_info: 'Limited visitor parking near Womble Gate. Base is compact and walkable. SRF parking requires separate coordination.',
@@ -4469,12 +4457,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         rota: {
             name: 'Naval Station Rota', abbr: 'NAVSTA Rota', city: 'Rota, Spain',
-            lat: 36.6374, lng: -6.3465,
+            lat: 36.6374, lng: -6.3465, mapZoom: 14,
             gate: { lat: 36.6280, lng: -6.3370, label: 'Main Gate (Dual Spanish/US Check)' },
             dock: { lat: 36.6420, lng: -6.3550, label: 'Pier Area / Ship Berths' },
             parking: { lat: 36.6350, lng: -6.3460, label: 'Visitor Parking (Main Lot)' },
-            mapUrl: 'https://maps.google.com/maps?saddr=36.6280,-6.3370&daddr=36.6350,-6.3460+to:36.6420,-6.3550&dirflg=d&t=k&z=14&output=embed',
-            directionsUrl: 'https://www.google.com/maps/dir/36.6280,-6.3370/36.6350,-6.3460/36.6420,-6.3550/@36.635,-6.345,14z/data=!3m1!1e3',
             base_info: 'Largest U.S. military community in Spain. Supports operations in Europe, Africa, and the Middle East. Home to FDNF-E destroyers for Aegis Ballistic Missile Defense.',
             gate_info: 'Main Gate: Dual checkpoint — Spanish military first, then U.S. ID. SOFA status or escort required. Allow extra time.',
             parking_info: 'Main visitor lot just inside the gate. Pier parking available with advance coordination.',
@@ -4605,46 +4591,66 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                     <div>
                         <button className="btn btn-secondary" style={{marginBottom:'16px'}} onClick={() => {setSelectedSite(null);setEditingPOC(null);}}>← All Sites</button>
                         
-                        {/* Map - Full Width with Route: Gate → Parking → Dock */}
-                        <div className="card" style={{padding:'20px',marginBottom:'16px'}}>
+                        {/* Base Map - Satellite Reference */}
+                        <div id="site-map-print" className="card" style={{padding:'20px',marginBottom:'16px'}}>
                             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
                                 <div>
-                                    <span className="card-title">🗺️ Base Navigation — {site.abbr}</span>
+                                    <span className="card-title">🗺️ Base Layout — {site.abbr}</span>
                                     <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{selectedSite==='yokosuka'?'🇯🇵':selectedSite==='rota'?'🇪🇸':'🇺🇸'} {site.name}</div>
                                 </div>
-                                <a href={site.directionsUrl} target="_blank" rel="noreferrer" className="btn btn-sm btn-primary">🧭 Open Directions in Google Maps ↗</a>
+                                <button className="btn btn-sm btn-secondary" onClick={() => {
+                                    const el = document.getElementById('site-map-print');
+                                    const win = window.open('','','width=900,height=800');
+                                    win.document.write('<html><head><title>' + site.abbr + ' - Base Map</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222}h2{margin:0 0 4px}h4{margin:12px 0 6px;color:#555}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}.card{padding:10px;border:1px solid #ccc;border-radius:6px;font-size:12px}.card b{display:block;margin-bottom:4px}.route{padding:10px;background:#f5f5f5;border-radius:6px;margin:12px 0;font-size:12px}@media print{body{margin:0}}</style></head><body>');
+                                    win.document.write('<h2>' + site.abbr + ' — ' + site.name + '</h2>');
+                                    win.document.write('<p style="font-size:12px;color:#666;margin:4px 0">Base reference map — print & bring onsite</p>');
+                                    win.document.write('<img src="https://maps.googleapis.com/maps/api/staticmap?center=' + site.lat + ',' + site.lng + '&zoom=' + (site.mapZoom||16) + '&size=850x500&maptype=satellite&key=" style="width:100%;border:1px solid #ccc;border-radius:6px" onerror="this.style.display=\'none\'" />');
+                                    win.document.write('<p style="font-size:11px;color:#888;margin:4px 0">Satellite imagery — if image fails to load, use the interactive map in-app to screenshot</p>');
+                                    win.document.write('<div class="grid">');
+                                    win.document.write('<div class="card" style="border-left:4px solid #ef4444"><b style="color:#ef4444">🚧 GATE</b>' + site.gate.label + '<br/><span style="color:#666">' + site.gate_info + '</span></div>');
+                                    win.document.write('<div class="card" style="border-left:4px solid #3b82f6"><b style="color:#3b82f6">🅿️ PARKING</b>' + site.parking.label + '<br/><span style="color:#666">' + site.parking_info + '</span></div>');
+                                    win.document.write('<div class="card" style="border-left:4px solid #22c55e"><b style="color:#22c55e">⚓ PIER</b>' + site.dock.label + '</div>');
+                                    win.document.write('</div>');
+                                    win.document.write('<div class="route"><b>🚗 ON-BASE: GATE → PARKING → PIER</b>' + site.route_info + '</div>');
+                                    win.document.write('</body></html>');
+                                    win.document.close();
+                                    setTimeout(() => win.print(), 300);
+                                }}>🖨️ Print Map</button>
                             </div>
                             <div style={{borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)',height:'500px'}}>
                                 <iframe 
                                     width="100%" height="500" frameBorder="0"
-                                    src={site.mapUrl}
+                                    src={`https://maps.google.com/maps?q=${site.lat},${site.lng}&t=k&z=${site.mapZoom || 16}&output=embed`}
                                     style={{border:0}}
                                     allowFullScreen
                                 />
                             </div>
+                            <div style={{marginTop:'8px',fontSize:'11px',color:'var(--text-muted)',textAlign:'center'}}>
+                                🛰️ Satellite view — zoom & pan to see base layout, piers, and gate locations
+                            </div>
                             
-                            {/* Route Legend */}
+                            {/* Key Locations */}
                             <div style={{marginTop:'12px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
                                 <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'4px solid #ef4444'}}>
-                                    <div style={{fontSize:'10px',fontWeight:700,color:'#ef4444',letterSpacing:'0.5px',marginBottom:'4px'}}>📍 A — GATE ENTRY</div>
+                                    <div style={{fontSize:'10px',fontWeight:700,color:'#ef4444',letterSpacing:'0.5px',marginBottom:'4px'}}>🚧 GATE ENTRY</div>
                                     <div style={{fontSize:'12px',fontWeight:600}}>{site.gate.label}</div>
-                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>{site.gate_info}</div>
+                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',lineHeight:'1.4'}}>{site.gate_info}</div>
                                 </div>
                                 <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'4px solid #3b82f6'}}>
-                                    <div style={{fontSize:'10px',fontWeight:700,color:'#3b82f6',letterSpacing:'0.5px',marginBottom:'4px'}}>🅿️ B — PARKING</div>
+                                    <div style={{fontSize:'10px',fontWeight:700,color:'#3b82f6',letterSpacing:'0.5px',marginBottom:'4px'}}>🅿️ PARKING</div>
                                     <div style={{fontSize:'12px',fontWeight:600}}>{site.parking.label}</div>
-                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>{site.parking_info}</div>
+                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',lineHeight:'1.4'}}>{site.parking_info}</div>
                                 </div>
                                 <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'4px solid #4ade80'}}>
-                                    <div style={{fontSize:'10px',fontWeight:700,color:'#4ade80',letterSpacing:'0.5px',marginBottom:'4px'}}>⚓ C — PIER / DOCK</div>
+                                    <div style={{fontSize:'10px',fontWeight:700,color:'#4ade80',letterSpacing:'0.5px',marginBottom:'4px'}}>⚓ PIER / DOCK</div>
                                     <div style={{fontSize:'12px',fontWeight:600}}>{site.dock.label}</div>
-                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>{site.base_info.substring(0,100)}</div>
+                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',lineHeight:'1.4'}}>{site.base_info.substring(0,120)}</div>
                                 </div>
                             </div>
                             
-                            {/* Driving Directions Summary */}
+                            {/* On-Base Directions */}
                             <div style={{marginTop:'12px',padding:'14px 16px',background:'linear-gradient(90deg, rgba(239,68,68,0.08), rgba(59,130,246,0.08), rgba(74,222,128,0.08))',borderRadius:'8px',border:'1px solid var(--border)'}}>
-                                <div style={{fontSize:'11px',fontWeight:700,color:'var(--text)',letterSpacing:'0.5px',marginBottom:'6px'}}>🚗 ROUTE: GATE → PARKING → PIER</div>
+                                <div style={{fontSize:'11px',fontWeight:700,color:'var(--text)',letterSpacing:'0.5px',marginBottom:'6px'}}>🚗 ON-BASE: GATE → PARKING → PIER</div>
                                 <div style={{fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6'}}>{site.route_info}</div>
                             </div>
                         </div>
