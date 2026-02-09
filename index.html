@@ -4311,8 +4311,160 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const [viewMode, setViewMode] = useState('list');
     const [calMonth, setCalMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
+    const [topTab, setTopTab] = useState('trips'); // trips | sites
+    const [selectedSite, setSelectedSite] = useState(null);
+    const [editingPOC, setEditingPOC] = useState(null);
+    const [pocForm, setPocForm] = useState({ name:'', role:'', phone:'', email:'', notes:'' });
+    const [sitePOCs, setSitePOCs] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('sitePOCs') || '{}'); } catch { return {}; }
+    });
+    const [siteNotes, setSiteNotes] = useState(() => {
+        try { return JSON.parse(localStorage.getItem('siteNotes') || '{}'); } catch { return {}; }
+    });
+    
+    useEffect(() => { localStorage.setItem('sitePOCs', JSON.stringify(sitePOCs)); }, [sitePOCs]);
+    useEffect(() => { localStorage.setItem('siteNotes', JSON.stringify(siteNotes)); }, [siteNotes]);
+    
     const locations = ['San Diego, CA', 'Norfolk, VA', 'Mayport, FL', 'Pearl Harbor, HI', 'Yokosuka, Japan', 'Rota, Spain', 'Everett, WA', 'Washington D.C.', 'Other'];
     const statuses = ['Scheduled', 'In Progress', 'Completed', 'Delayed', 'Cancelled'];
+    
+    const siteData = {
+        everett: {
+            name: 'Naval Station Everett', abbr: 'NAVSTA Everett', city: 'Everett, WA',
+            lat: 47.9790, lng: -122.2261,
+            mapUrl: 'https://maps.google.com/maps?q=47.9790,-122.2265&t=k&z=17&output=embed',
+            base_info: 'Home port for Carrier Strike Group, Destroyer Squadron, and multiple DDGs. Located on the Puget Sound waterfront.',
+            gate_info: 'Main Gate: Marine Dr entrance. Visitor Control: Building 2000.',
+            ships_homeported: ['DDG-106 Stockdale', 'DDG-108 Wayne E. Meyer', 'DDG-109 Jason Dunham'],
+            addresses: {
+                unclass: { label: 'UNCLASSIFIED Shipping', lines: ['Naval Station Everett', 'ATTN: [Your Command/Code]', '2000 Marine Drive', 'Everett, WA 98207-5001'] },
+                class: { label: 'CLASSIFIED Shipping', lines: ['Naval Station Everett', 'ATTN: Command Security Manager', 'Building 2000, Classified Material Control', '2000 Marine Drive', 'Everett, WA 98207-5001', '⚠️ Coordinate with local security office before shipping'] }
+            },
+            pocs_default: [
+                { id:'ep1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
+                { id:'ep2', name: '', role: 'Base IT/NMCI POC', phone: '', email: '', notes: '' },
+                { id:'ep3', name: '', role: 'Ship Coordinator', phone: '', email: '', notes: '' },
+            ]
+        },
+        sandiego: {
+            name: 'Naval Base San Diego', abbr: 'NBSD', city: 'San Diego, CA',
+            lat: 32.6839, lng: -117.1292,
+            mapUrl: 'https://maps.google.com/maps?q=32.6850,-117.1285&t=k&z=16&output=embed',
+            base_info: 'Largest naval base on the West Coast. Principal homeport of the Pacific Fleet surface combatants. Multiple piers and repair facilities.',
+            gate_info: 'Main Gate: Harbor Dr / Gate 1 (32nd St). Visitor Control Center at Gate 1.',
+            ships_homeported: ['Multiple CGs and DDGs'],
+            addresses: {
+                unclass: { label: 'UNCLASSIFIED Shipping', lines: ['Naval Base San Diego', 'ATTN: [Your Command/Code]', '3455 Senn Road', 'San Diego, CA 92136-5085'] },
+                class: { label: 'CLASSIFIED Shipping', lines: ['Naval Base San Diego', 'ATTN: Command Security Manager', 'Classified Material Control Facility', '3455 Senn Road', 'San Diego, CA 92136-5085', '⚠️ Coordinate with local security office before shipping'] }
+            },
+            pocs_default: [
+                { id:'sp1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
+                { id:'sp2', name: '', role: 'SWRMC Coordinator', phone: '', email: '', notes: '' },
+                { id:'sp3', name: '', role: 'Base IT/NMCI POC', phone: '', email: '', notes: '' },
+            ]
+        },
+        pearlharbor: {
+            name: 'Joint Base Pearl Harbor-Hickam', abbr: 'JBPHH', city: 'Pearl Harbor, HI',
+            lat: 21.3525, lng: -157.9648,
+            mapUrl: 'https://maps.google.com/maps?q=21.3545,-157.9610&t=k&z=16&output=embed',
+            base_info: 'Headquarters of U.S. Pacific Fleet. Joint base with Air Force. Pearl Harbor Naval Shipyard (PHNSY & IMF) provides maintenance and repair.',
+            gate_info: 'Nimitz Gate (Main): Kamehameha Hwy. Visitor Control: Halsey Visitor Center.',
+            ships_homeported: ['Multiple DDGs and CGs homeported'],
+            addresses: {
+                unclass: { label: 'UNCLASSIFIED Shipping', lines: ['Joint Base Pearl Harbor-Hickam', 'ATTN: [Your Command/Code]', '850 Ticonderoga Street, Suite 100', 'JBPHH, HI 96860-5101'] },
+                class: { label: 'CLASSIFIED Shipping', lines: ['Joint Base Pearl Harbor-Hickam', 'ATTN: Command Security Manager', 'Classified Material Control', '850 Ticonderoga Street', 'JBPHH, HI 96860-5101', '⚠️ Coordinate with local security office before shipping', '⚠️ OCONUS-adjacent: Allow extra transit time'] }
+            },
+            pocs_default: [
+                { id:'pp1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
+                { id:'pp2', name: '', role: 'PHNSY Coordinator', phone: '', email: '', notes: '' },
+                { id:'pp3', name: '', role: 'Base IT/NMCI POC', phone: '', email: '', notes: '' },
+            ]
+        },
+        mayport: {
+            name: 'Naval Station Mayport', abbr: 'NAVSTA Mayport', city: 'Mayport, FL',
+            lat: 30.3920, lng: -81.4068,
+            mapUrl: 'https://maps.google.com/maps?q=30.3930,-81.4020&t=k&z=16&output=embed',
+            base_info: 'Third-largest naval facility in the U.S. Located at the mouth of the St. Johns River. Home to multiple destroyer and cruiser squadrons.',
+            gate_info: 'Gate 5½ (Main): Mayport Rd entrance. Visitor Control at Gate 5½.',
+            ships_homeported: ['Multiple DDGs and CGs'],
+            addresses: {
+                unclass: { label: 'UNCLASSIFIED Shipping', lines: ['Naval Station Mayport', 'ATTN: [Your Command/Code]', 'P.O. Box 280032 / Bldg 1', 'Mayport, FL 32228-0032'] },
+                class: { label: 'CLASSIFIED Shipping', lines: ['Naval Station Mayport', 'ATTN: Command Security Manager', 'Classified Material Control', 'Building 1, Security Office', 'Mayport, FL 32228-0032', '⚠️ Coordinate with local security office before shipping'] }
+            },
+            pocs_default: [
+                { id:'mp1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
+                { id:'mp2', name: '', role: 'SERMC Coordinator', phone: '', email: '', notes: '' },
+                { id:'mp3', name: '', role: 'Base IT/NMCI POC', phone: '', email: '', notes: '' },
+            ]
+        },
+        norfolk: {
+            name: 'Naval Station Norfolk', abbr: 'NAVSTA Norfolk', city: 'Norfolk, VA',
+            lat: 36.9466, lng: -76.3134,
+            mapUrl: 'https://maps.google.com/maps?q=36.9480,-76.3180&t=k&z=16&output=embed',
+            base_info: 'Largest naval station in the world. Home to NATO Allied Command Transformation. Supports the Atlantic Fleet with 75+ ships and 134+ aircraft.',
+            gate_info: 'Gate 5 (Main): Hampton Blvd. Gate 2: Terminal Blvd. Visitor Control at Gate 5.',
+            ships_homeported: ['Numerous DDGs, CGs, CVNs, LHDs'],
+            addresses: {
+                unclass: { label: 'UNCLASSIFIED Shipping', lines: ['Naval Station Norfolk', 'ATTN: [Your Command/Code]', '1530 Gilbert Street', 'Norfolk, VA 23511-2797'] },
+                class: { label: 'CLASSIFIED Shipping', lines: ['Naval Station Norfolk', 'ATTN: Command Security Manager', 'Classified Material Control Facility', '1530 Gilbert Street', 'Norfolk, VA 23511-2797', '⚠️ Coordinate with local security office before shipping'] }
+            },
+            pocs_default: [
+                { id:'np1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
+                { id:'np2', name: '', role: 'NNSY Coordinator', phone: '', email: '', notes: '' },
+                { id:'np3', name: '', role: 'Base IT/NMCI POC', phone: '', email: '', notes: '' },
+            ]
+        },
+        yokosuka: {
+            name: 'Commander Fleet Activities Yokosuka', abbr: 'CFAY / Yoko', city: 'Yokosuka, Japan',
+            lat: 35.2836, lng: 139.6550,
+            mapUrl: 'https://maps.google.com/maps?q=35.2855,139.6555&t=k&z=17&output=embed',
+            base_info: 'Only permanently forward-deployed naval base. Home of the U.S. 7th Fleet flagship and forward-deployed naval forces (FDNF). SRF-JRMC ship repair facility onsite.',
+            gate_info: 'Womble Gate (Main), Ikego Gate. Japanese base access pass required. Visitor escort typically needed.',
+            ships_homeported: ['USS Ronald Reagan (CVN-76)', 'Multiple FDNF DDGs and CGs'],
+            addresses: {
+                unclass: { label: 'UNCLASSIFIED Shipping (APO)', lines: ['Commander Fleet Activities Yokosuka', 'ATTN: [Your Command/Code]', 'PSC 473 Box [Your Box #]', 'FPO AP 96349-1100', '⚠️ Use APO/FPO — Do NOT use Japanese address'] },
+                class: { label: 'CLASSIFIED Shipping (DCS/OPREP)', lines: ['Commander Fleet Activities Yokosuka', 'ATTN: Command Security Manager', 'Defense Courier Service (DCS)', 'PSC 473', 'FPO AP 96349-1100', '⚠️ OCONUS: Must use DCS for classified material', '⚠️ Allow 2-4 weeks additional transit time', '⚠️ Coordinate with CFAY security & receiving'] }
+            },
+            pocs_default: [
+                { id:'yp1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
+                { id:'yp2', name: '', role: 'SRF-JRMC Coordinator', phone: '', email: '', notes: '' },
+                { id:'yp3', name: '', role: 'CFAY IT/Logistics', phone: '', email: '', notes: '' },
+            ]
+        },
+        rota: {
+            name: 'Naval Station Rota', abbr: 'NAVSTA Rota', city: 'Rota, Spain',
+            lat: 36.6213, lng: -6.3537,
+            mapUrl: 'https://maps.google.com/maps?q=36.6200,-6.3500&t=k&z=16&output=embed',
+            base_info: 'Largest U.S. military community in Spain. Supports operations in Europe, Africa, and the Middle East. Home to FDNF-E destroyers for Aegis Ballistic Missile Defense.',
+            gate_info: 'Main Gate: Spanish military check + U.S. ID. SOFA status required. Visitor control at Main Gate.',
+            ships_homeported: ['FDNF-E DDGs (BMD mission)'],
+            addresses: {
+                unclass: { label: 'UNCLASSIFIED Shipping (APO)', lines: ['Naval Station Rota', 'ATTN: [Your Command/Code]', 'PSC 819 Box [Your Box #]', 'FPO AE 09645-5500', '⚠️ Use APO/FPO — Do NOT use Spanish address'] },
+                class: { label: 'CLASSIFIED Shipping (DCS)', lines: ['Naval Station Rota', 'ATTN: Command Security Manager', 'Defense Courier Service (DCS)', 'PSC 819', 'FPO AE 09645-5500', '⚠️ OCONUS: Must use DCS for classified material', '⚠️ Allow 2-4 weeks additional transit time', '⚠️ Coordinate with NAVSTA Rota security'] }
+            },
+            pocs_default: [
+                { id:'rp1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
+                { id:'rp2', name: '', role: 'NAVSTA Rota Logistics', phone: '', email: '', notes: '' },
+                { id:'rp3', name: '', role: 'Base IT POC', phone: '', email: '', notes: '' },
+            ]
+        }
+    };
+    
+    const getSitePOCs = (siteKey) => sitePOCs[siteKey] || siteData[siteKey]?.pocs_default || [];
+    const savePOC = (siteKey) => {
+        const existing = getSitePOCs(siteKey);
+        if (editingPOC && editingPOC !== 'new') {
+            setSitePOCs({...sitePOCs, [siteKey]: existing.map(p => p.id === editingPOC ? {...pocForm, id: editingPOC} : p)});
+        } else {
+            setSitePOCs({...sitePOCs, [siteKey]: [...existing, {...pocForm, id: 'poc_'+Date.now()}]});
+        }
+        setEditingPOC(null); setPocForm({name:'',role:'',phone:'',email:'',notes:''});
+        toast('Contact saved!', 'success');
+    };
+    const deletePOC = (siteKey, pocId) => {
+        setSitePOCs({...sitePOCs, [siteKey]: getSitePOCs(siteKey).filter(p => p.id !== pocId)});
+        toast('Contact removed', 'info');
+    };
     
     const add = () => { 
         if (!form.ship) { toast('Select a ship', 'error'); return; } 
@@ -4360,16 +4512,201 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         <div className="page active">
             <div className="page-header">
                 <div className="page-header-left">
-                    <h1 className="page-title">Upcoming Trips</h1>
-                    <p className="page-sub">Track scheduled travel and site visits</p>
+                    <h1 className="page-title">{topTab === 'trips' ? 'Upcoming Trips' : 'Installation Sites'}</h1>
+                    <p className="page-sub">{topTab === 'trips' ? 'Track scheduled travel and site visits' : 'Base maps, shipping addresses, and logistics POCs'}</p>
                 </div>
                 <div className="btn-group">
-                    <button className={`btn ${viewMode==='list'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('list')}>📋 List</button>
-                    <button className={`btn ${viewMode==='calendar'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('calendar')}>📅 Calendar</button>
+                    <button className={`btn ${topTab==='trips'?'btn-primary':'btn-secondary'}`} onClick={() => {setTopTab('trips');setSelectedSite(null);}}>✈️ Trips</button>
+                    <button className={`btn ${topTab==='sites'?'btn-primary':'btn-secondary'}`} onClick={() => setTopTab('sites')}>📍 Sites</button>
+                    {topTab === 'trips' && <>
+                        <div style={{width:'1px',background:'var(--border)',margin:'0 4px'}}/>
+                        <button className={`btn ${viewMode==='list'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('list')}>📋 List</button>
+                        <button className={`btn ${viewMode==='calendar'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('calendar')}>📅 Calendar</button>
+                    </>}
                 </div>
             </div>
             
-            {viewMode === 'calendar' ? (
+            {topTab === 'sites' && !selectedSite && (
+                <div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))',gap:'16px',marginBottom:'24px'}}>
+                        {Object.entries(siteData).map(([key, site]) => {
+                            const tripCount = installs.filter(t => site.city && t.location?.includes(site.city.split(',')[0])).length;
+                            return (
+                                <div key={key} className="card" style={{padding:'20px',cursor:'pointer',transition:'all 0.2s',border:'1px solid var(--border)'}} onClick={() => setSelectedSite(key)} onMouseOver={e=>e.currentTarget.style.borderColor='var(--primary)'} onMouseOut={e=>e.currentTarget.style.borderColor='var(--border)'}>
+                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'12px'}}>
+                                        <div>
+                                            <div style={{fontSize:'15px',fontWeight:700}}>{site.abbr}</div>
+                                            <div style={{fontSize:'12px',color:'var(--text-muted)',marginTop:'2px'}}>{site.name}</div>
+                                        </div>
+                                        <span style={{fontSize:'24px'}}>
+                                            {key==='yokosuka'?'🇯🇵':key==='rota'?'🇪🇸':'🇺🇸'}
+                                        </span>
+                                    </div>
+                                    <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'12px',lineHeight:'1.5'}}>{site.base_info.substring(0,120)}...</div>
+                                    <div style={{display:'flex',gap:'12px',fontSize:'11px'}}>
+                                        <span style={{color:'var(--text-muted)'}}>📍 {site.city}</span>
+                                        {tripCount > 0 && <span style={{color:'var(--green)'}}>✈️ {tripCount} trip{tripCount>1?'s':''}</span>}
+                                        <span style={{color:'var(--text-muted)'}}>{getSitePOCs(key).filter(p=>p.name).length} POCs</span>
+                                    </div>
+                                </div>
+                            );
+                        })}
+                    </div>
+                </div>
+            )}
+            
+            {topTab === 'sites' && selectedSite && siteData[selectedSite] && (() => {
+                const site = siteData[selectedSite];
+                const pocs = getSitePOCs(selectedSite);
+                const siteTrips = installs.filter(t => site.city && t.location?.includes(site.city.split(',')[0]));
+                return (
+                    <div>
+                        <button className="btn btn-secondary" style={{marginBottom:'16px'}} onClick={() => {setSelectedSite(null);setEditingPOC(null);}}>← All Sites</button>
+                        
+                        {/* Map - Full Width Hero */}
+                        <div className="card" style={{padding:'20px',marginBottom:'16px'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                                <span className="card-title">📍 Base Map — {site.name}</span>
+                                <a href={`https://www.google.com/maps/@${site.lat},${site.lng},17z/data=!3m1!1e3`} target="_blank" rel="noreferrer" style={{color:'var(--primary)',textDecoration:'none',fontSize:'12px'}}>Open in Google Maps ↗</a>
+                            </div>
+                            <div style={{borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)',height:'450px'}}>
+                                <iframe 
+                                    width="100%" height="450" frameBorder="0" scrolling="no"
+                                    src={site.mapUrl}
+                                    style={{border:0}}
+                                    allowFullScreen
+                                />
+                            </div>
+                            <div style={{marginTop:'8px',fontSize:'11px',color:'var(--text-muted)',display:'flex',justifyContent:'space-between'}}>
+                                <span>📍 Coords: {site.lat.toFixed(4)}, {site.lng.toFixed(4)}</span>
+                                <span>🛰️ Satellite view — zoom/pan to explore base layout</span>
+                            </div>
+                        </div>
+                        
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'16px'}}>
+                            {/* Site Overview */}
+                            <div className="card" style={{padding:'20px'}}>
+                                <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'16px'}}>
+                                    <div>
+                                        <span className="card-title" style={{fontSize:'18px'}}>{site.abbr}</span>
+                                        <div style={{fontSize:'12px',color:'var(--text-muted)',marginTop:'2px'}}>{site.name}</div>
+                                    </div>
+                                    <span style={{fontSize:'32px'}}>{selectedSite==='yokosuka'?'🇯🇵':selectedSite==='rota'?'🇪🇸':'🇺🇸'}</span>
+                                </div>
+                                <div style={{fontSize:'13px',color:'var(--text-dim)',lineHeight:'1.6',marginBottom:'16px'}}>{site.base_info}</div>
+                                <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',marginBottom:'12px'}}>
+                                    <div style={{fontSize:'11px',fontWeight:600,color:'var(--text-muted)',letterSpacing:'0.5px',marginBottom:'6px'}}>🚧 GATE INFO</div>
+                                    <div style={{fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.5'}}>{site.gate_info}</div>
+                                </div>
+                                {site.ships_homeported && (
+                                    <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px'}}>
+                                        <div style={{fontSize:'11px',fontWeight:600,color:'var(--text-muted)',letterSpacing:'0.5px',marginBottom:'6px'}}>🚢 HOMEPORTED SHIPS</div>
+                                        <div style={{fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.5'}}>{site.ships_homeported.join(', ')}</div>
+                                    </div>
+                                )}
+                                {siteTrips.length > 0 && (
+                                    <div style={{marginTop:'12px',padding:'12px',background:'var(--green-glow)',borderRadius:'8px',border:'1px solid var(--green)'}}>
+                                        <div style={{fontSize:'11px',fontWeight:600,color:'var(--green)',marginBottom:'6px'}}>✈️ UPCOMING TRIPS ({siteTrips.length})</div>
+                                        {siteTrips.slice(0,3).map(t => (
+                                            <div key={t.id} style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'4px'}}>• {t.ship} — {fmtDate(t.start)} {t.purpose ? `(${t.purpose})` : ''}</div>
+                                        ))}
+                                    </div>
+                                )}
+                            </div>
+                            
+                            {/* Site Notes */}
+                            <div className="card" style={{padding:'20px'}}>
+                                <span className="card-title">📝 Site Notes & Intel</span>
+                                <div style={{marginTop:'12px'}}>
+                                    <textarea className="form-textarea" style={{minHeight:'180px',fontSize:'12px'}} placeholder={"Add your notes about " + site.abbr + "...\n\nExamples:\n• Best hotel nearby\n• Parking instructions\n• WiFi info\n• Local food spots\n• Key building numbers\n• Badge/access requirements"} value={siteNotes[selectedSite]||''} onChange={e => setSiteNotes({...siteNotes, [selectedSite]: e.target.value})}/>
+                                </div>
+                                <div style={{marginTop:'12px',fontSize:'11px',color:'var(--text-muted)'}}>💾 Auto-saved to browser</div>
+                            </div>
+                        </div>
+                        
+                        {/* Shipping Addresses */}
+                        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'16px',marginBottom:'16px'}}>
+                            <div className="card" style={{padding:'20px'}}>
+                                <span className="card-title" style={{color:'var(--green)'}}>📦 {site.addresses.unclass.label}</span>
+                                <div style={{marginTop:'12px',padding:'16px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'3px solid var(--green)',fontFamily:'monospace'}}>
+                                    {site.addresses.unclass.lines.map((line, i) => (
+                                        <div key={i} style={{fontSize:'12px',color: line.startsWith('⚠️') ? 'var(--amber)' : 'var(--text)',marginBottom:'4px',lineHeight:'1.5'}}>{line}</div>
+                                    ))}
+                                </div>
+                                <button className="btn btn-sm btn-secondary" style={{marginTop:'10px'}} onClick={() => {
+                                    navigator.clipboard?.writeText(site.addresses.unclass.lines.filter(l=>!l.startsWith('⚠️')).join('\n'));
+                                    toast('Address copied!','success');
+                                }}>📋 Copy Address</button>
+                            </div>
+                            <div className="card" style={{padding:'20px'}}>
+                                <span className="card-title" style={{color:'var(--red)'}}>🔒 {site.addresses.class.label}</span>
+                                <div style={{marginTop:'12px',padding:'16px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'3px solid var(--red)',fontFamily:'monospace'}}>
+                                    {site.addresses.class.lines.map((line, i) => (
+                                        <div key={i} style={{fontSize:'12px',color: line.startsWith('⚠️') ? 'var(--amber)' : 'var(--text)',marginBottom:'4px',lineHeight:'1.5'}}>{line}</div>
+                                    ))}
+                                </div>
+                                <button className="btn btn-sm btn-secondary" style={{marginTop:'10px'}} onClick={() => {
+                                    navigator.clipboard?.writeText(site.addresses.class.lines.filter(l=>!l.startsWith('⚠️')).join('\n'));
+                                    toast('Address copied!','success');
+                                }}>📋 Copy Address</button>
+                            </div>
+                        </div>
+                        
+                        {/* POCs */}
+                        <div className="card" style={{padding:'20px'}}>
+                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+                                <span className="card-title">👤 Logistics & PMR Contacts</span>
+                                <button className="btn btn-sm btn-primary" onClick={() => {setEditingPOC('new');setPocForm({name:'',role:'',phone:'',email:'',notes:''});}}>+ Add Contact</button>
+                            </div>
+                            
+                            {editingPOC && (
+                                <div style={{padding:'16px',background:'var(--primary-glow)',borderRadius:'8px',border:'1px solid var(--primary)',marginBottom:'16px'}}>
+                                    <div style={{fontSize:'12px',fontWeight:600,marginBottom:'12px',color:'var(--primary)'}}>{editingPOC === 'new' ? 'Add New Contact' : 'Edit Contact'}</div>
+                                    <div className="form-row">
+                                        <div className="form-group"><label className="form-label">Name</label><input className="form-input" placeholder="John Smith" value={pocForm.name} onChange={e => setPocForm({...pocForm,name:e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">Role / Title</label><input className="form-input" placeholder="PMR Onsite Rep" value={pocForm.role} onChange={e => setPocForm({...pocForm,role:e.target.value})}/></div>
+                                    </div>
+                                    <div className="form-row">
+                                        <div className="form-group"><label className="form-label">Phone</label><input className="form-input" placeholder="(555) 123-4567" value={pocForm.phone} onChange={e => setPocForm({...pocForm,phone:e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">Email</label><input className="form-input" placeholder="john.smith@navy.mil" value={pocForm.email} onChange={e => setPocForm({...pocForm,email:e.target.value})}/></div>
+                                    </div>
+                                    <div className="form-group"><label className="form-label">Notes</label><input className="form-input" placeholder="Best contact for coordinating arrivals..." value={pocForm.notes} onChange={e => setPocForm({...pocForm,notes:e.target.value})}/></div>
+                                    <div className="btn-group" style={{marginTop:'12px'}}>
+                                        <button className="btn btn-sm btn-primary" onClick={() => savePOC(selectedSite)}>💾 Save</button>
+                                        <button className="btn btn-sm btn-secondary" onClick={() => setEditingPOC(null)}>Cancel</button>
+                                    </div>
+                                </div>
+                            )}
+                            
+                            {pocs.length === 0 ? (
+                                <div className="empty" style={{padding:'20px'}}>No contacts added yet. Click "Add Contact" to start building your POC list.</div>
+                            ) : (
+                                <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))',gap:'12px'}}>
+                                    {pocs.map(poc => (
+                                        <div key={poc.id} style={{padding:'16px',background:'var(--bg-input)',borderRadius:'8px',border:'1px solid var(--border)'}}>
+                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}}>
+                                                <div>
+                                                    <div style={{fontWeight:600,fontSize:'14px'}}>{poc.name || '(No name)'}</div>
+                                                    <div style={{fontSize:'11px',color:'var(--primary)',fontWeight:500}}>{poc.role}</div>
+                                                </div>
+                                                <div style={{display:'flex',gap:'4px'}}>
+                                                    <button className="btn btn-sm btn-secondary" style={{padding:'2px 6px',fontSize:'10px'}} onClick={() => {setEditingPOC(poc.id);setPocForm({name:poc.name,role:poc.role,phone:poc.phone,email:poc.email,notes:poc.notes});}}>✏️</button>
+                                                    <button className="btn btn-sm btn-danger" style={{padding:'2px 6px',fontSize:'10px'}} onClick={() => deletePOC(selectedSite, poc.id)}>×</button>
+                                                </div>
+                                            </div>
+                                            {poc.phone && <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'4px'}}>📞 <a href={`tel:${poc.phone}`} style={{color:'var(--text-dim)',textDecoration:'none'}}>{poc.phone}</a></div>}
+                                            {poc.email && <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'4px'}}>✉️ <a href={`mailto:${poc.email}`} style={{color:'var(--primary)',textDecoration:'none'}}>{poc.email}</a></div>}
+                                            {poc.notes && <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'8px',fontStyle:'italic'}}>{poc.notes}</div>}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                        </div>
+                    </div>
+                );
+            })()}
+            
+            {topTab === 'trips' && viewMode === 'calendar' ? (
                 <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:'20px'}}>
                     <div className="card" style={{padding:'16px'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
@@ -4444,7 +4781,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                         )}
                     </div>
                 </div>
-            ) : (
+            ) : topTab === 'trips' ? (
                 <div className="card">
                     <span className="card-title">All Trips</span>
                     {installs.length === 0 ? (
@@ -4476,9 +4813,9 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                         </table>
                     )}
                 </div>
-            )}
+            ) : null}
             
-            <div className="card">
+            {topTab === 'trips' && <div className="card">
                 <span className="card-title">Schedule New Trip</span>
                 <div className="form-row mt-md">
                     <div className="form-group">
@@ -4520,7 +4857,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                     <input className="form-input" placeholder="Additional details..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/>
                 </div>
                 <button className="btn btn-primary mt-md" onClick={add}>+ Add Trip</button>
-            </div>
+            </div>}
         </div>
     );
 }
