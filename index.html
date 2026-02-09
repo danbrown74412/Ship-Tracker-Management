@@ -4592,24 +4592,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                     .catch(err => { console.log('OSM boundary fetch failed, using fallback:', err); });
             }
             
-            // Custom icons
-            const makeIcon = (color, label) => L.divIcon({
-                className: '', iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -30],
-                html: '<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:' + color + ';border:2px solid #fff;border-radius:50%;font-size:12px;font-weight:800;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-family:Arial,sans-serif">' + label + '</div>'
-            });
-            
-            // Gate marker
-            L.marker([site.gate.lat, site.gate.lng], {icon: makeIcon('#ef4444','G')})
-                .bindPopup('<b style="color:#ef4444">GATE ENTRY</b><br/>' + site.gate.label + '<br/><small>' + site.gate_info.substring(0,80) + '</small>')
-                .addTo(map);
-            // Parking marker
-            L.marker([site.parking.lat, site.parking.lng], {icon: makeIcon('#3b82f6','P')})
-                .bindPopup('<b style="color:#3b82f6">PARKING</b><br/>' + site.parking.label + '<br/><small>' + site.parking_info.substring(0,80) + '</small>')
-                .addTo(map);
-            // Pier/Dock marker
-            L.marker([site.dock.lat, site.dock.lng], {icon: makeIcon('#22c55e','⚓')})
-                .bindPopup('<b style="color:#22c55e">PIER / DOCK</b><br/>' + site.dock.label)
-                .addTo(map);
+
         }, 100);
         
         return () => { cancelled = true; clearTimeout(timer); if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; } };
@@ -4722,12 +4705,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     win.document.write('<html><head><title>' + site.abbr + ' - Base Reference</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222}h2{margin:0 0 4px}h4{margin:12px 0 6px;color:#555}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}.card{padding:10px;border:1px solid #ccc;border-radius:6px;font-size:12px}.card b{display:block;margin-bottom:4px}.route{padding:12px;background:#f0f0f0;border-radius:6px;margin:12px 0;font-size:13px}@media print{body{margin:10px}}</style></head><body>');
                                     win.document.write('<h2>🗺️ ' + site.abbr + ' — ' + site.name + '</h2>');
                                     win.document.write('<p style="font-size:12px;color:#666;margin:4px 0 12px">Base reference — print & bring onsite. Screenshot the satellite map from the app for visual reference.</p>');
-                                    win.document.write('<div class="grid">');
-                                    win.document.write('<div class="card" style="border-left:4px solid #ef4444"><b style="color:#ef4444">🔴 GATE</b>' + site.gate.label + '<br/><span style="color:#666">' + site.gate_info + '</span></div>');
-                                    win.document.write('<div class="card" style="border-left:4px solid #3b82f6"><b style="color:#3b82f6">🅿️ PARKING</b>' + site.parking.label + '<br/><span style="color:#666">' + site.parking_info + '</span></div>');
-                                    win.document.write('<div class="card" style="border-left:4px solid #22c55e"><b style="color:#22c55e">⚓ PIER</b>' + site.dock.label + '</div>');
-                                    win.document.write('</div>');
-                                    win.document.write('<div class="route"><b>🚗 ON-BASE: GATE → PARKING → PIER</b><br/>' + site.route_info + '</div>');
+                                    win.document.write('<p style="font-size:12px;margin:8px 0">Screenshot the satellite map from the app for visual reference.</p>');
                                     if (pocs.filter(p=>p.name).length > 0) {
                                         win.document.write('<h4>👤 Contacts</h4>');
                                         pocs.filter(p=>p.name).forEach(p => {
@@ -4744,37 +4722,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                 }}>🖨️ Print Reference</button>
                             </div>
                             <div id="site-leaflet-map" style={{borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)',height:'500px',background:'#1a1a2e'}}></div>
-                            <div style={{marginTop:'8px',display:'flex',justifyContent:'center',gap:'16px',fontSize:'11px',color:'var(--text-muted)'}}>
-                                <span><span style={{display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:'#ef4444',textAlign:'center',lineHeight:'14px',fontSize:'8px',fontWeight:800,color:'#fff',verticalAlign:'middle',marginRight:'4px'}}>G</span>Gate</span>
-                                <span><span style={{display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:'#3b82f6',textAlign:'center',lineHeight:'14px',fontSize:'8px',fontWeight:800,color:'#fff',verticalAlign:'middle',marginRight:'4px'}}>P</span>Parking</span>
-                                <span><span style={{display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:'#22c55e',textAlign:'center',lineHeight:'14px',fontSize:'8px',fontWeight:800,color:'#fff',verticalAlign:'middle',marginRight:'4px'}}>⚓</span>Pier</span>
-                                <span style={{color:'var(--primary)'}}>--- Base Perimeter</span>
-                            </div>
-                            
-                            {/* Key Locations */}
-                            <div style={{marginTop:'12px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
-                                <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'4px solid #ef4444'}}>
-                                    <div style={{fontSize:'10px',fontWeight:700,color:'#ef4444',letterSpacing:'0.5px',marginBottom:'4px'}}>🔴 GATE ENTRY</div>
-                                    <div style={{fontSize:'12px',fontWeight:600}}>{site.gate.label}</div>
-                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',lineHeight:'1.4'}}>{site.gate_info}</div>
-                                </div>
-                                <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'4px solid #3b82f6'}}>
-                                    <div style={{fontSize:'10px',fontWeight:700,color:'#3b82f6',letterSpacing:'0.5px',marginBottom:'4px'}}>🅿️ PARKING</div>
-                                    <div style={{fontSize:'12px',fontWeight:600}}>{site.parking.label}</div>
-                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',lineHeight:'1.4'}}>{site.parking_info}</div>
-                                </div>
-                                <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'4px solid #4ade80'}}>
-                                    <div style={{fontSize:'10px',fontWeight:700,color:'#4ade80',letterSpacing:'0.5px',marginBottom:'4px'}}>⚓ PIER / DOCK</div>
-                                    <div style={{fontSize:'12px',fontWeight:600}}>{site.dock.label}</div>
-                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',lineHeight:'1.4'}}>{site.base_info.substring(0,120)}</div>
-                                </div>
-                            </div>
-                            
-                            {/* On-Base Directions */}
-                            <div style={{marginTop:'12px',padding:'14px 16px',background:'linear-gradient(90deg, rgba(239,68,68,0.08), rgba(59,130,246,0.08), rgba(74,222,128,0.08))',borderRadius:'8px',border:'1px solid var(--border)'}}>
-                                <div style={{fontSize:'11px',fontWeight:700,color:'var(--text)',letterSpacing:'0.5px',marginBottom:'6px'}}>🚗 ON-BASE: GATE → PARKING → PIER</div>
-                                <div style={{fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6'}}>{site.route_info}</div>
-                            </div>
+
                         </div>
                         
                         {/* POCs - Right under map */}
