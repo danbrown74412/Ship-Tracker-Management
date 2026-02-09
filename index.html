@@ -4313,7 +4313,6 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const [viewMode, setViewMode] = useState('list');
     const [calMonth, setCalMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
-    const [topTab, setTopTab] = useState('trips'); // trips | sites
     const [selectedSite, setSelectedSite] = useState(null);
     const siteMapRef = React.useRef(null);
     const siteMapInstance = React.useRef(null);
@@ -4335,11 +4334,18 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const siteData = {
         everett: {
             name: 'Naval Station Everett', abbr: 'NAVSTA Everett', city: 'Everett, WA',
-            lat: 47.9900, lng: -122.2185, mapZoom: 16,
-            boundary: [[47.9855,-122.2138],[47.9862,-122.2135],[47.987,-122.213],[47.988,-122.2125],[47.989,-122.212],[47.99,-122.2116],[47.991,-122.2112],[47.9918,-122.2108],[47.9925,-122.2108],[47.993,-122.2115],[47.9935,-122.213],[47.994,-122.215],[47.9948,-122.2175],[47.9955,-122.221],[47.9958,-122.224],[47.9955,-122.2258],[47.9948,-122.2265],[47.994,-122.2258],[47.9932,-122.224],[47.9925,-122.222],[47.9918,-122.22],[47.9905,-122.2195],[47.9892,-122.22],[47.9878,-122.2195],[47.9868,-122.2185],[47.9858,-122.217],[47.9852,-122.2155],[47.9853,-122.2142]],
-            gate: { lat: 47.9865, lng: -122.2145, label: 'Main Gate (W Marine View Dr at 19th St)' },
-            dock: { lat: 47.9930, lng: -122.2250, label: 'Pier Alpha & Bravo (Ship Berths)' },
-            parking: { lat: 47.9890, lng: -122.2190, label: 'Visitor Parking (Bldg 2000)' },
+            lat: 47.9880, lng: -122.2210, mapZoom: 16,
+            boundary: [
+                [47.9918,-122.2160],[47.9920,-122.2185],[47.9918,-122.2215],[47.9912,-122.2240],
+                [47.9900,-122.2255],[47.9885,-122.2260],[47.9870,-122.2258],[47.9855,-122.2260],
+                [47.9840,-122.2265],[47.9830,-122.2258],[47.9822,-122.2245],[47.9818,-122.2228],
+                [47.9818,-122.2205],[47.9822,-122.2190],[47.9830,-122.2180],[47.9840,-122.2170],
+                [47.9855,-122.2160],[47.9870,-122.2155],[47.9885,-122.2152],[47.9900,-122.2150],
+                [47.9912,-122.2152]
+            ],
+            gate: { lat: 47.9902, lng: -122.2155, label: 'Main Gate (W Marine View Dr)' },
+            dock: { lat: 47.9830, lng: -122.2240, label: 'Ship Piers (South Waterfront)' },
+            parking: { lat: 47.9885, lng: -122.2195, label: 'Visitor Parking (Bldg 2000 Area)' },
             base_info: 'Home port for Carrier Strike Group, Destroyer Squadron, and multiple DDGs. Located on the Puget Sound waterfront.',
             gate_info: 'Main Gate: W Marine View Dr (19th St). North Gate: 18th St. Both 24/7. Visitor Control right side before gate.',
             parking_info: 'Visitor lot near Bldg 2000. Fleet parking along interior road. Pier-side parking with ship coordination.',
@@ -4357,11 +4363,18 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         sandiego: {
             name: 'Naval Base San Diego', abbr: 'NBSD', city: 'San Diego, CA',
-            lat: 32.6852, lng: -117.1251, mapZoom: 15,
-            boundary: [[32.6785,-117.124],[32.68,-117.1238],[32.682,-117.1235],[32.684,-117.1232],[32.686,-117.1228],[32.688,-117.1225],[32.69,-117.1222],[32.692,-117.1218],[32.694,-117.1215],[32.696,-117.121],[32.698,-117.1208],[32.7,-117.121],[32.7005,-117.123],[32.7,-117.126],[32.699,-117.129],[32.698,-117.131],[32.697,-117.134],[32.695,-117.1355],[32.693,-117.1365],[32.691,-117.137],[32.689,-117.1368],[32.687,-117.1362],[32.685,-117.1355],[32.683,-117.1348],[32.681,-117.134],[32.6795,-117.133],[32.6785,-117.1315],[32.678,-117.129],[32.678,-117.126]],
-            gate: { lat: 32.6843, lng: -117.1255, label: 'Gate 6 / Main Gate (32nd St)' },
-            dock: { lat: 32.6950, lng: -117.1340, label: 'Piers 1-13 (Wet Side / Harbor Dr)' },
-            parking: { lat: 32.6863, lng: -117.1290, label: 'Visitor Control / Wet Side Parking' },
+            lat: 32.6870, lng: -117.1280, mapZoom: 14,
+            boundary: [
+                [32.6730,-117.1180],[32.6730,-117.1230],[32.6735,-117.1280],[32.6750,-117.1315],
+                [32.6780,-117.1340],[32.6810,-117.1355],[32.6850,-117.1365],[32.6890,-117.1375],
+                [32.6930,-117.1380],[32.6960,-117.1375],[32.6990,-117.1360],[32.7010,-117.1330],
+                [32.7010,-117.1280],[32.7000,-117.1230],[32.6985,-117.1190],[32.6960,-117.1165],
+                [32.6930,-117.1155],[32.6890,-117.1150],[32.6850,-117.1150],[32.6810,-117.1155],
+                [32.6770,-117.1160],[32.6745,-117.1165]
+            ],
+            gate: { lat: 32.6843, lng: -117.1255, label: 'Gate 6 / Main Gate (Surface Navy Blvd)' },
+            dock: { lat: 32.6900, lng: -117.1370, label: 'Piers 1-13 (Wet Side / Bay)' },
+            parking: { lat: 32.6858, lng: -117.1254, label: 'Visitor Control (Gate 6 Area)' },
             base_info: 'Largest naval base on the West Coast. Principal homeport of the Pacific Fleet surface combatants. Multiple piers and repair facilities.',
             gate_info: 'Gate 6 (Main): 32nd St — 24/7. Gate 43: 32nd St north — 24/7. Gate 7: Harbor Dr & Vesta — weekdays. CAC/Military ID required.',
             parking_info: 'Wet side parking along Harbor Dr — dynamic, may be repurposed for ship loadout. Coordinate with ship duty officer for pier parking.',
@@ -4379,11 +4392,17 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         pearlharbor: {
             name: 'Joint Base Pearl Harbor-Hickam', abbr: 'JBPHH', city: 'Pearl Harbor, HI',
-            lat: 21.3500, lng: -157.9530, mapZoom: 15,
-            boundary: [[21.344,-157.94],[21.3445,-157.943],[21.345,-157.946],[21.3452,-157.95],[21.3458,-157.953],[21.3465,-157.956],[21.3475,-157.959],[21.349,-157.962],[21.35,-157.965],[21.3515,-157.967],[21.353,-157.968],[21.3545,-157.9675],[21.356,-157.9665],[21.3575,-157.964],[21.3585,-157.961],[21.358,-157.957],[21.3572,-157.953],[21.3565,-157.949],[21.3555,-157.946],[21.354,-157.9435],[21.352,-157.9415],[21.35,-157.94],[21.348,-157.939],[21.346,-157.9388],[21.3445,-157.9395]],
-            gate: { lat: 21.3464, lng: -157.9423, label: 'Nimitz Gate / Pass & ID (Kamehameha Hwy)' },
-            dock: { lat: 21.3510, lng: -157.9632, label: 'PHNSY Dry Docks & Piers' },
-            parking: { lat: 21.3530, lng: -157.9523, label: 'PHNSY Visitor Parking' },
+            lat: 21.3480, lng: -157.9500, mapZoom: 14,
+            boundary: [
+                [21.3380,-157.9380],[21.3390,-157.9430],[21.3400,-157.9480],[21.3420,-157.9530],
+                [21.3440,-157.9570],[21.3470,-157.9610],[21.3500,-157.9640],[21.3530,-157.9660],
+                [21.3560,-157.9650],[21.3575,-157.9620],[21.3580,-157.9580],[21.3575,-157.9530],
+                [21.3565,-157.9480],[21.3550,-157.9440],[21.3530,-157.9410],[21.3500,-157.9390],
+                [21.3470,-157.9375],[21.3440,-157.9370],[21.3410,-157.9372]
+            ],
+            gate: { lat: 21.3413, lng: -157.9434, label: 'Hickam Main Gate (Nimitz Hwy)' },
+            dock: { lat: 21.3530, lng: -157.9523, label: 'PHNSY Dry Docks & Ship Piers' },
+            parking: { lat: 21.3450, lng: -157.9460, label: 'Halsey Visitor Center Parking' },
             base_info: 'Headquarters of U.S. Pacific Fleet. Joint base with Air Force. Pearl Harbor Naval Shipyard (PHNSY & IMF) provides maintenance and repair.',
             gate_info: 'Nimitz Gate (Main): Kamehameha Hwy — 24/7. Halsey Visitor Center for base passes. All vehicles subject to random inspection.',
             parking_info: 'Visitor parking at Halsey Visitor Center. PHNSY has designated parking — coordinate with shipyard access office ahead of visit.',
@@ -4401,11 +4420,17 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         mayport: {
             name: 'Naval Station Mayport', abbr: 'NAVSTA Mayport', city: 'Mayport, FL',
-            lat: 30.3870, lng: -81.4150, mapZoom: 15,
-            boundary: [[30.384,-81.436],[30.3835,-81.432],[30.383,-81.427],[30.3828,-81.422],[30.383,-81.417],[30.3835,-81.412],[30.384,-81.407],[30.385,-81.402],[30.386,-81.3975],[30.387,-81.3945],[30.3885,-81.393],[30.39,-81.392],[30.392,-81.3918],[30.394,-81.392],[30.3955,-81.393],[30.3965,-81.395],[30.397,-81.3975],[30.3968,-81.401],[30.3965,-81.405],[30.396,-81.41],[30.3955,-81.415],[30.3948,-81.42],[30.3935,-81.425],[30.392,-81.429],[30.39,-81.432],[30.388,-81.4345],[30.386,-81.4362],[30.3845,-81.4365]],
+            lat: 30.3850, lng: -81.4100, mapZoom: 14,
+            boundary: [
+                [30.3750,-81.4360],[30.3745,-81.4280],[30.3745,-81.4200],[30.3750,-81.4120],
+                [30.3760,-81.4040],[30.3780,-81.3970],[30.3810,-81.3920],[30.3850,-81.3890],
+                [30.3900,-81.3880],[30.3940,-81.3900],[30.3960,-81.3940],[30.3970,-81.3990],
+                [30.3965,-81.4060],[30.3960,-81.4130],[30.3950,-81.4200],[30.3930,-81.4260],
+                [30.3900,-81.4310],[30.3860,-81.4350],[30.3820,-81.4370],[30.3780,-81.4375]
+            ],
             gate: { lat: 30.3845, lng: -81.4354, label: 'Gate 5 (Perimeter Rd / Mayport Rd)' },
-            dock: { lat: 30.3950, lng: -81.3970, label: 'Turning Basin & Ship Piers' },
-            parking: { lat: 30.3900, lng: -81.4100, label: 'Visitor Parking (Main Base Area)' },
+            dock: { lat: 30.3930, lng: -81.3950, label: 'Turning Basin & Ship Piers (St. Johns River)' },
+            parking: { lat: 30.3840, lng: -81.4100, label: 'Visitor Parking (Main Base Area)' },
             base_info: 'Third-largest naval facility in the U.S. Located at the mouth of the St. Johns River. Home to multiple destroyer and cruiser squadrons.',
             gate_info: 'Gate 5 (Main): Perimeter Rd off Mayport Rd/A1A. Gate 5½ also available. Military ID or escort required. Visitor Control at gate.',
             parking_info: 'Visitor lot near Admin Building 1. Pier-side parking available — coordinate with ship quarterdeck.',
@@ -4423,11 +4448,18 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         norfolk: {
             name: 'Naval Station Norfolk', abbr: 'NAVSTA Norfolk', city: 'Norfolk, VA',
-            lat: 36.9435, lng: -76.3195, mapZoom: 14,
-            boundary: [[36.9365,-76.317],[36.937,-76.32],[36.9375,-76.323],[36.9385,-76.326],[36.94,-76.3285],[36.942,-76.33],[36.944,-76.3315],[36.946,-76.333],[36.948,-76.334],[36.95,-76.3345],[36.952,-76.334],[36.954,-76.333],[36.956,-76.3315],[36.9575,-76.3295],[36.959,-76.327],[36.96,-76.324],[36.9605,-76.321],[36.96,-76.3175],[36.959,-76.314],[36.9575,-76.311],[36.9555,-76.3085],[36.953,-76.3065],[36.9505,-76.3055],[36.948,-76.305],[36.9455,-76.3055],[36.943,-76.3065],[36.941,-76.308],[36.9395,-76.31],[36.938,-76.312],[36.937,-76.3145]],
+            lat: 36.9470, lng: -76.3200, mapZoom: 14,
+            boundary: [
+                [36.9350,-76.3130],[36.9355,-76.3180],[36.9365,-76.3230],[36.9380,-76.3280],
+                [36.9400,-76.3310],[36.9430,-76.3335],[36.9470,-76.3350],[36.9510,-76.3355],
+                [36.9550,-76.3345],[36.9580,-76.3315],[36.9600,-76.3270],[36.9610,-76.3220],
+                [36.9605,-76.3170],[36.9595,-76.3120],[36.9575,-76.3080],[36.9545,-76.3050],
+                [36.9510,-76.3035],[36.9470,-76.3030],[36.9430,-76.3040],[36.9400,-76.3060],
+                [36.9375,-76.3090],[36.9358,-76.3110]
+            ],
             gate: { lat: 36.9374, lng: -76.3197, label: 'Gate 5 (Hampton Blvd / B Ave)' },
-            dock: { lat: 36.9547, lng: -76.3278, label: 'Piers 1-14 (Main Waterfront)' },
-            parking: { lat: 36.9420, lng: -76.3210, label: 'Visitor Parking (near Gate 5)' },
+            dock: { lat: 36.9547, lng: -76.3278, label: 'Pier 11 Area (Main Waterfront)' },
+            parking: { lat: 36.9400, lng: -76.3200, label: 'Visitor Parking (Gate 5 Area)' },
             base_info: 'Largest naval station in the world. Home to NATO Allied Command Transformation. Supports the Atlantic Fleet with 75+ ships and 134+ aircraft.',
             gate_info: 'Gate 5 (Main): Hampton Blvd — 24/7. Gate 2: Terminal Blvd — limited hours. CAC/Military ID required. Visitor Control at Gate 5.',
             parking_info: 'Large visitor lot at Gate 5 / D-22 area. Pier parking by numbered lot — confirm pier assignment with ship POC before driving in.',
@@ -4445,11 +4477,17 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         yokosuka: {
             name: 'Commander Fleet Activities Yokosuka', abbr: 'CFAY / Yoko', city: 'Yokosuka, Japan',
-            lat: 35.2850, lng: 139.6640, mapZoom: 16,
-            boundary: [[35.2820,139.6655],[35.2825,139.6670],[35.2830,139.6685],[35.2838,139.6695],[35.2848,139.6700],[35.2858,139.6698],[35.2868,139.6690],[35.2878,139.6675],[35.2885,139.6655],[35.2890,139.6630],[35.2892,139.6608],[35.2888,139.6585],[35.2880,139.6568],[35.2870,139.6558],[35.2858,139.6555],[35.2845,139.6560],[35.2835,139.6570],[35.2828,139.6585],[35.2822,139.6605],[35.2818,139.6625],[35.2818,139.6645]],
+            lat: 35.2870, lng: 139.6635, mapZoom: 15,
+            boundary: [
+                [35.2820,139.6645],[35.2825,139.6665],[35.2835,139.6680],[35.2850,139.6688],
+                [35.2870,139.6690],[35.2890,139.6685],[35.2910,139.6675],[35.2925,139.6660],
+                [35.2935,139.6640],[35.2935,139.6615],[35.2928,139.6592],[35.2915,139.6575],
+                [35.2895,139.6565],[35.2875,139.6560],[35.2855,139.6565],[35.2838,139.6580],
+                [35.2825,139.6600],[35.2820,139.6625]
+            ],
             gate: { lat: 35.2828, lng: 139.6659, label: 'Main Gate (Honcho / Blue St)' },
-            dock: { lat: 35.2867, lng: 139.6622, label: 'SRF-JRMC Piers & Dry Docks' },
-            parking: { lat: 35.2845, lng: 139.6645, label: 'Visitor Parking (Main Base)' },
+            dock: { lat: 35.2867, lng: 139.6580, label: 'SRF-JRMC Piers & Dry Docks (West Waterfront)' },
+            parking: { lat: 35.2850, lng: 139.6645, label: 'Visitor Parking (Main Base)' },
             base_info: 'Only permanently forward-deployed naval base. Home of the U.S. 7th Fleet flagship and forward-deployed naval forces (FDNF). SRF-JRMC ship repair facility onsite.',
             gate_info: 'Main Gate (Honcho/Blue St): East side of base — 24/7. SOFA status or escort required. Womble Gate also available. Ikego Gate for housing.',
             parking_info: 'Limited visitor parking near Womble Gate. Base is compact and walkable. SRF parking requires separate coordination.',
@@ -4468,10 +4506,17 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         rota: {
             name: 'Naval Station Rota', abbr: 'NAVSTA Rota', city: 'Rota, Spain',
             lat: 36.6374, lng: -6.3465, mapZoom: 14,
-            boundary: [[36.6245,-6.3350],[36.6225,-6.3380],[36.6210,-6.3420],[36.6200,-6.3460],[36.6195,-6.3500],[36.6200,-6.3540],[36.6215,-6.3575],[36.6235,-6.3600],[36.6260,-6.3620],[36.6290,-6.3635],[36.6320,-6.3645],[36.6350,-6.3650],[36.6380,-6.3648],[36.6410,-6.3640],[36.6435,-6.3625],[36.6455,-6.3600],[36.6470,-6.3570],[36.6478,-6.3535],[36.6480,-6.3495],[36.6475,-6.3455],[36.6465,-6.3420],[36.6448,-6.3390],[36.6425,-6.3365],[36.6400,-6.3348],[36.6375,-6.3338],[36.6350,-6.3332],[36.6320,-6.3330],[36.6295,-6.3335],[36.6270,-6.3340]],
-            gate: { lat: 36.6280, lng: -6.3370, label: 'Main Gate (Dual Spanish/US Check)' },
-            dock: { lat: 36.6420, lng: -6.3550, label: 'Pier Area / Ship Berths' },
-            parking: { lat: 36.6350, lng: -6.3460, label: 'Visitor Parking (Main Lot)' },
+            boundary: [
+                [36.6215,-6.3270],[36.6200,-6.3320],[36.6195,-6.3390],[36.6200,-6.3460],
+                [36.6215,-6.3530],[36.6240,-6.3590],[36.6280,-6.3630],[36.6330,-6.3655],
+                [36.6380,-6.3665],[36.6430,-6.3660],[36.6475,-6.3635],[36.6510,-6.3590],
+                [36.6530,-6.3530],[36.6535,-6.3460],[36.6525,-6.3390],[36.6505,-6.3330],
+                [36.6475,-6.3280],[36.6435,-6.3245],[36.6390,-6.3230],[36.6340,-6.3230],
+                [36.6290,-6.3240],[36.6250,-6.3255]
+            ],
+            gate: { lat: 36.6250, lng: -6.3310, label: 'Main Gate (Dual Spanish/US Checkpoint)' },
+            dock: { lat: 36.6480, lng: -6.3560, label: 'Port / Ship Piers (NW Bay Side)' },
+            parking: { lat: 36.6374, lng: -6.3465, label: 'Visitor Parking (Main Lot)' },
             base_info: 'Largest U.S. military community in Spain. Supports operations in Europe, Africa, and the Middle East. Home to FDNF-E destroyers for Aegis Ballistic Missile Defense.',
             gate_info: 'Main Gate: Dual checkpoint — Spanish military first, then U.S. ID. SOFA status or escort required. Allow extra time.',
             parking_info: 'Main visitor lot just inside the gate. Pier parking available with advance coordination.',
@@ -4491,7 +4536,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     
     // Leaflet map for site detail view
     useEffect(() => {
-        if (!selectedSite || !siteData[selectedSite] || topTab !== 'sites') return;
+        if (!selectedSite || !siteData[selectedSite]) return;
         // Small delay to ensure React has rendered the div
         const timer = setTimeout(() => {
             const el = document.getElementById('site-leaflet-map');
@@ -4521,17 +4566,17 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
             }
             
             // Custom icons
-            const makeIcon = (color, emoji) => L.divIcon({
-                className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
-                html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:' + color + ';border:2px solid #fff;border-radius:50%;font-size:15px;box-shadow:0 2px 8px rgba(0,0,0,0.5)">' + emoji + '</div>'
+            const makeIcon = (color, label) => L.divIcon({
+                className: '', iconSize: [28, 28], iconAnchor: [14, 28], popupAnchor: [0, -30],
+                html: '<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:' + color + ';border:2px solid #fff;border-radius:50%;font-size:12px;font-weight:800;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-family:Arial,sans-serif">' + label + '</div>'
             });
             
             // Gate marker
-            L.marker([site.gate.lat, site.gate.lng], {icon: makeIcon('#ef4444','🚧')})
-                .bindPopup('<b style="color:#ef4444">GATE</b><br/>' + site.gate.label + '<br/><small>' + site.gate_info.substring(0,80) + '</small>')
+            L.marker([site.gate.lat, site.gate.lng], {icon: makeIcon('#ef4444','G')})
+                .bindPopup('<b style="color:#ef4444">GATE ENTRY</b><br/>' + site.gate.label + '<br/><small>' + site.gate_info.substring(0,80) + '</small>')
                 .addTo(map);
             // Parking marker
-            L.marker([site.parking.lat, site.parking.lng], {icon: makeIcon('#3b82f6','🅿️')})
+            L.marker([site.parking.lat, site.parking.lng], {icon: makeIcon('#3b82f6','P')})
                 .bindPopup('<b style="color:#3b82f6">PARKING</b><br/>' + site.parking.label + '<br/><small>' + site.parking_info.substring(0,80) + '</small>')
                 .addTo(map);
             // Pier/Dock marker
@@ -4546,7 +4591,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         }, 100);
         
         return () => { clearTimeout(timer); if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; } };
-    }, [selectedSite, topTab]);
+    }, [selectedSite]);
     
     const getSitePOCs = (siteKey) => sitePOCs[siteKey] || siteData[siteKey]?.pocs_default || [];
     const savePOC = (siteKey) => {
@@ -4610,56 +4655,38 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         <div className="page active">
             <div className="page-header">
                 <div className="page-header-left">
-                    <h1 className="page-title">{topTab === 'trips' ? 'Upcoming Trips' : 'Installation Sites'}</h1>
-                    <p className="page-sub">{topTab === 'trips' ? 'Track scheduled travel and site visits' : 'Base maps, shipping addresses, and logistics POCs'}</p>
+                    <h1 className="page-title">{selectedSite ? siteData[selectedSite]?.abbr : 'Trips & Sites'}</h1>
+                    <p className="page-sub">{selectedSite ? siteData[selectedSite]?.name : 'Scheduled travel, base info, and logistics'}</p>
                 </div>
-                <div className="btn-group">
-                    <button className={`btn ${topTab==='trips'?'btn-primary':'btn-secondary'}`} onClick={() => {setTopTab('trips');setSelectedSite(null);}}>✈️ Trips</button>
-                    <button className={`btn ${topTab==='sites'?'btn-primary':'btn-secondary'}`} onClick={() => setTopTab('sites')}>📍 Sites</button>
-                    {topTab === 'trips' && <>
-                        <div style={{width:'1px',background:'var(--border)',margin:'0 4px'}}/>
-                        <button className={`btn ${viewMode==='list'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('list')}>📋 List</button>
-                        <button className={`btn ${viewMode==='calendar'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('calendar')}>📅 Calendar</button>
-                    </>}
-                </div>
+                {!selectedSite && <div className="btn-group">
+                    <button className={`btn ${viewMode==='list'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('list')}>📋 List</button>
+                    <button className={`btn ${viewMode==='calendar'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('calendar')}>📅 Calendar</button>
+                </div>}
             </div>
             
-            {topTab === 'sites' && !selectedSite && (
-                <div>
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(320px, 1fr))',gap:'16px',marginBottom:'24px'}}>
-                        {Object.entries(siteData).map(([key, site]) => {
-                            const tripCount = installs.filter(t => site.city && t.location?.includes(site.city.split(',')[0])).length;
-                            return (
-                                <div key={key} className="card" style={{padding:'20px',cursor:'pointer',transition:'all 0.2s',border:'1px solid var(--border)'}} onClick={() => setSelectedSite(key)} onMouseOver={e=>e.currentTarget.style.borderColor='var(--primary)'} onMouseOut={e=>e.currentTarget.style.borderColor='var(--border)'}>
-                                    <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'12px'}}>
-                                        <div>
-                                            <div style={{fontSize:'15px',fontWeight:700}}>{site.abbr}</div>
-                                            <div style={{fontSize:'12px',color:'var(--text-muted)',marginTop:'2px'}}>{site.name}</div>
-                                        </div>
-                                        <span style={{fontSize:'24px'}}>
-                                            {key==='yokosuka'?'🇯🇵':key==='rota'?'🇪🇸':'🇺🇸'}
-                                        </span>
-                                    </div>
-                                    <div style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'12px',lineHeight:'1.5'}}>{site.base_info.substring(0,120)}...</div>
-                                    <div style={{display:'flex',gap:'12px',fontSize:'11px'}}>
-                                        <span style={{color:'var(--text-muted)'}}>📍 {site.city}</span>
-                                        {tripCount > 0 && <span style={{color:'var(--green)'}}>✈️ {tripCount} trip{tripCount>1?'s':''}</span>}
-                                        <span style={{color:'var(--text-muted)'}}>{getSitePOCs(key).filter(p=>p.name).length} POCs</span>
-                                    </div>
-                                </div>
-                            );
-                        })}
-                    </div>
+            {/* Installation Sites - clickable location bar */}
+            {!selectedSite && (
+                <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'16px'}}>
+                    {Object.entries(siteData).map(([key, site]) => {
+                        const shipCount = sorted.filter(s => s.location && site.city && s.location.includes(site.city.split(',')[0])).length;
+                        return (
+                            <button key={key} className="btn btn-secondary" style={{padding:'8px 14px',fontSize:'12px',display:'flex',alignItems:'center',gap:'6px'}} onClick={() => setSelectedSite(key)}>
+                                <span>{key==='yokosuka'?'🇯🇵':key==='rota'?'🇪🇸':'🇺🇸'}</span>
+                                <span style={{fontWeight:600}}>{site.abbr}</span>
+                                {shipCount > 0 && <span style={{background:'var(--primary)',color:'#fff',borderRadius:'10px',padding:'1px 7px',fontSize:'10px',fontWeight:700}}>{shipCount}</span>}
+                            </button>
+                        );
+                    })}
                 </div>
             )}
             
-            {topTab === 'sites' && selectedSite && siteData[selectedSite] && (() => {
+            {selectedSite && siteData[selectedSite] && (() => {
                 const site = siteData[selectedSite];
                 const pocs = getSitePOCs(selectedSite);
                 const siteTrips = installs.filter(t => site.city && t.location?.includes(site.city.split(',')[0]));
                 return (
                     <div>
-                        <button className="btn btn-secondary" style={{marginBottom:'16px'}} onClick={() => {setSelectedSite(null);setEditingPOC(null);}}>← All Sites</button>
+                        <button className="btn btn-secondary" style={{marginBottom:'16px'}} onClick={() => {setSelectedSite(null);setEditingPOC(null);}}>← Back to Trips</button>
                         
                         {/* Base Map - Satellite Reference */}
                         <div className="card" style={{padding:'20px',marginBottom:'16px'}}>
@@ -4674,7 +4701,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     win.document.write('<h2>🗺️ ' + site.abbr + ' — ' + site.name + '</h2>');
                                     win.document.write('<p style="font-size:12px;color:#666;margin:4px 0 12px">Base reference — print & bring onsite. Screenshot the satellite map from the app for visual reference.</p>');
                                     win.document.write('<div class="grid">');
-                                    win.document.write('<div class="card" style="border-left:4px solid #ef4444"><b style="color:#ef4444">🚧 GATE</b>' + site.gate.label + '<br/><span style="color:#666">' + site.gate_info + '</span></div>');
+                                    win.document.write('<div class="card" style="border-left:4px solid #ef4444"><b style="color:#ef4444">🔴 GATE</b>' + site.gate.label + '<br/><span style="color:#666">' + site.gate_info + '</span></div>');
                                     win.document.write('<div class="card" style="border-left:4px solid #3b82f6"><b style="color:#3b82f6">🅿️ PARKING</b>' + site.parking.label + '<br/><span style="color:#666">' + site.parking_info + '</span></div>');
                                     win.document.write('<div class="card" style="border-left:4px solid #22c55e"><b style="color:#22c55e">⚓ PIER</b>' + site.dock.label + '</div>');
                                     win.document.write('</div>');
@@ -4695,14 +4722,17 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                 }}>🖨️ Print Reference</button>
                             </div>
                             <div id="site-leaflet-map" style={{borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)',height:'500px',background:'#1a1a2e'}}></div>
-                            <div style={{marginTop:'8px',fontSize:'11px',color:'var(--text-muted)',textAlign:'center'}}>
-                                🛰️ Satellite view — base perimeter outlined in blue • click markers for details
+                            <div style={{marginTop:'8px',display:'flex',justifyContent:'center',gap:'16px',fontSize:'11px',color:'var(--text-muted)'}}>
+                                <span><span style={{display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:'#ef4444',textAlign:'center',lineHeight:'14px',fontSize:'8px',fontWeight:800,color:'#fff',verticalAlign:'middle',marginRight:'4px'}}>G</span>Gate</span>
+                                <span><span style={{display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:'#3b82f6',textAlign:'center',lineHeight:'14px',fontSize:'8px',fontWeight:800,color:'#fff',verticalAlign:'middle',marginRight:'4px'}}>P</span>Parking</span>
+                                <span><span style={{display:'inline-block',width:'14px',height:'14px',borderRadius:'50%',background:'#22c55e',textAlign:'center',lineHeight:'14px',fontSize:'8px',fontWeight:800,color:'#fff',verticalAlign:'middle',marginRight:'4px'}}>⚓</span>Pier</span>
+                                <span style={{color:'var(--primary)'}}>--- Base Perimeter</span>
                             </div>
                             
                             {/* Key Locations */}
                             <div style={{marginTop:'12px',display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'12px'}}>
                                 <div style={{padding:'12px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'4px solid #ef4444'}}>
-                                    <div style={{fontSize:'10px',fontWeight:700,color:'#ef4444',letterSpacing:'0.5px',marginBottom:'4px'}}>🚧 GATE ENTRY</div>
+                                    <div style={{fontSize:'10px',fontWeight:700,color:'#ef4444',letterSpacing:'0.5px',marginBottom:'4px'}}>🔴 GATE ENTRY</div>
                                     <div style={{fontSize:'12px',fontWeight:600}}>{site.gate.label}</div>
                                     <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px',lineHeight:'1.4'}}>{site.gate_info}</div>
                                 </div>
@@ -4853,7 +4883,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                 );
             })()}
             
-            {topTab === 'trips' && viewMode === 'calendar' ? (
+            {!selectedSite && viewMode === 'calendar' ? (
                 <div style={{display:'grid',gridTemplateColumns:'1fr 320px',gap:'20px'}}>
                     <div className="card" style={{padding:'16px'}}>
                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
@@ -4928,7 +4958,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                         )}
                     </div>
                 </div>
-            ) : topTab === 'trips' ? (
+            ) : !selectedSite ? (
                 <div className="card">
                     <span className="card-title">All Trips</span>
                     {installs.length === 0 ? (
@@ -4962,7 +4992,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                 </div>
             ) : null}
             
-            {topTab === 'trips' && <div className="card">
+            {!selectedSite && <div className="card">
                 <span className="card-title">Schedule New Trip</span>
                 <div className="form-row mt-md">
                     <div className="form-group">
