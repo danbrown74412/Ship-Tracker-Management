@@ -4334,6 +4334,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const siteData = {
         everett: {
             name: 'Naval Station Everett', abbr: 'NAVSTA Everett', city: 'Everett, WA',
+            osmQuery: 'Naval Station Everett, Washington',
             lat: 47.9880, lng: -122.2210, mapZoom: 16,
             boundary: [
                 [47.9918,-122.2160],[47.9920,-122.2185],[47.9918,-122.2215],[47.9912,-122.2240],
@@ -4363,6 +4364,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         sandiego: {
             name: 'Naval Base San Diego', abbr: 'NBSD', city: 'San Diego, CA',
+            osmQuery: 'Naval Base San Diego, California',
             lat: 32.6870, lng: -117.1280, mapZoom: 14,
             boundary: [
                 [32.6730,-117.1180],[32.6730,-117.1230],[32.6735,-117.1280],[32.6750,-117.1315],
@@ -4392,6 +4394,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         pearlharbor: {
             name: 'Joint Base Pearl Harbor-Hickam', abbr: 'JBPHH', city: 'Pearl Harbor, HI',
+            osmQuery: 'Joint Base Pearl Harbor-Hickam, Hawaii',
             lat: 21.3480, lng: -157.9500, mapZoom: 14,
             boundary: [
                 [21.3380,-157.9380],[21.3390,-157.9430],[21.3400,-157.9480],[21.3420,-157.9530],
@@ -4420,6 +4423,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         mayport: {
             name: 'Naval Station Mayport', abbr: 'NAVSTA Mayport', city: 'Mayport, FL',
+            osmQuery: 'Naval Station Mayport, Florida',
             lat: 30.3850, lng: -81.4100, mapZoom: 14,
             boundary: [
                 [30.3750,-81.4360],[30.3745,-81.4280],[30.3745,-81.4200],[30.3750,-81.4120],
@@ -4448,6 +4452,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         norfolk: {
             name: 'Naval Station Norfolk', abbr: 'NAVSTA Norfolk', city: 'Norfolk, VA',
+            osmQuery: 'Naval Station Norfolk, Virginia',
             lat: 36.9470, lng: -76.3200, mapZoom: 14,
             boundary: [
                 [36.9350,-76.3130],[36.9355,-76.3180],[36.9365,-76.3230],[36.9380,-76.3280],
@@ -4477,6 +4482,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         yokosuka: {
             name: 'Commander Fleet Activities Yokosuka', abbr: 'CFAY / Yoko', city: 'Yokosuka, Japan',
+            osmQuery: 'United States Fleet Activities Yokosuka',
             lat: 35.2870, lng: 139.6635, mapZoom: 15,
             boundary: [
                 [35.2820,139.6645],[35.2825,139.6665],[35.2835,139.6680],[35.2850,139.6688],
@@ -4505,6 +4511,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         rota: {
             name: 'Naval Station Rota', abbr: 'NAVSTA Rota', city: 'Rota, Spain',
+            osmQuery: 'Naval Station Rota, Spain',
             lat: 36.6374, lng: -6.3465, mapZoom: 14,
             boundary: [
                 [36.6215,-6.3270],[36.6200,-6.3320],[36.6195,-6.3390],[36.6200,-6.3460],
@@ -4537,11 +4544,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     // Leaflet map for site detail view
     useEffect(() => {
         if (!selectedSite || !siteData[selectedSite]) return;
-        // Small delay to ensure React has rendered the div
+        let cancelled = false;
         const timer = setTimeout(() => {
             const el = document.getElementById('site-leaflet-map');
-            if (!el) return;
-            // Cleanup previous map
+            if (!el || cancelled) return;
             if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; }
             
             const site = siteData[selectedSite];
@@ -4552,17 +4558,38 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
                 attribution: '&copy; Esri', maxZoom: 19
             }).addTo(map);
-            // Labels overlay
             L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
                 maxZoom: 19, opacity: 0.6
             }).addTo(map);
             
-            // Base boundary outline
+            // Draw hardcoded boundary as fallback while loading
+            let fallbackLayer = null;
             if (site.boundary && site.boundary.length > 2) {
-                L.polygon(site.boundary, {
-                    color: '#00d4ff', weight: 3, fillColor: '#00d4ff', fillOpacity: 0.08,
-                    dashArray: '8,6', lineCap: 'round'
+                fallbackLayer = L.polygon(site.boundary, {
+                    color: '#00d4ff', weight: 2, fillColor: '#00d4ff', fillOpacity: 0.05,
+                    dashArray: '8,6', lineCap: 'round', opacity: 0.4
                 }).addTo(map);
+                map.fitBounds(site.boundary, { padding: [30, 30] });
+            }
+            
+            // Fetch REAL boundary from OpenStreetMap Nominatim
+            if (site.osmQuery) {
+                const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(site.osmQuery) + '&format=json&polygon_geojson=1&limit=1';
+                fetch(url, { headers: { 'Accept': 'application/json' } })
+                    .then(r => r.json())
+                    .then(data => {
+                        if (cancelled || !data || !data[0] || !data[0].geojson) return;
+                        const geojson = data[0].geojson;
+                        // Remove fallback boundary
+                        if (fallbackLayer) { map.removeLayer(fallbackLayer); fallbackLayer = null; }
+                        // Draw real OSM boundary
+                        const osmLayer = L.geoJSON(geojson, {
+                            style: { color: '#00d4ff', weight: 3, fillColor: '#00d4ff', fillOpacity: 0.08, dashArray: '10,6', lineCap: 'round' }
+                        }).addTo(map);
+                        // Fit map to real boundary
+                        map.fitBounds(osmLayer.getBounds(), { padding: [30, 30] });
+                    })
+                    .catch(err => { console.log('OSM boundary fetch failed, using fallback:', err); });
             }
             
             // Custom icons
@@ -4583,14 +4610,9 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
             L.marker([site.dock.lat, site.dock.lng], {icon: makeIcon('#22c55e','⚓')})
                 .bindPopup('<b style="color:#22c55e">PIER / DOCK</b><br/>' + site.dock.label)
                 .addTo(map);
-            
-            // Fit bounds to show full base
-            if (site.boundary && site.boundary.length > 2) {
-                map.fitBounds(site.boundary, { padding: [30, 30] });
-            }
         }, 100);
         
-        return () => { clearTimeout(timer); if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; } };
+        return () => { cancelled = true; clearTimeout(timer); if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; } };
     }, [selectedSite]);
     
     const getSitePOCs = (siteKey) => sitePOCs[siteKey] || siteData[siteKey]?.pocs_default || [];
