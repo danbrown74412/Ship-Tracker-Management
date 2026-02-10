@@ -4374,7 +4374,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const addMapMarker = (siteKey, type, lat, lng) => {
         const existing = getSiteMarkers(siteKey);
         const typeCount = existing.filter(m => m.type === type).length;
-        const labels = { gate: 'Gate', pier: 'Pier', route: 'Route Point' };
+        const labels = { gate: 'Gate', pier: 'Pier', route: 'Route Point', meetup: 'Meet Up Spot' };
         const newMarker = {
             id: 'mm_' + Date.now() + '_' + Math.random().toString(36).substr(2,4),
             siteKey, type, lat, lng,
@@ -4577,7 +4577,8 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         const markerStyles = {
             gate: { bg: '#ef4444', letter: 'G', border: '#fff' },
             pier: { bg: '#3b82f6', letter: 'P', border: '#fff' },
-            route: { bg: '#f59e0b', letter: 'R', border: '#fff' }
+            route: { bg: '#f59e0b', letter: 'R', border: '#fff' },
+            meetup: { bg: '#10b981', letter: 'M', border: '#fff' }
         };
         
         markers.filter(m => m.type !== 'route').forEach(m => {
@@ -4935,9 +4936,9 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     if (siteMarkers.length > 0) {
                                         win.document.write('<h4>📍 Map Markers</h4>');
                                         win.document.write('<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 12px">');
-                                        const grouped = {gate: siteMarkers.filter(m=>m.type==='gate'), pier: siteMarkers.filter(m=>m.type==='pier'), route: siteMarkers.filter(m=>m.type==='route').sort((a,b)=>a.order-b.order)};
-                                        const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b'};
-                                        const icons = {gate:'🚪',pier:'⚓',route:'🛣️'};
+                                        const grouped = {gate: siteMarkers.filter(m=>m.type==='gate'), pier: siteMarkers.filter(m=>m.type==='pier'), route: siteMarkers.filter(m=>m.type==='route').sort((a,b)=>a.order-b.order), meetup: siteMarkers.filter(m=>m.type==='meetup')};
+                                        const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b',meetup:'#10b981'};
+                                        const icons = {gate:'🚪',pier:'⚓',route:'🛣️',meetup:'📍'};
                                         Object.keys(grouped).forEach(type => {
                                             if (grouped[type].length === 0) return;
                                             grouped[type].forEach(m => {
@@ -4973,7 +4974,8 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                             {[
                                                 {type:'gate', label:'🚪 Gate', color:'#ef4444'},
                                                 {type:'pier', label:'⚓ Pier', color:'#3b82f6'},
-                                                {type:'route', label:'🛣️ Route', color:'#f59e0b'}
+                                                {type:'route', label:'🛣️ Route', color:'#f59e0b'},
+                                                {type:'meetup', label:'📍 Meet Up', color:'#10b981'}
                                             ].map(t => (
                                                 <button key={t.type} onClick={() => setMarkerPlaceType(t.type)} style={{
                                                     padding:'4px 10px',fontSize:'11px',fontWeight:700,borderRadius:'6px',border:'none',cursor:'pointer',
@@ -5004,7 +5006,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
                                             <span style={{fontSize:'12px',fontWeight:700,color:'var(--text-secondary)'}}>📍 Custom Markers ({siteMarkers.length})</span>
                                             <div style={{display:'flex',gap:'4px'}}>
-                                                {['gate','pier','route'].map(type => {
+                                                {['gate','pier','route','meetup'].map(type => {
                                                     const count = siteMarkers.filter(m => m.type === type).length;
                                                     if (count === 0) return null;
                                                     return <button key={type} className="btn btn-sm" style={{padding:'2px 6px',fontSize:'9px',background:'transparent',color:'var(--text-muted)'}} onClick={() => clearSiteMarkers(selectedSite, type)}>Clear {type}s ({count})</button>;
@@ -5013,11 +5015,11 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                         </div>
                                         <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}}>
                                             {siteMarkers.sort((a,b) => {
-                                                const order = {gate:0,pier:1,route:2};
+                                                const order = {gate:0,pier:1,route:2,meetup:3};
                                                 return (order[a.type]||0) - (order[b.type]||0) || a.order - b.order;
                                             }).map(m => {
-                                                const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b'};
-                                                const icons = {gate:'🚪',pier:'⚓',route:'🛣️'};
+                                                const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b',meetup:'#10b981'};
+                                                const icons = {gate:'🚪',pier:'⚓',route:'🛣️',meetup:'📍'};
                                                 return (
                                                     <div key={m.id} style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 10px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'3px solid '+colors[m.type],fontSize:'11px'}}>
                                                         <span>{icons[m.type]}</span>
