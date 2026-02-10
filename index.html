@@ -320,25 +320,11 @@ const hashPassword = (password) => {
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
 // Firebase real-time hook - loads instantly from localStorage, syncs with Firestore
-// Global flag: stop all Firestore writes when quota exceeded
-const firestoreDisabled = { current: false };
-
 const useFirestore = (collectionName, initialData = []) => {
-    const [data, setData] = useState(() => {
-        try {
-            const saved = localStorage.getItem('fb_' + collectionName);
-            if (saved) return JSON.parse(saved);
-        } catch {}
-        if (initialData.length > 0) {
-            localStorage.setItem('fb_' + collectionName, JSON.stringify(initialData));
-        }
-        return initialData;
-    });
-    const [loading, setLoading] = useState(false);
-    const initialized = useRef(false);
-    const dataRef = useRef(data);
+    const [data, setData] = useState(initialData);
+    const [loading, setLoading] = useState(true);
+    const dataRef = useRef(initialData);
     const pendingWrite = useRef(false);
-    const reconciling = useRef(false);
     
     const cleanForFirestore = (obj) => {
         if (!obj || typeof obj !== 'object') return obj;
@@ -359,71 +345,40 @@ const useFirestore = (collectionName, initialData = []) => {
     
     useEffect(() => { dataRef.current = data; }, [data]);
 
+    // Listen to Firestore — single source of truth
     useEffect(() => {
-        if (firestoreDisabled.current) { setLoading(false); return () => {}; }
         const unsubscribe = db.collection(collectionName).onSnapshot((snapshot) => {
-            if (pendingWrite.current || reconciling.current || firestoreDisabled.current) return;
-            
-            if (!snapshot.empty) {
-                const fbItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-                const fbIds = new Set(fbItems.map(i => i.id));
-                const localData = dataRef.current;
-                
-                if (!initialized.current) {
-                    initialized.current = true;
-                    // Merge local-only items but do NOT write back to Firestore immediately
-                    const missingItems = localData.filter(item => item && item.id && !fbIds.has(item.id));
-                    if (missingItems.length > 0) {
-                        console.log('[' + collectionName + '] Keeping ' + missingItems.length + ' local-only items');
-                        const merged = [...fbItems, ...missingItems];
-                        setData(merged);
-                        dataRef.current = merged;
-                        localStorage.setItem('fb_' + collectionName, JSON.stringify(merged));
-                    } else {
-                        setData(fbItems);
-                        dataRef.current = fbItems;
-                        localStorage.setItem('fb_' + collectionName, JSON.stringify(fbItems));
-                    }
-                } else {
-                    setData(fbItems);
-                    dataRef.current = fbItems;
-                    localStorage.setItem('fb_' + collectionName, JSON.stringify(fbItems));
-                }
-            } else if (!initialized.current) {
-                initialized.current = true;
-                // Firestore empty — keep local data, try seeding once
-                const localData = dataRef.current;
-                if (localData.length === 0 && initialData.length > 0) {
-                    setData(initialData);
-                    dataRef.current = initialData;
-                    localStorage.setItem('fb_' + collectionName, JSON.stringify(initialData));
-                }
-            }
+            if (pendingWrite.current) return;
+            const fbItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+            setData(fbItems);
+            dataRef.current = fbItems;
             setLoading(false);
         }, (error) => {
             console.error('[' + collectionName + '] Firestore error:', error);
-            if (error.code === 'resource-exhausted' || (error.message && error.message.includes('Quota'))) {
-                firestoreDisabled.current = true;
-                console.warn('[Firestore] Quota exceeded — switching to localStorage-only mode');
-            }
             setLoading(false);
         });
         return () => unsubscribe();
     }, [collectionName]);
 
+    // Seed initial data if Firestore collection is empty (one-time)
+    useEffect(() => {
+        if (!loading && data.length === 0 && initialData.length > 0) {
+            const ops = initialData.filter(item => item && item.id).map(item =>
+                db.collection(collectionName).doc(String(item.id)).set(cleanForFirestore(item))
+                    .catch(e => console.error('[' + collectionName + '] Seed failed:', e))
+            );
+            Promise.all(ops);
+        }
+    }, [loading]);
+
     const setDataWithSync = useCallback((newDataOrFn) => {
         const currentData = dataRef.current;
         const newData = typeof newDataOrFn === 'function' ? newDataOrFn(currentData) : newDataOrFn;
         
-        // Always update local state + localStorage
+        // Optimistic local update
+        pendingWrite.current = true;
         setData(newData);
         dataRef.current = newData;
-        localStorage.setItem('fb_' + collectionName, JSON.stringify(newData));
-        
-        // Skip Firestore if quota exceeded
-        if (firestoreDisabled.current) return;
-        
-        pendingWrite.current = true;
         
         // DIFF-BASED: Only write changed/added items, delete removed ones
         const oldMap = {};
@@ -437,14 +392,7 @@ const useFirestore = (collectionName, initialData = []) => {
             const newJson = JSON.stringify(item);
             if (oldMap[item.id] !== newJson) {
                 ops.push(db.collection(collectionName).doc(String(item.id)).set(cleanForFirestore(item))
-                    .catch(e => {
-                        if (e.code === 'resource-exhausted' || (e.message && e.message.includes('Quota'))) {
-                            firestoreDisabled.current = true;
-                            console.warn('[Firestore] Quota exceeded — localStorage-only mode');
-                        } else {
-                            console.error('[' + collectionName + '] Write failed for ' + item.id + ':', e);
-                        }
-                    }));
+                    .catch(e => console.error('[' + collectionName + '] Write failed for ' + item.id + ':', e)));
             }
         });
         
@@ -658,12 +606,7 @@ function AdminPanel({ users, onClose }) {
 
 function AuthWrapper() {
     const [currentUser, setCurrentUser] = useState(() => { try { return JSON.parse(localStorage.getItem('shipTrackerUser')); } catch { return null; } });
-    const [users, setUsers] = useState(() => {
-        try { const s = localStorage.getItem('fb_users'); if (s) return JSON.parse(s); } catch {}
-        const admin = { id: 'UADMIN001', username: 'DBrown', passwordHash: hashPassword('admin123'), status: 'approved', isAdmin: true, createdAt: new Date().toISOString() };
-        localStorage.setItem('fb_users', JSON.stringify([admin]));
-        return [admin];
-    });
+    const [users, setUsers] = useState([]);
     const [showAdmin, setShowAdmin] = useState(false);
     const [loginAttempts, setLoginAttempts] = useState(() => {
         try { return JSON.parse(localStorage.getItem('loginAttempts') || '{}'); } catch { return {}; }
@@ -725,7 +668,6 @@ function AuthWrapper() {
                     db.collection('users').doc(adminUser.id).update({ passwordHash: correctAdminHash });
                 }
                 setUsers(list);
-                localStorage.setItem('fb_users', JSON.stringify(list));
             } else if (!init.current) {
                 init.current = true;
                 const admin = { id: 'UADMIN001', username: 'DBrown', passwordHash: correctAdminHash, status: 'approved', isAdmin: true, createdAt: new Date().toISOString() };
@@ -1077,9 +1019,9 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
             }).catch(() => {});
         };
         
-        // Update immediately and every 20 seconds
+        // Update immediately and every 60 seconds
         updatePresence();
-        const interval = setInterval(updatePresence, 20000);
+        const interval = setInterval(updatePresence, 60000);
         
         // Listen for ALL presence docs
         const unsubscribe = db.collection('presence').onSnapshot((snapshot) => {
