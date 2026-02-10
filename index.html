@@ -337,6 +337,24 @@ const useFirestore = (collectionName, initialData = []) => {
     const pendingWrite = useRef(false);
     const pendingData = useRef(null);
     
+    // Strip undefined values (Firestore rejects them)
+    const cleanForFirestore = (obj) => {
+        if (!obj || typeof obj !== 'object') return obj;
+        if (Array.isArray(obj)) return obj.map(cleanForFirestore);
+        const cleaned = {};
+        for (const [k, v] of Object.entries(obj)) {
+            if (v === undefined) continue;
+            if (v && typeof v === 'object' && !Array.isArray(v) && !(v instanceof Date)) {
+                cleaned[k] = cleanForFirestore(v);
+            } else if (Array.isArray(v)) {
+                cleaned[k] = v.map(item => typeof item === 'object' && item !== null ? cleanForFirestore(item) : item);
+            } else {
+                cleaned[k] = v;
+            }
+        }
+        return cleaned;
+    };
+    
     // Keep ref in sync with state
     useEffect(() => {
         dataRef.current = data;
@@ -356,8 +374,8 @@ const useFirestore = (collectionName, initialData = []) => {
                 initialized.current = true;
                 const batch = db.batch();
                 initialData.forEach(item => {
-                    const ref = db.collection(collectionName).doc(item.id);
-                    batch.set(ref, item);
+                    const ref = db.collection(collectionName).doc(String(item.id));
+                    batch.set(ref, cleanForFirestore(item));
                 });
                 batch.commit();
             }
@@ -385,27 +403,27 @@ const useFirestore = (collectionName, initialData = []) => {
         const batch = db.batch();
         newData.forEach(item => {
             if (item && item.id) {
-                const ref = db.collection(collectionName).doc(item.id);
-                batch.set(ref, item);
+                const ref = db.collection(collectionName).doc(String(item.id));
+                batch.set(ref, cleanForFirestore(item));
             }
         });
         const newIds = new Set(newData.map(item => item.id));
         currentData.forEach(item => {
             if (item && item.id && !newIds.has(item.id)) {
-                const ref = db.collection(collectionName).doc(item.id);
+                const ref = db.collection(collectionName).doc(String(item.id));
                 batch.delete(ref);
             }
         });
         batch.commit()
             .then(() => {
-                // Clear pending flag after write completes
                 setTimeout(() => {
                     pendingWrite.current = false;
                     pendingData.current = null;
                 }, 500);
             })
             .catch(err => {
-                console.error('Batch write error:', err);
+                console.error('Batch write error for ' + collectionName + ':', err);
+                console.error('Data that failed:', JSON.stringify(newData).substring(0, 500));
                 pendingWrite.current = false;
                 pendingData.current = null;
             });
