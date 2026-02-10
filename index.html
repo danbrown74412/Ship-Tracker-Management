@@ -5390,74 +5390,74 @@ function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }
                     {installs.length === 0 ? (
                         <div className="card"><div className="empty">No trips scheduled yet</div></div>
                     ) : (
-                        <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',gap:'12px'}}>
                             {installs.sort((a,b) => parseLocalDate(a.start) - parseLocalDate(b.start)).map(i => {
                                 const isPast = parseLocalDate(i.end || i.start) < new Date();
                                 const isActive = i.status === 'In Progress';
-                                const statusColors = { 'Scheduled': 'var(--blue)', 'In Progress': 'var(--primary)', 'Completed': 'var(--green)', 'Delayed': 'var(--amber)', 'Cancelled': 'var(--red)' };
-                                const borderColor = statusColors[i.status] || 'var(--border)';
+                                const statusColors = { 'Scheduled': '#3b82f6', 'In Progress': '#19a974', 'Completed': '#22c55e', 'Delayed': '#f59e0b', 'Cancelled': '#ef4444' };
+                                const borderColor = statusColors[i.status] || '#555';
                                 const techInitials = { Daniel: 'DB', Uriel: 'UG', Jay: 'JR', Moe: 'MH' };
                                 const techColors = { Daniel: '#3b82f6', Uriel: '#8b5cf6', Jay: '#f59e0b', Moe: '#10b981' };
                                 return (
                                     <div key={i.id} style={{
-                                        padding:'16px 18px',borderRadius:'12px',
-                                        background: isActive ? 'linear-gradient(135deg, rgba(25,169,116,0.06), var(--bg-card))' : 'var(--bg-card)',
-                                        border:'1px solid var(--border)',borderLeft:'4px solid ' + borderColor,
-                                        opacity: isPast && i.status !== 'Completed' ? 0.6 : 1,
-                                        transition:'all 0.15s'
-                                    }}>
-                                        {/* Top row: Ship + Status + Delete */}
-                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
-                                            <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                                                <span style={{fontSize:'18px',fontWeight:800,color:'var(--text)',letterSpacing:'-0.3px'}}>{i.ship}</span>
+                                        padding:'14px 16px',borderRadius:'12px',
+                                        background:'var(--bg-card)',
+                                        border:'1px solid var(--border)',
+                                        borderTop:'3px solid ' + borderColor,
+                                        opacity: isPast && i.status !== 'Completed' ? 0.55 : 1,
+                                        transition:'all 0.2s',position:'relative',
+                                        display:'flex',flexDirection:'column',gap:'10px'
+                                    }}
+                                    onMouseEnter={e => {e.currentTarget.style.borderColor=borderColor;e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';}}
+                                    onMouseLeave={e => {e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.borderTopColor=borderColor;e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none';}}>
+                                        
+                                        {/* Header: Ship + Status */}
+                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
+                                            <div style={{fontSize:'17px',fontWeight:800,color:'var(--text)',lineHeight:'1.2'}}>{i.ship}</div>
+                                            <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
                                                 <span style={{
-                                                    padding:'3px 10px',borderRadius:'12px',fontSize:'10px',fontWeight:700,letterSpacing:'0.5px',
-                                                    background: borderColor + '22',color: borderColor,border:'1px solid ' + borderColor + '44'
+                                                    padding:'2px 8px',borderRadius:'10px',fontSize:'9px',fontWeight:700,letterSpacing:'0.3px',whiteSpace:'nowrap',
+                                                    background: borderColor + '20',color: borderColor
                                                 }}>{i.status}</span>
+                                                <button onClick={() => del(i.id)} style={{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:'12px',padding:'2px 4px',borderRadius:'4px',lineHeight:1}}
+                                                    onMouseEnter={e => e.currentTarget.style.color='var(--red)'}
+                                                    onMouseLeave={e => e.currentTarget.style.color='var(--text-muted)'}>✕</button>
                                             </div>
-                                            <button onClick={() => del(i.id)} style={{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:'14px',padding:'4px 8px',borderRadius:'6px',transition:'all 0.15s'}}
-                                                onMouseEnter={e => {e.currentTarget.style.color='var(--red)';e.currentTarget.style.background='rgba(239,68,68,0.1)';}}
-                                                onMouseLeave={e => {e.currentTarget.style.color='var(--text-muted)';e.currentTarget.style.background='transparent';}}>🗑️</button>
                                         </div>
                                         
-                                        {/* Info row: Location, Dates, Purpose */}
-                                        <div style={{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom: (i.techs && i.techs.length > 0) ? '12px' : '0'}}>
-                                            <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-secondary)'}}>
-                                                <span style={{opacity:0.7}}>📍</span> {i.location}
+                                        {/* Details */}
+                                        <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
+                                            <div style={{fontSize:'12px',color:'var(--text-secondary)',display:'flex',alignItems:'center',gap:'6px'}}>
+                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>📍</span>{i.location}
                                             </div>
-                                            <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-secondary)'}}>
-                                                <span style={{opacity:0.7}}>📅</span> {fmtDate(i.start)}{i.end ? ` → ${fmtDate(i.end)}` : ''}
+                                            <div style={{fontSize:'12px',color:'var(--text-secondary)',display:'flex',alignItems:'center',gap:'6px'}}>
+                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>📅</span>{fmtDate(i.start)}{i.end ? ` → ${fmtDate(i.end)}` : ''}
                                             </div>
-                                            {i.purpose && <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-secondary)'}}>
-                                                <span style={{opacity:0.7}}>🎯</span> {i.purpose}
+                                            {i.purpose && <div style={{fontSize:'11px',color:'var(--text-dim)',display:'flex',alignItems:'center',gap:'6px'}}>
+                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>🎯</span>{i.purpose}
                                             </div>}
-                                            {i.notes && <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-dim)'}}>
-                                                <span style={{opacity:0.7}}>📝</span> {i.notes}
+                                            {i.notes && <div style={{fontSize:'11px',color:'var(--text-dim)',display:'flex',alignItems:'center',gap:'6px'}}>
+                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>📝</span>{i.notes}
                                             </div>}
                                         </div>
                                         
-                                        {/* Techs row */}
+                                        {/* Team Avatars */}
                                         {i.techs && i.techs.length > 0 && (
-                                            <div style={{display:'flex',alignItems:'center',gap:'8px',paddingTop:'10px',borderTop:'1px solid var(--border)'}}>
-                                                <span style={{fontSize:'10px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'0.5px'}}>TEAM</span>
-                                                <div style={{display:'flex',gap:'6px'}}>
-                                                    {i.techs.map(t => (
-                                                        <div key={t} style={{
-                                                            display:'flex',alignItems:'center',gap:'6px',
-                                                            padding:'4px 10px',borderRadius:'16px',
-                                                            background: (techColors[t] || '#666') + '18',
-                                                            border:'1px solid ' + (techColors[t] || '#666') + '33'
-                                                        }}>
-                                                            <div style={{
-                                                                width:'22px',height:'22px',borderRadius:'50%',
-                                                                background: techColors[t] || '#666',color:'#fff',
-                                                                display:'flex',alignItems:'center',justifyContent:'center',
-                                                                fontSize:'9px',fontWeight:800,letterSpacing:'0.5px'
-                                                            }}>{techInitials[t] || t.charAt(0)}</div>
-                                                            <span style={{fontSize:'12px',fontWeight:600,color: techColors[t] || 'var(--text)'}}>{t}</span>
-                                                        </div>
+                                            <div style={{display:'flex',alignItems:'center',gap:'6px',paddingTop:'8px',borderTop:'1px solid var(--border)'}}>
+                                                <div style={{display:'flex',marginRight:'2px'}}>
+                                                    {i.techs.map((t, idx) => (
+                                                        <div key={t} title={t} style={{
+                                                            width:'26px',height:'26px',borderRadius:'50%',
+                                                            background: techColors[t] || '#666',color:'#fff',
+                                                            display:'flex',alignItems:'center',justifyContent:'center',
+                                                            fontSize:'9px',fontWeight:800,letterSpacing:'0.3px',
+                                                            border:'2px solid var(--bg-card)',
+                                                            marginLeft: idx > 0 ? '-6px' : '0',
+                                                            zIndex: i.techs.length - idx,position:'relative'
+                                                        }}>{techInitials[t] || t.charAt(0)}</div>
                                                     ))}
                                                 </div>
+                                                <span style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:500}}>{i.techs.join(' & ')}</span>
                                             </div>
                                         )}
                                     </div>
