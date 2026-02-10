@@ -4332,7 +4332,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         { key: 'everett', label: 'Everett', location: 'NAVSTA Everett', attn: '' },
         { key: 'sandiego', label: 'San Diego', location: 'NBSD San Diego', attn: '' },
         { key: 'pearlharbor', label: 'Pearl Harbor', location: 'JBPHH Pearl Harbor', attn: '' },
-        { key: 'mayport', label: 'Mayport', location: 'NAVSTA Mayport', attn: '' },
+        { key: 'mayport', label: 'Mayport', location: 'PMR MAYPORT — NAVSTA Mayport BLDG 1488/SERMC, 1488 Massey Ave, Mayport, FL 32228', attn: 'SECURITY OFFICER' },
         { key: 'norfolk', label: 'Norfolk', location: 'NAVSTA Norfolk', attn: '' },
         { key: 'yokosuka', label: 'Yokosuka', location: 'CFAY Yokosuka', attn: '' },
         { key: 'rota', label: 'Rota', location: 'NAVSTA Rota', attn: '' },
@@ -4345,10 +4345,13 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     };
     const buildShippingText = () => {
         const f = shipForm;
+        const addrType = shipType === 'class' ? 'class' : 'unclass';
+        const destSite = activeShipDest && siteData[activeShipDest];
+        const addrBlock = destSite ? destSite.addresses[addrType].lines.filter(l => !l.startsWith('⚠️')).join('\n') : '';
         if (shipType === 'unclass') {
-            return `Unclassified:\nDimensions: ${f.dimL||'___'}L x ${f.dimW||'___'}W x ${f.dimH||'___'}H\nWeight: ${f.weight||'____'} lbs\nLocation: ${f.location||''}\nATTN: ${f.attn||''}`;
+            return `Unclassified:\nDimensions: ${f.dimL||'___'}L x ${f.dimW||'___'}W x ${f.dimH||'___'}H\nWeight: ${f.weight||'____'} lbs\n\nShip To:\n${addrBlock || f.location || ''}\n${f.attn ? 'ATTN: ' + f.attn : ''}`.trim();
         } else {
-            return `Classified:\nDimensions: ${f.dimL||'6'}x${f.dimW||'6'}x${f.dimH||'4'}\nWeight: ${f.weight||'<10'} lbs\nLocation: ${f.location||''}\nATTN: ${f.attn||''}\nSerial Numbers:\nSSD1: ${f.serialSSD1||''}\nSSD2: ${f.serialSSD2||''}\nRTR:   ${f.serialRTR||''}\nPHONE: ${f.serialPhone||''}`;
+            return `Classified:\nDimensions: ${f.dimL||'6'}x${f.dimW||'6'}x${f.dimH||'4'}\nWeight: ${f.weight||'<10'} lbs\n\nShip To:\n${addrBlock || f.location || ''}\n${f.attn ? 'ATTN: ' + f.attn : ''}\n\nSerial Numbers:\nSSD1: ${f.serialSSD1||''}\nSSD2: ${f.serialSSD2||''}\nRTR:   ${f.serialRTR||''}\nPHONE: ${f.serialPhone||''}`.trim();
         }
     };
     const [sitePOCs, setSitePOCs] = useState(() => {
@@ -4482,12 +4485,12 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
             route_info: 'From Gate 5 → east across base on Massey Ave → Main base area & parking → continue NE to Turning Basin and ship piers on the St. Johns River.',
             ships_homeported: ['Multiple DDGs and CGs'],
             addresses: {
-                unclass: { label: 'UNCLASSIFIED Shipping', lines: ['Naval Station Mayport', 'ATTN: [Your Command/Code]', 'P.O. Box 280032 / Bldg 1', 'Mayport, FL 32228-0032'] },
-                class: { label: 'CLASSIFIED Shipping', lines: ['Naval Station Mayport', 'ATTN: Command Security Manager', 'Classified Material Control', 'Building 1, Security Office', 'Mayport, FL 32228-0032', '⚠️ Coordinate with local security office before shipping'] }
+                unclass: { label: 'UNCLASSIFIED Shipping', lines: ['PMR MAYPORT', 'ATTN: SECURITY OFFICER', 'NAVAL STATION MAYPORT BLDG 1488/SERMC', '1488 MASSEY AVE', 'MAYPORT, FL 32228'] },
+                class: { label: 'CLASSIFIED Shipping', lines: ['PMR MAYPORT', 'ATTN: SECURITY OFFICER', 'NAVAL STATION MAYPORT BLDG 1488/SERMC', '1488 MASSEY AVE', 'MAYPORT, FL 32228', '⚠️ Coordinate with local security office before shipping'] }
             },
             pocs_default: [
-                { id:'mp1', name: '', role: 'PMR Onsite Rep', phone: '', email: '', notes: 'Add PMR contact info' },
-                { id:'mp2', name: '', role: 'SERMC Coordinator', phone: '', email: '', notes: '' },
+                { id:'mp1', name: 'Chris Williams', role: 'PMR Onsite Rep', phone: '', email: 'christopher.l.williams18.ctr@us.navy.mil', notes: '' },
+                { id:'mp2', name: 'Kevin Martin', role: 'PMR Onsite Rep', phone: '', email: 'kevin.l.martin46.civ@us.navy.mil', notes: '' },
                 { id:'mp3', name: '', role: 'Base IT/NMCI POC', phone: '', email: '', notes: '' },
             ]
         },
@@ -4760,20 +4763,47 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                 </div>}
             </div>
             
-            {/* Installation Sites - clickable location bar */}
+            {/* Base Information - Prominent Cards */}
             {!selectedSite && (
-                <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginBottom:'16px'}}>
-                    {Object.entries(siteData).map(([key, site]) => {
-                        const shipCount = sorted.filter(s => s.location && site.city && s.location.includes(site.city.split(',')[0])).length;
-                        return (
-                            <button key={key} className="btn btn-secondary" style={{padding:'8px 14px',fontSize:'12px',display:'flex',alignItems:'center',gap:'6px'}} onClick={() => setSelectedSite(key)}>
-                                <span>{key==='yokosuka'?'🇯🇵':key==='rota'?'🇪🇸':'🇺🇸'}</span>
-                                <span style={{fontWeight:600}}>{site.abbr}</span>
-                                <span style={{fontSize:'10px',color:'var(--text-muted)',fontWeight:400}}>({site.city})</span>
-                                {shipCount > 0 && <span style={{background:'var(--primary)',color:'#fff',borderRadius:'10px',padding:'1px 7px',fontSize:'10px',fontWeight:700}}>{shipCount}</span>}
-                            </button>
-                        );
-                    })}
+                <div style={{marginBottom:'20px'}}>
+                    <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
+                        <span style={{fontSize:'20px'}}>🏛️</span>
+                        <div>
+                            <div style={{fontSize:'16px',fontWeight:800,color:'var(--text-primary)',letterSpacing:'-0.3px'}}>Base Information</div>
+                            <div style={{fontSize:'11px',color:'var(--text-muted)'}}>Select your destination — maps, contacts, shipping & logistics</div>
+                        </div>
+                    </div>
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(200px, 1fr))',gap:'10px'}}>
+                        {Object.entries(siteData).map(([key, site]) => {
+                            const flag = key==='yokosuka'?'🇯🇵':key==='rota'?'🇪🇸':'🇺🇸';
+                            const shipCount = sorted.filter(s => s.location && site.city && s.location.includes(site.city.split(',')[0])).length;
+                            const pocCount = (sitePOCs[key] || site.pocs_default || []).filter(p => p.name).length;
+                            return (
+                                <button key={key} onClick={() => setSelectedSite(key)} style={{
+                                    padding:'16px',borderRadius:'12px',border:'1px solid var(--border)',background:'var(--bg-card)',
+                                    cursor:'pointer',transition:'all 0.2s',textAlign:'left',position:'relative',overflow:'hidden',
+                                    display:'flex',flexDirection:'column',gap:'8px'
+                                }}
+                                onMouseEnter={e => {e.currentTarget.style.borderColor='var(--primary)';e.currentTarget.style.transform='translateY(-2px)';e.currentTarget.style.boxShadow='0 4px 16px rgba(0,0,0,0.15)';}}
+                                onMouseLeave={e => {e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none';}}>
+                                    <div style={{display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                                        <span style={{fontSize:'22px'}}>{flag}</span>
+                                        {shipCount > 0 && <span style={{background:'var(--primary)',color:'#fff',borderRadius:'10px',padding:'2px 8px',fontSize:'10px',fontWeight:700}}>{shipCount} ship{shipCount>1?'s':''}</span>}
+                                    </div>
+                                    <div>
+                                        <div style={{fontSize:'15px',fontWeight:800,color:'var(--text-primary)',lineHeight:'1.2'}}>{site.abbr}</div>
+                                        <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{site.city}</div>
+                                    </div>
+                                    <div style={{display:'flex',gap:'8px',flexWrap:'wrap',marginTop:'2px'}}>
+                                        <span style={{fontSize:'10px',color:'var(--text-muted)',display:'flex',alignItems:'center',gap:'3px'}}>🗺️ Map</span>
+                                        <span style={{fontSize:'10px',color:'var(--text-muted)',display:'flex',alignItems:'center',gap:'3px'}}>📦 Shipping</span>
+                                        {pocCount > 0 && <span style={{fontSize:'10px',color:'var(--text-muted)',display:'flex',alignItems:'center',gap:'3px'}}>👤 {pocCount} POC{pocCount>1?'s':''}</span>}
+                                    </div>
+                                    <div style={{fontSize:'10px',color:'var(--primary)',fontWeight:600,marginTop:'2px'}}>View Details →</div>
+                                </button>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
             
@@ -4811,6 +4841,13 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                 </button>
                             ))}
                         </div>
+                        
+                        {/* Full Address Display */}
+                        {activeShipDest && siteData[activeShipDest] && (
+                            <div style={{padding:'12px 16px',background: shipType==='class' ? 'rgba(239,68,68,0.05)' : 'rgba(34,197,94,0.05)',borderRadius:'10px',border: shipType==='class' ? '1px solid rgba(239,68,68,0.15)' : '1px solid rgba(34,197,94,0.15)',marginBottom:'14px',fontFamily:'monospace',fontSize:'11px',lineHeight:'1.7',color:'var(--text)',whiteSpace:'pre-wrap'}}>
+                                {siteData[activeShipDest].addresses[shipType === 'class' ? 'class' : 'unclass'].lines.join('\n')}
+                            </div>
+                        )}
                         
                         {/* Package Info */}
                         <div style={{fontSize:'11px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'10px',marginTop:'8px'}}>📐 PACKAGE</div>
