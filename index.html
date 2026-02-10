@@ -4374,7 +4374,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     const addMapMarker = (siteKey, type, lat, lng) => {
         const existing = getSiteMarkers(siteKey);
         const typeCount = existing.filter(m => m.type === type).length;
-        const labels = { gate: 'Gate', pier: 'Pier', route: 'Route Point', meetup: 'Meet Up Spot' };
+        const labels = { gate: 'Gate', pier: 'Pier', parking: 'Parking', route: 'Route Point', meetup: 'Meet Up Spot' };
         const newMarker = {
             id: 'mm_' + Date.now() + '_' + Math.random().toString(36).substr(2,4),
             siteKey, type, lat, lng,
@@ -4429,7 +4429,6 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         sandiego: {
             name: 'Naval Base San Diego', abbr: 'NBSD', city: 'San Diego, CA',
-            osmQuery: 'Naval Base San Diego, California',
             lat: 32.6870, lng: -117.1280, mapZoom: 14,
             gate: { lat: 32.6863, lng: -117.1272, label: 'Main Gate / Visitor Control (Harbor Dr)' },
             dock: { lat: 32.6900, lng: -117.1370, label: 'Piers 1-13 (Wet Side / Bay)' },
@@ -4451,7 +4450,6 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         pearlharbor: {
             name: 'Joint Base Pearl Harbor-Hickam', abbr: 'JBPHH', city: 'Pearl Harbor, HI',
-            osmQuery: 'Joint Base Pearl Harbor-Hickam, Hawaii',
             lat: 21.3480, lng: -157.9500, mapZoom: 14,
             gate: { lat: 21.3440, lng: -157.9430, label: 'Main Gate (Kamehameha Hwy)' },
             dock: { lat: 21.3530, lng: -157.9523, label: 'PHNSY Dry Docks & Ship Piers' },
@@ -4575,17 +4573,18 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         const markers = mapMarkersRef.current.filter(m => m.siteKey === siteKey);
         
         const markerStyles = {
-            gate: { bg: '#ef4444', letter: 'G', border: '#fff' },
-            pier: { bg: '#3b82f6', letter: 'P', border: '#fff' },
-            route: { bg: '#f59e0b', letter: 'R', border: '#fff' },
-            meetup: { bg: '#10b981', letter: 'M', border: '#fff' }
+            gate: { bg: '#ef4444', icon: '🚪', border: '#fff' },
+            pier: { bg: '#3b82f6', icon: '⚓', border: '#fff' },
+            parking: { bg: '#8b5cf6', icon: '🅿️', border: '#fff' },
+            meetup: { bg: '#10b981', icon: '📍', border: '#fff' },
+            route: { bg: '#f59e0b', icon: 'R', border: '#fff' }
         };
         
         markers.filter(m => m.type !== 'route').forEach(m => {
-            const s = markerStyles[m.type];
+            const s = markerStyles[m.type] || markerStyles.meetup;
             const icon = L.divIcon({
-                className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
-                html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:'+s.bg+';border:2px solid '+s.border+';border-radius:50%;font-size:13px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.6);font-family:Arial,sans-serif;cursor:'+(mapEditModeRef.current?'grab':'pointer')+'">'+s.letter+'</div>'
+                className: '', iconSize: [34, 34], iconAnchor: [17, 34], popupAnchor: [0, -36],
+                html: '<div style="width:34px;height:34px;display:flex;align-items:center;justify-content:center;background:'+s.bg+';border:2px solid '+s.border+';border-radius:50%;font-size:16px;box-shadow:0 2px 10px rgba(0,0,0,0.6);cursor:'+(mapEditModeRef.current?'grab':'pointer')+'">'+s.icon+'</div>'
             });
             const marker = L.marker([m.lat, m.lng], { icon, draggable: mapEditModeRef.current });
             marker.bindPopup('<b style="color:'+s.bg+'">' + (m.label || m.type) + '</b>');
@@ -4936,9 +4935,9 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     if (siteMarkers.length > 0) {
                                         win.document.write('<h4>📍 Map Markers</h4>');
                                         win.document.write('<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 12px">');
-                                        const grouped = {gate: siteMarkers.filter(m=>m.type==='gate'), pier: siteMarkers.filter(m=>m.type==='pier'), route: siteMarkers.filter(m=>m.type==='route').sort((a,b)=>a.order-b.order), meetup: siteMarkers.filter(m=>m.type==='meetup')};
-                                        const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b',meetup:'#10b981'};
-                                        const icons = {gate:'🚪',pier:'⚓',route:'🛣️',meetup:'📍'};
+                                        const grouped = {gate: siteMarkers.filter(m=>m.type==='gate'), pier: siteMarkers.filter(m=>m.type==='pier'), parking: siteMarkers.filter(m=>m.type==='parking'), route: siteMarkers.filter(m=>m.type==='route').sort((a,b)=>a.order-b.order), meetup: siteMarkers.filter(m=>m.type==='meetup')};
+                                        const colors = {gate:'#ef4444',pier:'#3b82f6',parking:'#8b5cf6',route:'#f59e0b',meetup:'#10b981'};
+                                        const icons = {gate:'🚪',pier:'⚓',parking:'🅿️',route:'🛣️',meetup:'📍'};
                                         Object.keys(grouped).forEach(type => {
                                             if (grouped[type].length === 0) return;
                                             grouped[type].forEach(m => {
@@ -4974,6 +4973,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                             {[
                                                 {type:'gate', label:'🚪 Gate', color:'#ef4444'},
                                                 {type:'pier', label:'⚓ Pier', color:'#3b82f6'},
+                                                {type:'parking', label:'🅿️ Parking', color:'#8b5cf6'},
                                                 {type:'route', label:'🛣️ Route', color:'#f59e0b'},
                                                 {type:'meetup', label:'📍 Meet Up', color:'#10b981'}
                                             ].map(t => (
@@ -5006,7 +5006,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                         <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
                                             <span style={{fontSize:'12px',fontWeight:700,color:'var(--text-secondary)'}}>📍 Custom Markers ({siteMarkers.length})</span>
                                             <div style={{display:'flex',gap:'4px'}}>
-                                                {['gate','pier','route','meetup'].map(type => {
+                                                {['gate','pier','parking','route','meetup'].map(type => {
                                                     const count = siteMarkers.filter(m => m.type === type).length;
                                                     if (count === 0) return null;
                                                     return <button key={type} className="btn btn-sm" style={{padding:'2px 6px',fontSize:'9px',background:'transparent',color:'var(--text-muted)'}} onClick={() => clearSiteMarkers(selectedSite, type)}>Clear {type}s ({count})</button>;
@@ -5015,11 +5015,11 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                         </div>
                                         <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}}>
                                             {siteMarkers.sort((a,b) => {
-                                                const order = {gate:0,pier:1,route:2,meetup:3};
+                                                const order = {gate:0,pier:1,parking:2,route:3,meetup:4};
                                                 return (order[a.type]||0) - (order[b.type]||0) || a.order - b.order;
                                             }).map(m => {
-                                                const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b',meetup:'#10b981'};
-                                                const icons = {gate:'🚪',pier:'⚓',route:'🛣️',meetup:'📍'};
+                                                const colors = {gate:'#ef4444',pier:'#3b82f6',parking:'#8b5cf6',route:'#f59e0b',meetup:'#10b981'};
+                                                const icons = {gate:'🚪',pier:'⚓',parking:'🅿️',route:'🛣️',meetup:'📍'};
                                                 return (
                                                     <div key={m.id} style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 10px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'3px solid '+colors[m.type],fontSize:'11px'}}>
                                                         <span>{icons[m.type]}</span>
