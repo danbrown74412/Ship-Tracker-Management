@@ -5379,37 +5379,91 @@ function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }
                     </div>
                 </div>
             ) : !selectedSite ? (
-                <div className="card">
-                    <span className="card-title">All Trips</span>
+                <div>
+                    <div style={{display:'flex',alignItems:'center',gap:'10px',marginBottom:'14px'}}>
+                        <span style={{fontSize:'20px'}}>📋</span>
+                        <div>
+                            <div style={{fontSize:'16px',fontWeight:800,color:'var(--text)',letterSpacing:'-0.3px'}}>Scheduled Trips</div>
+                            <div style={{fontSize:'11px',color:'var(--text-secondary)'}}>{installs.length} trip{installs.length!==1?'s':''} scheduled</div>
+                        </div>
+                    </div>
                     {installs.length === 0 ? (
-                        <div className="empty">No trips scheduled</div>
+                        <div className="card"><div className="empty">No trips scheduled yet</div></div>
                     ) : (
-                        <table className="table mt-md">
-                            <thead>
-                                <tr>
-                                    <th>Ship</th>
-                                    <th>Dates</th>
-                                    <th>Location</th>
-                                    <th>Purpose</th>
-                                    <th>Techs</th>
-                                    <th>Status</th>
-                                    <th>Action</th>
-                                </tr>
-                            </thead>
-                            <tbody>
-                                {installs.sort((a,b) => parseLocalDate(a.start) - parseLocalDate(b.start)).map(i => (
-                                    <tr key={i.id}>
-                                        <td style={{fontWeight:600}}>{i.ship}</td>
-                                        <td style={{fontSize:'12px'}}>{fmtDate(i.start)}{i.end ? ` - ${fmtDate(i.end)}` : ''}</td>
-                                        <td>{i.location}</td>
-                                        <td style={{fontSize:'12px',color:'var(--text-dim)'}}>{i.purpose || '—'}</td>
-                                        <td style={{fontSize:'11px'}}>{i.techs && i.techs.length > 0 ? i.techs.join(', ') : '—'}</td>
-                                        <td><span className={`badge ${i.status==='Completed'?'badge-success':i.status==='Cancelled'?'badge-mild':'badge-info'}`}>{i.status}</span></td>
-                                        <td><button className="btn btn-sm btn-danger" onClick={() => del(i.id)}>Del</button></td>
-                                    </tr>
-                                ))}
-                            </tbody>
-                        </table>
+                        <div style={{display:'flex',flexDirection:'column',gap:'10px'}}>
+                            {installs.sort((a,b) => parseLocalDate(a.start) - parseLocalDate(b.start)).map(i => {
+                                const isPast = parseLocalDate(i.end || i.start) < new Date();
+                                const isActive = i.status === 'In Progress';
+                                const statusColors = { 'Scheduled': 'var(--blue)', 'In Progress': 'var(--primary)', 'Completed': 'var(--green)', 'Delayed': 'var(--amber)', 'Cancelled': 'var(--red)' };
+                                const borderColor = statusColors[i.status] || 'var(--border)';
+                                const techInitials = { Daniel: 'DB', Uriel: 'UG', Jay: 'JR', Moe: 'MH' };
+                                const techColors = { Daniel: '#3b82f6', Uriel: '#8b5cf6', Jay: '#f59e0b', Moe: '#10b981' };
+                                return (
+                                    <div key={i.id} style={{
+                                        padding:'16px 18px',borderRadius:'12px',
+                                        background: isActive ? 'linear-gradient(135deg, rgba(25,169,116,0.06), var(--bg-card))' : 'var(--bg-card)',
+                                        border:'1px solid var(--border)',borderLeft:'4px solid ' + borderColor,
+                                        opacity: isPast && i.status !== 'Completed' ? 0.6 : 1,
+                                        transition:'all 0.15s'
+                                    }}>
+                                        {/* Top row: Ship + Status + Delete */}
+                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'10px'}}>
+                                            <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                                                <span style={{fontSize:'18px',fontWeight:800,color:'var(--text)',letterSpacing:'-0.3px'}}>{i.ship}</span>
+                                                <span style={{
+                                                    padding:'3px 10px',borderRadius:'12px',fontSize:'10px',fontWeight:700,letterSpacing:'0.5px',
+                                                    background: borderColor + '22',color: borderColor,border:'1px solid ' + borderColor + '44'
+                                                }}>{i.status}</span>
+                                            </div>
+                                            <button onClick={() => del(i.id)} style={{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:'14px',padding:'4px 8px',borderRadius:'6px',transition:'all 0.15s'}}
+                                                onMouseEnter={e => {e.currentTarget.style.color='var(--red)';e.currentTarget.style.background='rgba(239,68,68,0.1)';}}
+                                                onMouseLeave={e => {e.currentTarget.style.color='var(--text-muted)';e.currentTarget.style.background='transparent';}}>🗑️</button>
+                                        </div>
+                                        
+                                        {/* Info row: Location, Dates, Purpose */}
+                                        <div style={{display:'flex',gap:'16px',flexWrap:'wrap',marginBottom: (i.techs && i.techs.length > 0) ? '12px' : '0'}}>
+                                            <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-secondary)'}}>
+                                                <span style={{opacity:0.7}}>📍</span> {i.location}
+                                            </div>
+                                            <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-secondary)'}}>
+                                                <span style={{opacity:0.7}}>📅</span> {fmtDate(i.start)}{i.end ? ` → ${fmtDate(i.end)}` : ''}
+                                            </div>
+                                            {i.purpose && <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-secondary)'}}>
+                                                <span style={{opacity:0.7}}>🎯</span> {i.purpose}
+                                            </div>}
+                                            {i.notes && <div style={{display:'flex',alignItems:'center',gap:'5px',fontSize:'12px',color:'var(--text-dim)'}}>
+                                                <span style={{opacity:0.7}}>📝</span> {i.notes}
+                                            </div>}
+                                        </div>
+                                        
+                                        {/* Techs row */}
+                                        {i.techs && i.techs.length > 0 && (
+                                            <div style={{display:'flex',alignItems:'center',gap:'8px',paddingTop:'10px',borderTop:'1px solid var(--border)'}}>
+                                                <span style={{fontSize:'10px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'0.5px'}}>TEAM</span>
+                                                <div style={{display:'flex',gap:'6px'}}>
+                                                    {i.techs.map(t => (
+                                                        <div key={t} style={{
+                                                            display:'flex',alignItems:'center',gap:'6px',
+                                                            padding:'4px 10px',borderRadius:'16px',
+                                                            background: (techColors[t] || '#666') + '18',
+                                                            border:'1px solid ' + (techColors[t] || '#666') + '33'
+                                                        }}>
+                                                            <div style={{
+                                                                width:'22px',height:'22px',borderRadius:'50%',
+                                                                background: techColors[t] || '#666',color:'#fff',
+                                                                display:'flex',alignItems:'center',justifyContent:'center',
+                                                                fontSize:'9px',fontWeight:800,letterSpacing:'0.5px'
+                                                            }}>{techInitials[t] || t.charAt(0)}</div>
+                                                            <span style={{fontSize:'12px',fontWeight:600,color: techColors[t] || 'var(--text)'}}>{t}</span>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                        </div>
                     )}
                 </div>
             ) : null}
