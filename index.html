@@ -4472,6 +4472,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         },
         pearlharbor: {
             name: 'Joint Base Pearl Harbor-Hickam', abbr: 'JBPHH', city: 'Pearl Harbor, HI',
+            osmQuery: 'Pearl Harbor Naval Shipyard',
             lat: 21.3480, lng: -157.9500, mapZoom: 14,
             gate: { lat: 21.3440, lng: -157.9430, label: 'Main Gate (Kamehameha Hwy)' },
             dock: { lat: 21.3530, lng: -157.9523, label: 'PHNSY Dry Docks & Ship Piers' },
@@ -4969,7 +4970,6 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{selectedSite==='yokosuka'?'🇯🇵':selectedSite==='rota'?'🇪🇸':'🇺🇸'} {site.name}</div>
                                 </div>
                                 <button className="btn btn-sm btn-secondary" onClick={async () => {
-                                    // Capture the map as an image first
                                     let mapDataUrl = null;
                                     const mapEl = document.getElementById('site-leaflet-map');
                                     if (mapEl && typeof html2canvas !== 'undefined') {
@@ -4979,41 +4979,14 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                         } catch(e) { console.warn('Map capture failed:', e); }
                                     }
                                     const win = window.open('','','width=900,height=700');
-                                    win.document.write('<html><head><title>' + site.abbr + ' - Base Reference</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222}h2{margin:0 0 4px}h4{margin:12px 0 6px;color:#555}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}.card{padding:10px;border:1px solid #ccc;border-radius:6px;font-size:12px}.card b{display:block;margin-bottom:4px}.route{padding:12px;background:#f0f0f0;border-radius:6px;margin:12px 0;font-size:13px}.map-img{width:100%;max-height:500px;object-fit:contain;border-radius:8px;border:2px solid #ccc;margin:8px 0 16px}@media print{body{margin:10px}.map-img{max-height:450px;page-break-inside:avoid}}</style></head><body>');
+                                    win.document.write('<html><head><title>' + site.abbr + ' - Base Map</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222;text-align:center}h2{margin:0 0 8px}.map-img{width:100%;max-height:90vh;object-fit:contain;border-radius:8px;margin:8px 0}@media print{body{margin:10px}.map-img{max-height:95vh}}</style></head><body>');
                                     win.document.write('<h2>🗺️ ' + site.abbr + ' — ' + site.name + '</h2>');
-                                    win.document.write('<p style="font-size:12px;color:#666;margin:4px 0 12px">Base reference — print & bring onsite.</p>');
                                     if (mapDataUrl) {
                                         win.document.write('<img class="map-img" src="' + mapDataUrl + '" alt="Base Map"/>');
                                     } else {
-                                        win.document.write('<p style="font-size:12px;color:#999;margin:8px 0">Screenshot the satellite map from the app for visual reference.</p>');
+                                        win.document.write('<p style="color:#999;margin:40px 0">Map capture failed — screenshot the map from the app.</p>');
                                     }
-                                    // Custom markers legend
-                                    const siteMarkers = getSiteMarkers(selectedSite);
-                                    if (siteMarkers.length > 0) {
-                                        win.document.write('<h4>📍 Map Markers</h4>');
-                                        win.document.write('<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 12px">');
-                                        const grouped = {gate: siteMarkers.filter(m=>m.type==='gate'), pier: siteMarkers.filter(m=>m.type==='pier'), parking: siteMarkers.filter(m=>m.type==='parking'), route: siteMarkers.filter(m=>m.type==='route').sort((a,b)=>a.order-b.order), meetup: siteMarkers.filter(m=>m.type==='meetup')};
-                                        const colors = {gate:'#ef4444',pier:'#3b82f6',parking:'#8b5cf6',route:'#f59e0b',meetup:'#10b981'};
-                                        const icons = {gate:'🚪',pier:'⚓',parking:'🅿️',route:'🛣️',meetup:'📍'};
-                                        Object.keys(grouped).forEach(type => {
-                                            if (grouped[type].length === 0) return;
-                                            grouped[type].forEach(m => {
-                                                win.document.write('<span style="font-size:11px;padding:3px 8px;border-radius:6px;border-left:3px solid '+colors[type]+';background:#f5f5f5">'+icons[type]+' '+m.label+'</span>');
-                                            });
-                                        });
-                                        win.document.write('</div>');
-                                    }
-                                    if (pocs.filter(p=>p.name).length > 0) {
-                                        win.document.write('<h4>👤 Contacts</h4>');
-                                        pocs.filter(p=>p.name).forEach(p => {
-                                            win.document.write('<div style="font-size:12px;margin:4px 0"><b>' + p.name + '</b> — ' + p.role + (p.phone ? ' | 📞 ' + p.phone : '') + (p.email ? ' | ✉️ ' + p.email : '') + '</div>');
-                                        });
-                                    }
-                                    win.document.write('<h4>📦 Shipping</h4>');
-                                    win.document.write('<div class="grid" style="grid-template-columns:1fr 1fr">');
-                                    win.document.write('<div class="card" style="border-left:3px solid green;font-family:monospace;font-size:11px">' + site.addresses.unclass.lines.join('<br/>') + '</div>');
-                                    win.document.write('<div class="card" style="border-left:3px solid red;font-family:monospace;font-size:11px">' + site.addresses.class.lines.join('<br/>') + '</div>');
-                                    win.document.write('</div></body></html>');
+                                    win.document.write('</body></html>');
                                     win.document.close();
                                     setTimeout(() => win.print(), 300);
                                 }}>🖨️ Print Reference</button>
