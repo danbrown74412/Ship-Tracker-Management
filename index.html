@@ -1111,8 +1111,9 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
 
     const navItems = [
         { id: 0, label: 'Dashboard', icon: 'dashboard' }, { id: 1, label: 'Daily Checks', icon: 'checks' },
+        { id: 5, label: 'Trips & Info', icon: 'installs' },
         { id: 2, label: 'Add Ship', icon: 'add' },
-        { id: 4, label: 'Inventory', icon: 'inventory' }, { id: 5, label: 'Trips', icon: 'installs' },
+        { id: 4, label: 'Inventory', icon: 'inventory' },
         { id: 6, label: 'Parts', icon: 'parts' }, { id: 7, label: 'Email Status', icon: 'email', badge: overdueShips },
         { id: 8, label: 'Data / Import', icon: 'settings' },
         ...(isAdmin ? [{ id: 10, label: 'Suggestions', icon: 'issues', badge: suggestions.filter(s => s.status === 'new').length }] : []),
