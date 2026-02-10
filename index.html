@@ -4660,20 +4660,6 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
             // Render custom markers (replaces hardcoded gate marker)
             renderCustomMarkers(map, selectedSite);
             
-            // If no custom gate markers exist, show the default one
-            const customGates = mapMarkersRef.current.filter(m => m.siteKey === selectedSite && m.type === 'gate');
-            if (customGates.length === 0) {
-                const gateIcon = L.divIcon({
-                    className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
-                    html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#ef4444;border:2px solid #fff;border-radius:50%;font-size:13px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.6);font-family:Arial,sans-serif;opacity:0.5">G</div>'
-                });
-                const defaultGate = L.marker([site.gate.lat, site.gate.lng], { icon: gateIcon })
-                    .bindPopup('<b style="color:#ef4444">' + site.gate.label + '</b><br/><i style="font-size:11px;color:#888">Default — use Edit Map to place your own</i>')
-                    .addTo(map);
-                if (!map._customLayers) map._customLayers = [];
-                map._customLayers.push(defaultGate);
-            }
-            
             // Fetch REAL boundary from OpenStreetMap Nominatim
             if (site.osmQuery) {
                 const url = 'https://nominatim.openstreetmap.org/search?q=' + encodeURIComponent(site.osmQuery) + '&format=json&polygon_geojson=1&limit=1';
@@ -4700,22 +4686,6 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         if (!selectedSite || !siteMapInstance.current) return;
         const map = siteMapInstance.current;
         renderCustomMarkers(map, selectedSite);
-        // Re-show default gate if no custom gates
-        const customGates = mapMarkers.filter(m => m.siteKey === selectedSite && m.type === 'gate');
-        if (customGates.length === 0) {
-            const site = siteData[selectedSite];
-            if (site) {
-                const gateIcon = L.divIcon({
-                    className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
-                    html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#ef4444;border:2px solid #fff;border-radius:50%;font-size:13px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.6);font-family:Arial,sans-serif;opacity:0.5">G</div>'
-                });
-                const defaultGate = L.marker([site.gate.lat, site.gate.lng], { icon: gateIcon })
-                    .bindPopup('<b style="color:#ef4444">' + site.gate.label + '</b><br/><i style="font-size:11px;color:#888">Default — use Edit Map to place your own</i>')
-                    .addTo(map);
-                if (!map._customLayers) map._customLayers = [];
-                map._customLayers.push(defaultGate);
-            }
-        }
     }, [mapMarkers, mapEditMode]);
     
     const getSitePOCs = (siteKey) => sitePOCs[siteKey] || siteData[siteKey]?.pocs_default || [];
