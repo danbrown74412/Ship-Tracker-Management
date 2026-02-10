@@ -4598,27 +4598,28 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
             map._customLayers.push(marker);
         });
         
-        // Route points with numbered markers + polyline
+        // Route points + polyline (only show drag handles in edit mode)
         const routePts = markers.filter(m => m.type === 'route').sort((a,b) => a.order - b.order);
         if (routePts.length > 0) {
-            routePts.forEach((m, idx) => {
-                const icon = L.divIcon({
-                    className: '', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -16],
-                    html: '<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#f59e0b;border:2px solid #fff;border-radius:50%;font-size:12px;font-weight:900;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-family:Arial,sans-serif;cursor:'+(mapEditModeRef.current?'grab':'pointer')+'">'+(idx+1)+'</div>'
-                });
-                const marker = L.marker([m.lat, m.lng], { icon, draggable: mapEditModeRef.current });
-                marker.bindPopup('<b style="color:#f59e0b">' + (m.label || 'Route Point ' + (idx+1)) + '</b>');
-                if (mapEditModeRef.current) {
+            if (mapEditModeRef.current) {
+                // Edit mode: show small draggable dots so user can reposition
+                routePts.forEach((m, idx) => {
+                    const icon = L.divIcon({
+                        className: '', iconSize: [14, 14], iconAnchor: [7, 7], popupAnchor: [0, -10],
+                        html: '<div style="width:14px;height:14px;background:#f59e0b;border:2px solid #fff;border-radius:50%;box-shadow:0 1px 6px rgba(0,0,0,0.5);cursor:grab"></div>'
+                    });
+                    const marker = L.marker([m.lat, m.lng], { icon, draggable: true });
+                    marker.bindPopup('<b style="color:#f59e0b">' + (m.label || 'Route Point ' + (idx+1)) + '</b>');
                     marker.on('dragend', function(e) {
                         const pos = e.target.getLatLng();
                         setMapMarkers(prev => prev.map(x => x.id === m.id ? {...x, lat: pos.lat, lng: pos.lng} : x));
                     });
-                }
-                marker.addTo(map);
-                map._customLayers.push(marker);
-            });
+                    marker.addTo(map);
+                    map._customLayers.push(marker);
+                });
+            }
             
-            // Draw route polyline
+            // Draw route polyline (always visible)
             if (routePts.length >= 2) {
                 const latlngs = routePts.map(m => [m.lat, m.lng]);
                 const polyline = L.polyline(latlngs, {
