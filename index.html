@@ -290,6 +290,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -4360,6 +4361,46 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     useEffect(() => { localStorage.setItem('sitePOCs', JSON.stringify(sitePOCs)); }, [sitePOCs]);
     useEffect(() => { localStorage.setItem('siteNotes', JSON.stringify(siteNotes)); }, [siteNotes]);
     
+    // Map markers - synced to Firebase for all users
+    const [mapMarkers, setMapMarkers] = useFirestore('mapMarkers', []);
+    const [mapEditMode, setMapEditMode] = useState(false);
+    const [markerPlaceType, setMarkerPlaceType] = useState('gate');
+    const [editingMarkerLabel, setEditingMarkerLabel] = useState(null);
+    const [markerLabelText, setMarkerLabelText] = useState('');
+    const mapMarkersRef = useRef([]);
+    useEffect(() => { mapMarkersRef.current = mapMarkers; }, [mapMarkers]);
+    
+    const getSiteMarkers = (siteKey) => mapMarkers.filter(m => m.siteKey === siteKey);
+    const addMapMarker = (siteKey, type, lat, lng) => {
+        const existing = getSiteMarkers(siteKey);
+        const typeCount = existing.filter(m => m.type === type).length;
+        const labels = { gate: 'Gate', pier: 'Pier', route: 'Route Point' };
+        const newMarker = {
+            id: 'mm_' + Date.now() + '_' + Math.random().toString(36).substr(2,4),
+            siteKey, type, lat, lng,
+            label: labels[type] + ' ' + (typeCount + 1),
+            order: typeCount,
+            createdAt: new Date().toISOString()
+        };
+        setMapMarkers(prev => [...prev, newMarker]);
+        toast(labels[type] + ' placed!', 'success');
+    };
+    const removeMapMarker = (markerId) => {
+        setMapMarkers(prev => prev.filter(m => m.id !== markerId));
+        toast('Marker removed', 'info');
+    };
+    const updateMarkerLabel = (markerId, newLabel) => {
+        setMapMarkers(prev => prev.map(m => m.id === markerId ? {...m, label: newLabel} : m));
+        setEditingMarkerLabel(null);
+        setMarkerLabelText('');
+        toast('Label updated', 'success');
+    };
+    const clearSiteMarkers = (siteKey, type) => {
+        if (!confirm('Clear all ' + type + ' markers for this site?')) return;
+        setMapMarkers(prev => prev.filter(m => !(m.siteKey === siteKey && m.type === type)));
+        toast('Markers cleared', 'info');
+    };
+    
     const locations = ['San Diego, CA', 'Norfolk, VA', 'Mayport, FL', 'Pearl Harbor, HI', 'Yokosuka, Japan', 'Rota, Spain', 'Everett, WA', 'Washington D.C.', 'Other'];
     const statuses = ['Scheduled', 'In Progress', 'Completed', 'Delayed', 'Cancelled'];
     
@@ -4521,6 +4562,74 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     };
     
     // Leaflet map for site detail view
+    const mapEditModeRef = useRef(false);
+    const markerPlaceTypeRef = useRef('gate');
+    useEffect(() => { mapEditModeRef.current = mapEditMode; }, [mapEditMode]);
+    useEffect(() => { markerPlaceTypeRef.current = markerPlaceType; }, [markerPlaceType]);
+    
+    const renderCustomMarkers = (map, siteKey) => {
+        // Clear existing custom layers
+        if (map._customLayers) map._customLayers.forEach(l => { try { map.removeLayer(l); } catch(e){} });
+        map._customLayers = [];
+        
+        const markers = mapMarkersRef.current.filter(m => m.siteKey === siteKey);
+        
+        const markerStyles = {
+            gate: { bg: '#ef4444', letter: 'G', border: '#fff' },
+            pier: { bg: '#3b82f6', letter: 'P', border: '#fff' },
+            route: { bg: '#f59e0b', letter: 'R', border: '#fff' }
+        };
+        
+        markers.filter(m => m.type !== 'route').forEach(m => {
+            const s = markerStyles[m.type];
+            const icon = L.divIcon({
+                className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
+                html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:'+s.bg+';border:2px solid '+s.border+';border-radius:50%;font-size:13px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.6);font-family:Arial,sans-serif;cursor:'+(mapEditModeRef.current?'grab':'pointer')+'">'+s.letter+'</div>'
+            });
+            const marker = L.marker([m.lat, m.lng], { icon, draggable: mapEditModeRef.current });
+            marker.bindPopup('<b style="color:'+s.bg+'">' + (m.label || m.type) + '</b>');
+            if (mapEditModeRef.current) {
+                marker.on('dragend', function(e) {
+                    const pos = e.target.getLatLng();
+                    setMapMarkers(prev => prev.map(x => x.id === m.id ? {...x, lat: pos.lat, lng: pos.lng} : x));
+                });
+            }
+            marker.addTo(map);
+            map._customLayers.push(marker);
+        });
+        
+        // Route points with numbered markers + polyline
+        const routePts = markers.filter(m => m.type === 'route').sort((a,b) => a.order - b.order);
+        if (routePts.length > 0) {
+            routePts.forEach((m, idx) => {
+                const icon = L.divIcon({
+                    className: '', iconSize: [28, 28], iconAnchor: [14, 14], popupAnchor: [0, -16],
+                    html: '<div style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:#f59e0b;border:2px solid #fff;border-radius:50%;font-size:12px;font-weight:900;color:#fff;box-shadow:0 2px 8px rgba(0,0,0,0.5);font-family:Arial,sans-serif;cursor:'+(mapEditModeRef.current?'grab':'pointer')+'">'+(idx+1)+'</div>'
+                });
+                const marker = L.marker([m.lat, m.lng], { icon, draggable: mapEditModeRef.current });
+                marker.bindPopup('<b style="color:#f59e0b">' + (m.label || 'Route Point ' + (idx+1)) + '</b>');
+                if (mapEditModeRef.current) {
+                    marker.on('dragend', function(e) {
+                        const pos = e.target.getLatLng();
+                        setMapMarkers(prev => prev.map(x => x.id === m.id ? {...x, lat: pos.lat, lng: pos.lng} : x));
+                    });
+                }
+                marker.addTo(map);
+                map._customLayers.push(marker);
+            });
+            
+            // Draw route polyline
+            if (routePts.length >= 2) {
+                const latlngs = routePts.map(m => [m.lat, m.lng]);
+                const polyline = L.polyline(latlngs, {
+                    color: '#f59e0b', weight: 4, opacity: 0.9, dashArray: '10,8',
+                    lineCap: 'round', lineJoin: 'round'
+                }).addTo(map);
+                map._customLayers.push(polyline);
+            }
+        }
+    };
+    
     useEffect(() => {
         if (!selectedSite || !siteData[selectedSite]) return;
         let cancelled = false;
@@ -4541,14 +4650,28 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                 maxZoom: 19, opacity: 0.6
             }).addTo(map);
             
-            // Gate marker
-            const gateIcon = L.divIcon({
-                className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
-                html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#ef4444;border:2px solid #fff;border-radius:50%;font-size:13px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.6);font-family:Arial,sans-serif">G</div>'
+            // Click to place markers in edit mode
+            map.on('click', function(e) {
+                if (!mapEditModeRef.current) return;
+                addMapMarker(selectedSite, markerPlaceTypeRef.current, e.latlng.lat, e.latlng.lng);
             });
-            L.marker([site.gate.lat, site.gate.lng], { icon: gateIcon })
-                .bindPopup('<b style="color:#ef4444">' + site.gate.label + '</b>')
-                .addTo(map);
+            
+            // Render custom markers (replaces hardcoded gate marker)
+            renderCustomMarkers(map, selectedSite);
+            
+            // If no custom gate markers exist, show the default one
+            const customGates = mapMarkersRef.current.filter(m => m.siteKey === selectedSite && m.type === 'gate');
+            if (customGates.length === 0) {
+                const gateIcon = L.divIcon({
+                    className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
+                    html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#ef4444;border:2px solid #fff;border-radius:50%;font-size:13px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.6);font-family:Arial,sans-serif;opacity:0.5">G</div>'
+                });
+                const defaultGate = L.marker([site.gate.lat, site.gate.lng], { icon: gateIcon })
+                    .bindPopup('<b style="color:#ef4444">' + site.gate.label + '</b><br/><i style="font-size:11px;color:#888">Default — use Edit Map to place your own</i>')
+                    .addTo(map);
+                if (!map._customLayers) map._customLayers = [];
+                map._customLayers.push(defaultGate);
+            }
             
             // Fetch REAL boundary from OpenStreetMap Nominatim
             if (site.osmQuery) {
@@ -4558,22 +4681,41 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                     .then(data => {
                         if (cancelled || !data || !data[0] || !data[0].geojson) return;
                         const geojson = data[0].geojson;
-                        // Remove fallback boundary
-                        // Draw real OSM boundary
                         const osmLayer = L.geoJSON(geojson, {
                             style: { color: '#00d4ff', weight: 3, fillColor: '#00d4ff', fillOpacity: 0.08, dashArray: '10,6', lineCap: 'round' }
                         }).addTo(map);
-                        // Fit map to real boundary
                         map.fitBounds(osmLayer.getBounds(), { padding: [30, 30] });
                     })
                     .catch(err => { console.log('OSM boundary fetch failed, using fallback:', err); });
             }
-            
 
         }, 100);
         
         return () => { cancelled = true; clearTimeout(timer); if (siteMapInstance.current) { try { siteMapInstance.current.remove(); } catch(e){} siteMapInstance.current = null; } };
     }, [selectedSite]);
+    
+    // Re-render custom markers when markers change or edit mode toggles
+    useEffect(() => {
+        if (!selectedSite || !siteMapInstance.current) return;
+        const map = siteMapInstance.current;
+        renderCustomMarkers(map, selectedSite);
+        // Re-show default gate if no custom gates
+        const customGates = mapMarkers.filter(m => m.siteKey === selectedSite && m.type === 'gate');
+        if (customGates.length === 0) {
+            const site = siteData[selectedSite];
+            if (site) {
+                const gateIcon = L.divIcon({
+                    className: '', iconSize: [32, 32], iconAnchor: [16, 32], popupAnchor: [0, -34],
+                    html: '<div style="width:32px;height:32px;display:flex;align-items:center;justify-content:center;background:#ef4444;border:2px solid #fff;border-radius:50%;font-size:13px;font-weight:900;color:#fff;box-shadow:0 2px 10px rgba(0,0,0,0.6);font-family:Arial,sans-serif;opacity:0.5">G</div>'
+                });
+                const defaultGate = L.marker([site.gate.lat, site.gate.lng], { icon: gateIcon })
+                    .bindPopup('<b style="color:#ef4444">' + site.gate.label + '</b><br/><i style="font-size:11px;color:#888">Default — use Edit Map to place your own</i>')
+                    .addTo(map);
+                if (!map._customLayers) map._customLayers = [];
+                map._customLayers.push(defaultGate);
+            }
+        }
+    }, [mapMarkers, mapEditMode]);
     
     const getSitePOCs = (siteKey) => sitePOCs[siteKey] || siteData[siteKey]?.pocs_default || [];
     const savePOC = (siteKey) => {
@@ -4798,12 +4940,41 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     <span className="card-title">🗺️ Base Layout — {site.abbr}</span>
                                     <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{selectedSite==='yokosuka'?'🇯🇵':selectedSite==='rota'?'🇪🇸':'🇺🇸'} {site.name}</div>
                                 </div>
-                                <button className="btn btn-sm btn-secondary" onClick={() => {
+                                <button className="btn btn-sm btn-secondary" onClick={async () => {
+                                    // Capture the map as an image first
+                                    let mapDataUrl = null;
+                                    const mapEl = document.getElementById('site-leaflet-map');
+                                    if (mapEl && typeof html2canvas !== 'undefined') {
+                                        try {
+                                            const canvas = await html2canvas(mapEl, { useCORS: true, allowTaint: true, scale: 2, logging: false, backgroundColor: '#1a1a2e' });
+                                            mapDataUrl = canvas.toDataURL('image/png');
+                                        } catch(e) { console.warn('Map capture failed:', e); }
+                                    }
                                     const win = window.open('','','width=900,height=700');
-                                    win.document.write('<html><head><title>' + site.abbr + ' - Base Reference</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222}h2{margin:0 0 4px}h4{margin:12px 0 6px;color:#555}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}.card{padding:10px;border:1px solid #ccc;border-radius:6px;font-size:12px}.card b{display:block;margin-bottom:4px}.route{padding:12px;background:#f0f0f0;border-radius:6px;margin:12px 0;font-size:13px}@media print{body{margin:10px}}</style></head><body>');
+                                    win.document.write('<html><head><title>' + site.abbr + ' - Base Reference</title><style>body{font-family:Arial,sans-serif;margin:20px;color:#222}h2{margin:0 0 4px}h4{margin:12px 0 6px;color:#555}.grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin:12px 0}.card{padding:10px;border:1px solid #ccc;border-radius:6px;font-size:12px}.card b{display:block;margin-bottom:4px}.route{padding:12px;background:#f0f0f0;border-radius:6px;margin:12px 0;font-size:13px}.map-img{width:100%;max-height:500px;object-fit:contain;border-radius:8px;border:2px solid #ccc;margin:8px 0 16px}@media print{body{margin:10px}.map-img{max-height:450px;page-break-inside:avoid}}</style></head><body>');
                                     win.document.write('<h2>🗺️ ' + site.abbr + ' — ' + site.name + '</h2>');
-                                    win.document.write('<p style="font-size:12px;color:#666;margin:4px 0 12px">Base reference — print & bring onsite. Screenshot the satellite map from the app for visual reference.</p>');
-                                    win.document.write('<p style="font-size:12px;margin:8px 0">Screenshot the satellite map from the app for visual reference.</p>');
+                                    win.document.write('<p style="font-size:12px;color:#666;margin:4px 0 12px">Base reference — print & bring onsite.</p>');
+                                    if (mapDataUrl) {
+                                        win.document.write('<img class="map-img" src="' + mapDataUrl + '" alt="Base Map"/>');
+                                    } else {
+                                        win.document.write('<p style="font-size:12px;color:#999;margin:8px 0">Screenshot the satellite map from the app for visual reference.</p>');
+                                    }
+                                    // Custom markers legend
+                                    const siteMarkers = getSiteMarkers(selectedSite);
+                                    if (siteMarkers.length > 0) {
+                                        win.document.write('<h4>📍 Map Markers</h4>');
+                                        win.document.write('<div style="display:flex;gap:16px;flex-wrap:wrap;margin:8px 0 12px">');
+                                        const grouped = {gate: siteMarkers.filter(m=>m.type==='gate'), pier: siteMarkers.filter(m=>m.type==='pier'), route: siteMarkers.filter(m=>m.type==='route').sort((a,b)=>a.order-b.order)};
+                                        const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b'};
+                                        const icons = {gate:'🚪',pier:'⚓',route:'🛣️'};
+                                        Object.keys(grouped).forEach(type => {
+                                            if (grouped[type].length === 0) return;
+                                            grouped[type].forEach(m => {
+                                                win.document.write('<span style="font-size:11px;padding:3px 8px;border-radius:6px;border-left:3px solid '+colors[type]+';background:#f5f5f5">'+icons[type]+' '+m.label+'</span>');
+                                            });
+                                        });
+                                        win.document.write('</div>');
+                                    }
                                     if (pocs.filter(p=>p.name).length > 0) {
                                         win.document.write('<h4>👤 Contacts</h4>');
                                         pocs.filter(p=>p.name).forEach(p => {
@@ -4819,7 +4990,82 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     setTimeout(() => win.print(), 300);
                                 }}>🖨️ Print Reference</button>
                             </div>
-                            <div id="site-leaflet-map" style={{borderRadius:'10px',overflow:'hidden',border:'2px solid var(--border)',height:'500px',background:'#1a1a2e'}}></div>
+                            
+                            {/* Map Edit Controls */}
+                            <div style={{display:'flex',alignItems:'center',gap:'8px',marginBottom:'10px',flexWrap:'wrap'}}>
+                                <button className={'btn btn-sm ' + (mapEditMode ? 'btn-primary' : 'btn-secondary')} onClick={() => setMapEditMode(!mapEditMode)} style={mapEditMode ? {animation:'pulse 2s infinite',boxShadow:'0 0 12px var(--primary)'} : {}}>
+                                    {mapEditMode ? '✏️ Editing — Click Map to Place' : '✏️ Edit Map'}
+                                </button>
+                                {mapEditMode && (
+                                    <>
+                                        <div style={{display:'flex',gap:'4px',background:'var(--bg-input)',borderRadius:'8px',padding:'3px'}}>
+                                            {[
+                                                {type:'gate', label:'🚪 Gate', color:'#ef4444'},
+                                                {type:'pier', label:'⚓ Pier', color:'#3b82f6'},
+                                                {type:'route', label:'🛣️ Route', color:'#f59e0b'}
+                                            ].map(t => (
+                                                <button key={t.type} onClick={() => setMarkerPlaceType(t.type)} style={{
+                                                    padding:'4px 10px',fontSize:'11px',fontWeight:700,borderRadius:'6px',border:'none',cursor:'pointer',
+                                                    background: markerPlaceType === t.type ? t.color : 'transparent',
+                                                    color: markerPlaceType === t.type ? '#fff' : 'var(--text-muted)',
+                                                    transition:'all 0.15s'
+                                                }}>{t.label}</button>
+                                            ))}
+                                        </div>
+                                        <button className="btn btn-sm btn-secondary" onClick={() => { setMapEditMode(false); toast('Edit mode off', 'info'); }}>✓ Done</button>
+                                    </>
+                                )}
+                            </div>
+                            {mapEditMode && (
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'8px',padding:'6px 10px',background:'var(--primary-glow)',borderRadius:'6px',border:'1px solid var(--primary)'}}>
+                                    💡 Click on the map to place a <b>{markerPlaceType}</b> marker. Drag markers to reposition. All markers sync to all users in real-time.
+                                </div>
+                            )}
+                            
+                            <div id="site-leaflet-map" style={{borderRadius:'10px',overflow:'hidden',border: mapEditMode ? '2px solid var(--primary)' : '2px solid var(--border)',height:'500px',background:'#1a1a2e',transition:'border 0.2s'}}></div>
+                            
+                            {/* Marker List */}
+                            {(() => {
+                                const siteMarkers = getSiteMarkers(selectedSite);
+                                if (siteMarkers.length === 0) return null;
+                                return (
+                                    <div style={{marginTop:'12px'}}>
+                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'8px'}}>
+                                            <span style={{fontSize:'12px',fontWeight:700,color:'var(--text-secondary)'}}>📍 Custom Markers ({siteMarkers.length})</span>
+                                            <div style={{display:'flex',gap:'4px'}}>
+                                                {['gate','pier','route'].map(type => {
+                                                    const count = siteMarkers.filter(m => m.type === type).length;
+                                                    if (count === 0) return null;
+                                                    return <button key={type} className="btn btn-sm" style={{padding:'2px 6px',fontSize:'9px',background:'transparent',color:'var(--text-muted)'}} onClick={() => clearSiteMarkers(selectedSite, type)}>Clear {type}s ({count})</button>;
+                                                })}
+                                            </div>
+                                        </div>
+                                        <div style={{display:'flex',flexWrap:'wrap',gap:'6px'}}>
+                                            {siteMarkers.sort((a,b) => {
+                                                const order = {gate:0,pier:1,route:2};
+                                                return (order[a.type]||0) - (order[b.type]||0) || a.order - b.order;
+                                            }).map(m => {
+                                                const colors = {gate:'#ef4444',pier:'#3b82f6',route:'#f59e0b'};
+                                                const icons = {gate:'🚪',pier:'⚓',route:'🛣️'};
+                                                return (
+                                                    <div key={m.id} style={{display:'flex',alignItems:'center',gap:'6px',padding:'5px 10px',background:'var(--bg-input)',borderRadius:'8px',borderLeft:'3px solid '+colors[m.type],fontSize:'11px'}}>
+                                                        <span>{icons[m.type]}</span>
+                                                        {editingMarkerLabel === m.id ? (
+                                                            <span style={{display:'flex',gap:'4px',alignItems:'center'}}>
+                                                                <input style={{fontSize:'11px',padding:'2px 4px',width:'100px',borderRadius:'4px',border:'1px solid var(--border)',background:'var(--bg-card)',color:'var(--text-primary)'}} value={markerLabelText} onChange={e => setMarkerLabelText(e.target.value)} onKeyDown={e => { if(e.key==='Enter') updateMarkerLabel(m.id, markerLabelText); if(e.key==='Escape') setEditingMarkerLabel(null); }} autoFocus/>
+                                                                <button style={{background:'none',border:'none',cursor:'pointer',fontSize:'11px',color:'var(--primary)'}} onClick={() => updateMarkerLabel(m.id, markerLabelText)}>✓</button>
+                                                            </span>
+                                                        ) : (
+                                                            <span style={{fontWeight:600,cursor:'pointer',color:'var(--text-primary)'}} onClick={() => { setEditingMarkerLabel(m.id); setMarkerLabelText(m.label); }} title="Click to rename">{m.label}</span>
+                                                        )}
+                                                        <button style={{background:'none',border:'none',cursor:'pointer',fontSize:'10px',color:'var(--text-muted)',marginLeft:'2px',padding:'0'}} onClick={() => { if(confirm('Remove this marker?')) removeMapMarker(m.id); }} title="Remove marker">✕</button>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                );
+                            })()}
 
                         </div>
                         
