@@ -364,19 +364,30 @@ const useFirestore = (collectionName, initialData = []) => {
                 const fbItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 const fbIds = new Set(fbItems.map(i => i.id));
                 const localData = dataRef.current;
-                const missingItems = localData.filter(item => item && item.id && !fbIds.has(item.id));
                 
-                if (missingItems.length > 0) {
-                    reconciling.current = true;
-                    console.log('[' + collectionName + '] Reconciling ' + missingItems.length + ' local items to Firestore');
-                    const merged = [...fbItems, ...missingItems];
-                    setData(merged);
-                    dataRef.current = merged;
-                    localStorage.setItem('fb_' + collectionName, JSON.stringify(merged));
-                    const promises = missingItems.map(item =>
-                        db.collection(collectionName).doc(String(item.id)).set(cleanForFirestore(item)).catch(e => console.error('[' + collectionName + '] Reconcile write failed:', e))
-                    );
-                    Promise.all(promises).then(() => { setTimeout(() => { reconciling.current = false; }, 500); });
+                // Only reconcile once on first load, not on every snapshot
+                if (!initialized.current) {
+                    initialized.current = true;
+                    const missingItems = localData.filter(item => item && item.id && !fbIds.has(item.id));
+                    if (missingItems.length > 0) {
+                        reconciling.current = true;
+                        console.log('[' + collectionName + '] Reconciling ' + missingItems.length + ' local items');
+                        const merged = [...fbItems, ...missingItems];
+                        setData(merged);
+                        dataRef.current = merged;
+                        localStorage.setItem('fb_' + collectionName, JSON.stringify(merged));
+                        const batch = db.batch();
+                        missingItems.forEach(item => {
+                            if (item && item.id) batch.set(db.collection(collectionName).doc(String(item.id)), cleanForFirestore(item));
+                        });
+                        batch.commit()
+                            .then(() => { setTimeout(() => { reconciling.current = false; }, 500); })
+                            .catch(e => { console.error('[' + collectionName + '] Reconcile failed:', e); reconciling.current = false; });
+                    } else {
+                        setData(fbItems);
+                        dataRef.current = fbItems;
+                        localStorage.setItem('fb_' + collectionName, JSON.stringify(fbItems));
+                    }
                 } else {
                     setData(fbItems);
                     dataRef.current = fbItems;
@@ -411,19 +422,37 @@ const useFirestore = (collectionName, initialData = []) => {
         dataRef.current = newData;
         localStorage.setItem('fb_' + collectionName, JSON.stringify(newData));
         
-        // Write each item individually (avoids batch size limits & partial failures)
-        const newIds = new Set(newData.map(item => item.id));
-        const writes = newData.filter(item => item && item.id).map(item =>
-            db.collection(collectionName).doc(String(item.id)).set(cleanForFirestore(item))
-                .catch(e => console.error('[' + collectionName + '] Write failed for ' + item.id + ':', e))
-        );
-        const deletes = currentData.filter(item => item && item.id && !newIds.has(item.id)).map(item =>
-            db.collection(collectionName).doc(String(item.id)).delete()
-                .catch(e => console.error('[' + collectionName + '] Delete failed for ' + item.id + ':', e))
-        );
-        Promise.all([...writes, ...deletes]).finally(() => {
-            setTimeout(() => { pendingWrite.current = false; }, 500);
+        // DIFF-BASED: Only write changed/added items, delete removed ones
+        const oldMap = {};
+        currentData.forEach(item => { if (item && item.id) oldMap[item.id] = JSON.stringify(item); });
+        const newIds = new Set();
+        const ops = [];
+        
+        newData.forEach(item => {
+            if (!item || !item.id) return;
+            newIds.add(item.id);
+            const newJson = JSON.stringify(item);
+            if (oldMap[item.id] !== newJson) {
+                // Changed or new item
+                ops.push(db.collection(collectionName).doc(String(item.id)).set(cleanForFirestore(item))
+                    .catch(e => console.error('[' + collectionName + '] Write failed for ' + item.id + ':', e)));
+            }
         });
+        
+        currentData.forEach(item => {
+            if (item && item.id && !newIds.has(item.id)) {
+                ops.push(db.collection(collectionName).doc(String(item.id)).delete()
+                    .catch(e => console.error('[' + collectionName + '] Delete failed for ' + item.id + ':', e)));
+            }
+        });
+        
+        if (ops.length > 0) {
+            Promise.all(ops).finally(() => {
+                setTimeout(() => { pendingWrite.current = false; }, 500);
+            });
+        } else {
+            setTimeout(() => { pendingWrite.current = false; }, 100);
+        }
     }, [collectionName]);
 
     return [data, setDataWithSync, loading];
@@ -4327,8 +4356,38 @@ function Inventory({ ships, setShips, toast, logActivity }) {
 function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }) {
     const sorted = useMemo(() => [...ships].sort(sortHull), [ships]);
     const [form, setForm] = useState({ ship: '', start: '', end: '', location: 'Mayport, FL', purpose: '', notes: '', status: 'Scheduled', techs: [] });
+    const [editingTripId, setEditingTripId] = useState(null);
     const techNames = ['Daniel', 'Uriel', 'Jay', 'Moe'];
     const toggleTech = (name) => setForm(f => ({ ...f, techs: f.techs.includes(name) ? f.techs.filter(t => t !== name) : [...f.techs, name] }));
+    const fmtShort = (d) => {
+        if (!d) return '';
+        let date;
+        if (typeof d === 'string' && d.match(/^\d{4}-\d{2}-\d{2}$/)) {
+            const [y, m, day] = d.split('-').map(Number);
+            date = new Date(y, m - 1, day);
+        } else if (typeof d === 'string' && d.includes('T')) {
+            const [y, m, day] = d.split('T')[0].split('-').map(Number);
+            date = new Date(y, m - 1, day);
+        } else { date = new Date(d); }
+        return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    };
+    const startEditTrip = (trip) => {
+        setEditingTripId(trip.id);
+        setForm({ ship: trip.ship || '', start: fmtDateInput(trip.start) || '', end: fmtDateInput(trip.end) || '', location: trip.location || 'Mayport, FL', purpose: trip.purpose || '', notes: trip.notes || '', status: trip.status || 'Scheduled', techs: trip.techs || [] });
+    };
+    const saveEditTrip = () => {
+        if (!form.ship) { toast('Enter a ship name', 'error'); return; }
+        if (!form.start) { toast('Select a start date', 'error'); return; }
+        setInstalls(p => p.map(t => t.id === editingTripId ? { ...t, ...form } : t));
+        logActivity('Updated trip: ' + form.ship + ' to ' + form.location);
+        setEditingTripId(null);
+        setForm({ ship: '', start: '', end: '', location: 'Mayport, FL', purpose: '', notes: '', status: 'Scheduled', techs: [] });
+        toast('Trip updated!', 'success');
+    };
+    const cancelEditTrip = () => {
+        setEditingTripId(null);
+        setForm({ ship: '', start: '', end: '', location: 'Mayport, FL', purpose: '', notes: '', status: 'Scheduled', techs: [] });
+    };
     const [viewMode, setViewMode] = useState('list');
     const [calMonth, setCalMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
@@ -5283,7 +5342,7 @@ function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }
                                     <div style={{marginTop:'12px',padding:'12px',background:'var(--green-glow)',borderRadius:'8px',border:'1px solid var(--green)'}}>
                                         <div style={{fontSize:'11px',fontWeight:600,color:'var(--green)',marginBottom:'6px'}}>✈️ UPCOMING TRIPS ({siteTrips.length})</div>
                                         {siteTrips.slice(0,3).map(t => (
-                                            <div key={t.id} style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'4px'}}>• {t.ship} — {fmtDate(t.start)} {t.purpose ? `(${t.purpose})` : ''}{t.techs && t.techs.length > 0 ? ` — 👷 ${t.techs.join(', ')}` : ''}</div>
+                                            <div key={t.id} style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'4px'}}>• {t.ship} — {fmtShort(t.start)} {t.purpose ? `(${t.purpose})` : ''}{t.techs && t.techs.length > 0 ? ` — 👷 ${t.techs.join(', ')}` : ''}</div>
                                         ))}
                                     </div>
                                 )}
@@ -5363,15 +5422,18 @@ function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }
                                             <div style={{fontWeight:600,fontSize:'13px'}}>{trip.ship}</div>
                                             <span className="badge badge-info" style={{fontSize:'9px'}}>{trip.status}</span>
                                         </div>
-                                        <div style={{fontSize:'11px',color:'var(--text-dim)',marginBottom:'4px'}}>
+                                        <div style={{fontSize:'12px',color:'var(--primary)',fontWeight:600,marginBottom:'4px'}}>
                                             📍 {trip.location}
                                         </div>
                                         <div style={{fontSize:'10px',color:'var(--text-muted)'}}>
-                                            {fmtDate(trip.start)}{trip.end ? ` - ${fmtDate(trip.end)}` : ''}
+                                            {fmtShort(trip.start)}{trip.end ? ` → ${fmtShort(trip.end)}` : ''}
                                         </div>
                                         {trip.purpose && <div style={{fontSize:'10px',color:'var(--text-muted)',marginTop:'4px'}}>🎯 {trip.purpose}</div>}
                                         {trip.techs && trip.techs.length > 0 && <div style={{fontSize:'10px',color:'var(--text-muted)',marginTop:'2px'}}>👷 {trip.techs.join(', ')}</div>}
-                                        <button className="btn btn-sm btn-danger" style={{marginTop:'8px',padding:'2px 8px',fontSize:'9px'}} onClick={() => del(trip.id)}>Delete</button>
+                                        <div style={{display:'flex',gap:'6px',marginTop:'8px'}}>
+                                            <button className="btn btn-sm btn-secondary" style={{padding:'2px 8px',fontSize:'9px'}} onClick={() => startEditTrip(trip)}>✏️ Edit</button>
+                                            <button className="btn btn-sm btn-danger" style={{padding:'2px 8px',fontSize:'9px'}} onClick={() => del(trip.id)}>Delete</button>
+                                        </div>
                                     </div>
                                 ))}
                             </div>
@@ -5390,76 +5452,88 @@ function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }
                     {installs.length === 0 ? (
                         <div className="card"><div className="empty">No trips scheduled yet</div></div>
                     ) : (
-                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',gap:'12px'}}>
+                        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(300px, 1fr))',gap:'12px'}}>
                             {installs.sort((a,b) => parseLocalDate(a.start) - parseLocalDate(b.start)).map(i => {
                                 const isPast = parseLocalDate(i.end || i.start) < new Date();
-                                const isActive = i.status === 'In Progress';
                                 const statusColors = { 'Scheduled': '#3b82f6', 'In Progress': '#19a974', 'Completed': '#22c55e', 'Delayed': '#f59e0b', 'Cancelled': '#ef4444' };
                                 const borderColor = statusColors[i.status] || '#555';
                                 const techInitials = { Daniel: 'DB', Uriel: 'UG', Jay: 'JR', Moe: 'MH' };
                                 const techColors = { Daniel: '#3b82f6', Uriel: '#8b5cf6', Jay: '#f59e0b', Moe: '#10b981' };
+                                const isEditing = editingTripId === i.id;
                                 return (
                                     <div key={i.id} style={{
-                                        padding:'14px 16px',borderRadius:'12px',
+                                        borderRadius:'12px',overflow:'hidden',
                                         background:'var(--bg-card)',
-                                        border:'1px solid var(--border)',
-                                        borderTop:'3px solid ' + borderColor,
-                                        opacity: isPast && i.status !== 'Completed' ? 0.55 : 1,
-                                        transition:'all 0.2s',position:'relative',
-                                        display:'flex',flexDirection:'column',gap:'10px'
+                                        border: isEditing ? '2px solid var(--primary)' : '1px solid var(--border)',
+                                        opacity: isPast && i.status !== 'Completed' ? 0.5 : 1,
+                                        transition:'all 0.2s'
                                     }}
-                                    onMouseEnter={e => {e.currentTarget.style.borderColor=borderColor;e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';}}
-                                    onMouseLeave={e => {e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.borderTopColor=borderColor;e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none';}}>
+                                    onMouseEnter={e => {if(!isEditing){e.currentTarget.style.transform='translateY(-1px)';e.currentTarget.style.boxShadow='0 4px 12px rgba(0,0,0,0.12)';}}}
+                                    onMouseLeave={e => {e.currentTarget.style.transform='none';e.currentTarget.style.boxShadow='none';}}>
                                         
-                                        {/* Header: Ship + Status */}
-                                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'flex-start'}}>
-                                            <div style={{fontSize:'17px',fontWeight:800,color:'var(--text)',lineHeight:'1.2'}}>{i.ship}</div>
-                                            <div style={{display:'flex',alignItems:'center',gap:'4px'}}>
-                                                <span style={{
-                                                    padding:'2px 8px',borderRadius:'10px',fontSize:'9px',fontWeight:700,letterSpacing:'0.3px',whiteSpace:'nowrap',
-                                                    background: borderColor + '20',color: borderColor
-                                                }}>{i.status}</span>
-                                                <button onClick={() => del(i.id)} style={{background:'transparent',border:'none',color:'var(--text-muted)',cursor:'pointer',fontSize:'12px',padding:'2px 4px',borderRadius:'4px',lineHeight:1}}
-                                                    onMouseEnter={e => e.currentTarget.style.color='var(--red)'}
-                                                    onMouseLeave={e => e.currentTarget.style.color='var(--text-muted)'}>✕</button>
+                                        {/* Location banner */}
+                                        <div style={{padding:'10px 16px',background: borderColor + '18',borderBottom:'1px solid ' + borderColor + '30',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                            <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                                                <span style={{fontSize:'13px'}}>📍</span>
+                                                <span style={{fontSize:'14px',fontWeight:700,color: borderColor}}>{i.location}</span>
                                             </div>
+                                            <span style={{
+                                                padding:'2px 8px',borderRadius:'10px',fontSize:'9px',fontWeight:700,letterSpacing:'0.3px',
+                                                background: borderColor + '25',color: borderColor
+                                            }}>{i.status}</span>
                                         </div>
                                         
-                                        {/* Details */}
-                                        <div style={{display:'flex',flexDirection:'column',gap:'4px'}}>
-                                            <div style={{fontSize:'12px',color:'var(--text-secondary)',display:'flex',alignItems:'center',gap:'6px'}}>
-                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>📍</span>{i.location}
+                                        {/* Body */}
+                                        <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:'8px'}}>
+                                            {/* Ship + dates row */}
+                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                                <span style={{fontSize:'16px',fontWeight:800,color:'var(--text)'}}>{i.ship}</span>
+                                                <span style={{fontSize:'12px',color:'var(--text-secondary)',fontWeight:500}}>
+                                                    {fmtShort(i.start)}{i.end ? ` → ${fmtShort(i.end)}` : ''}
+                                                </span>
                                             </div>
-                                            <div style={{fontSize:'12px',color:'var(--text-secondary)',display:'flex',alignItems:'center',gap:'6px'}}>
-                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>📅</span>{fmtDate(i.start)}{i.end ? ` → ${fmtDate(i.end)}` : ''}
-                                            </div>
-                                            {i.purpose && <div style={{fontSize:'11px',color:'var(--text-dim)',display:'flex',alignItems:'center',gap:'6px'}}>
-                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>🎯</span>{i.purpose}
-                                            </div>}
-                                            {i.notes && <div style={{fontSize:'11px',color:'var(--text-dim)',display:'flex',alignItems:'center',gap:'6px'}}>
-                                                <span style={{width:'16px',textAlign:'center',fontSize:'11px'}}>📝</span>{i.notes}
-                                            </div>}
-                                        </div>
-                                        
-                                        {/* Team Avatars */}
-                                        {i.techs && i.techs.length > 0 && (
-                                            <div style={{display:'flex',alignItems:'center',gap:'6px',paddingTop:'8px',borderTop:'1px solid var(--border)'}}>
-                                                <div style={{display:'flex',marginRight:'2px'}}>
-                                                    {i.techs.map((t, idx) => (
-                                                        <div key={t} title={t} style={{
-                                                            width:'26px',height:'26px',borderRadius:'50%',
-                                                            background: techColors[t] || '#666',color:'#fff',
-                                                            display:'flex',alignItems:'center',justifyContent:'center',
-                                                            fontSize:'9px',fontWeight:800,letterSpacing:'0.3px',
-                                                            border:'2px solid var(--bg-card)',
-                                                            marginLeft: idx > 0 ? '-6px' : '0',
-                                                            zIndex: i.techs.length - idx,position:'relative'
-                                                        }}>{techInitials[t] || t.charAt(0)}</div>
-                                                    ))}
+                                            
+                                            {/* Purpose + Notes */}
+                                            {(i.purpose || i.notes) && (
+                                                <div style={{display:'flex',gap:'12px',flexWrap:'wrap'}}>
+                                                    {i.purpose && <span style={{fontSize:'11px',color:'var(--text-dim)',display:'flex',alignItems:'center',gap:'4px'}}>🎯 {i.purpose}</span>}
+                                                    {i.notes && <span style={{fontSize:'11px',color:'var(--text-dim)',display:'flex',alignItems:'center',gap:'4px'}}>📝 {i.notes}</span>}
                                                 </div>
-                                                <span style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:500}}>{i.techs.join(' & ')}</span>
+                                            )}
+                                            
+                                            {/* Team + Actions */}
+                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',paddingTop:'8px',borderTop:'1px solid var(--border)'}}>
+                                                {/* Techs */}
+                                                {i.techs && i.techs.length > 0 ? (
+                                                    <div style={{display:'flex',alignItems:'center',gap:'6px'}}>
+                                                        <div style={{display:'flex'}}>
+                                                            {i.techs.map((t, idx) => (
+                                                                <div key={t} title={t} style={{
+                                                                    width:'24px',height:'24px',borderRadius:'50%',
+                                                                    background: techColors[t] || '#666',color:'#fff',
+                                                                    display:'flex',alignItems:'center',justifyContent:'center',
+                                                                    fontSize:'8px',fontWeight:800,
+                                                                    border:'2px solid var(--bg-card)',
+                                                                    marginLeft: idx > 0 ? '-5px' : '0',
+                                                                    zIndex: i.techs.length - idx,position:'relative'
+                                                                }}>{techInitials[t] || t.charAt(0)}</div>
+                                                            ))}
+                                                        </div>
+                                                        <span style={{fontSize:'11px',color:'var(--text-secondary)',fontWeight:500}}>{i.techs.join(' & ')}</span>
+                                                    </div>
+                                                ) : <span style={{fontSize:'10px',color:'var(--text-muted)'}}>No team assigned</span>}
+                                                
+                                                {/* Action buttons */}
+                                                <div style={{display:'flex',gap:'4px'}}>
+                                                    <button onClick={() => startEditTrip(i)} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-muted)',cursor:'pointer',fontSize:'10px',padding:'3px 8px',borderRadius:'6px',fontWeight:600,transition:'all 0.15s'}}
+                                                        onMouseEnter={e => {e.currentTarget.style.borderColor='var(--primary)';e.currentTarget.style.color='var(--primary)';}}
+                                                        onMouseLeave={e => {e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text-muted)';}}>✏️ Edit</button>
+                                                    <button onClick={() => del(i.id)} style={{background:'transparent',border:'1px solid var(--border)',color:'var(--text-muted)',cursor:'pointer',fontSize:'10px',padding:'3px 8px',borderRadius:'6px',fontWeight:600,transition:'all 0.15s'}}
+                                                        onMouseEnter={e => {e.currentTarget.style.borderColor='var(--red)';e.currentTarget.style.color='var(--red)';}}
+                                                        onMouseLeave={e => {e.currentTarget.style.borderColor='var(--border)';e.currentTarget.style.color='var(--text-muted)';}}>🗑️</button>
+                                                </div>
                                             </div>
-                                        )}
+                                        </div>
                                     </div>
                                 );
                             })}
@@ -5468,8 +5542,8 @@ function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }
                 </div>
             ) : null}
             
-            {!selectedSite && <div className="card">
-                <span className="card-title">Schedule New Trip</span>
+            {!selectedSite && <div className="card" style={editingTripId ? {borderColor:'var(--primary)',background:'var(--primary-glow)'} : {}}>
+                <span className="card-title">{editingTripId ? '✏️ Edit Trip' : 'Schedule New Trip'}</span>
                 <div className="form-row mt-md">
                     <div className="form-group">
                         <label className="form-label">Ship *</label>
@@ -5526,7 +5600,16 @@ function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }
                         <input className="form-input" placeholder="Additional details..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/>
                     </div>
                 </div>
-                <button className="btn btn-primary mt-md" onClick={add}>+ Add Trip</button>
+                <div style={{display:'flex',gap:'8px',marginTop:'12px'}}>
+                    {editingTripId ? (
+                        <>
+                            <button className="btn btn-primary" onClick={saveEditTrip}>💾 Save Changes</button>
+                            <button className="btn btn-secondary" onClick={cancelEditTrip}>Cancel</button>
+                        </>
+                    ) : (
+                        <button className="btn btn-primary" onClick={add}>+ Add Trip</button>
+                    )}
+                </div>
             </div>}
         </div>
     );
