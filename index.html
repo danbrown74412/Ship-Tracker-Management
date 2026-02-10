@@ -320,6 +320,9 @@ const hashPassword = (password) => {
 const { useState, useEffect, useMemo, useCallback, useRef } = React;
 
 // Firebase real-time hook - loads instantly from localStorage, syncs with Firestore
+// Global flag: stop all Firestore writes when quota exceeded
+const firestoreDisabled = { current: false };
+
 const useFirestore = (collectionName, initialData = []) => {
     const [data, setData] = useState(() => {
         try {
@@ -357,32 +360,25 @@ const useFirestore = (collectionName, initialData = []) => {
     useEffect(() => { dataRef.current = data; }, [data]);
 
     useEffect(() => {
+        if (firestoreDisabled.current) { setLoading(false); return () => {}; }
         const unsubscribe = db.collection(collectionName).onSnapshot((snapshot) => {
-            if (pendingWrite.current || reconciling.current) return;
+            if (pendingWrite.current || reconciling.current || firestoreDisabled.current) return;
             
             if (!snapshot.empty) {
                 const fbItems = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
                 const fbIds = new Set(fbItems.map(i => i.id));
                 const localData = dataRef.current;
                 
-                // Only reconcile once on first load, not on every snapshot
                 if (!initialized.current) {
                     initialized.current = true;
+                    // Merge local-only items but do NOT write back to Firestore immediately
                     const missingItems = localData.filter(item => item && item.id && !fbIds.has(item.id));
                     if (missingItems.length > 0) {
-                        reconciling.current = true;
-                        console.log('[' + collectionName + '] Reconciling ' + missingItems.length + ' local items');
+                        console.log('[' + collectionName + '] Keeping ' + missingItems.length + ' local-only items');
                         const merged = [...fbItems, ...missingItems];
                         setData(merged);
                         dataRef.current = merged;
                         localStorage.setItem('fb_' + collectionName, JSON.stringify(merged));
-                        const batch = db.batch();
-                        missingItems.forEach(item => {
-                            if (item && item.id) batch.set(db.collection(collectionName).doc(String(item.id)), cleanForFirestore(item));
-                        });
-                        batch.commit()
-                            .then(() => { setTimeout(() => { reconciling.current = false; }, 500); })
-                            .catch(e => { console.error('[' + collectionName + '] Reconcile failed:', e); reconciling.current = false; });
                     } else {
                         setData(fbItems);
                         dataRef.current = fbItems;
@@ -393,21 +389,23 @@ const useFirestore = (collectionName, initialData = []) => {
                     dataRef.current = fbItems;
                     localStorage.setItem('fb_' + collectionName, JSON.stringify(fbItems));
                 }
-            } else {
+            } else if (!initialized.current) {
+                initialized.current = true;
+                // Firestore empty — keep local data, try seeding once
                 const localData = dataRef.current;
-                const toSeed = localData.length > 0 ? localData : initialData;
-                if (toSeed.length > 0 && !initialized.current) {
-                    initialized.current = true;
-                    console.log('[' + collectionName + '] Seeding ' + toSeed.length + ' items to Firestore');
-                    const promises = toSeed.filter(item => item && item.id).map(item =>
-                        db.collection(collectionName).doc(String(item.id)).set(cleanForFirestore(item)).catch(e => console.error('[' + collectionName + '] Seed write failed:', e))
-                    );
-                    Promise.all(promises);
+                if (localData.length === 0 && initialData.length > 0) {
+                    setData(initialData);
+                    dataRef.current = initialData;
+                    localStorage.setItem('fb_' + collectionName, JSON.stringify(initialData));
                 }
             }
             setLoading(false);
         }, (error) => {
-            console.error('[' + collectionName + '] Firestore listener error:', error);
+            console.error('[' + collectionName + '] Firestore error:', error);
+            if (error.code === 'resource-exhausted' || (error.message && error.message.includes('Quota'))) {
+                firestoreDisabled.current = true;
+                console.warn('[Firestore] Quota exceeded — switching to localStorage-only mode');
+            }
             setLoading(false);
         });
         return () => unsubscribe();
@@ -417,10 +415,15 @@ const useFirestore = (collectionName, initialData = []) => {
         const currentData = dataRef.current;
         const newData = typeof newDataOrFn === 'function' ? newDataOrFn(currentData) : newDataOrFn;
         
-        pendingWrite.current = true;
+        // Always update local state + localStorage
         setData(newData);
         dataRef.current = newData;
         localStorage.setItem('fb_' + collectionName, JSON.stringify(newData));
+        
+        // Skip Firestore if quota exceeded
+        if (firestoreDisabled.current) return;
+        
+        pendingWrite.current = true;
         
         // DIFF-BASED: Only write changed/added items, delete removed ones
         const oldMap = {};
@@ -433,16 +436,22 @@ const useFirestore = (collectionName, initialData = []) => {
             newIds.add(item.id);
             const newJson = JSON.stringify(item);
             if (oldMap[item.id] !== newJson) {
-                // Changed or new item
                 ops.push(db.collection(collectionName).doc(String(item.id)).set(cleanForFirestore(item))
-                    .catch(e => console.error('[' + collectionName + '] Write failed for ' + item.id + ':', e)));
+                    .catch(e => {
+                        if (e.code === 'resource-exhausted' || (e.message && e.message.includes('Quota'))) {
+                            firestoreDisabled.current = true;
+                            console.warn('[Firestore] Quota exceeded — localStorage-only mode');
+                        } else {
+                            console.error('[' + collectionName + '] Write failed for ' + item.id + ':', e);
+                        }
+                    }));
             }
         });
         
         currentData.forEach(item => {
             if (item && item.id && !newIds.has(item.id)) {
                 ops.push(db.collection(collectionName).doc(String(item.id)).delete()
-                    .catch(e => console.error('[' + collectionName + '] Delete failed for ' + item.id + ':', e)));
+                    .catch(e => console.error('[' + collectionName + '] Delete failed:', e)));
             }
         });
         
