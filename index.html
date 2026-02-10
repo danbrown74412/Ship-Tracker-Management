@@ -1219,7 +1219,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
                 {page === 1 && <DailyChecks ships={ships} checks={dailyChecks} setChecks={setDailyChecks} toast={toast} logActivity={logActivity}/>}
                 {page === 2 && <AddShip ships={ships} setShips={setShips} toast={toast} editing={editingShip} setEditing={setEditingShip} setPage={setPage} logActivity={logActivity}/>}
                 {page === 4 && <Inventory ships={ships} setShips={setShips} toast={toast} logActivity={logActivity}/>}
-                {page === 5 && <Installs ships={ships} installs={installs} setInstalls={setInstalls} toast={toast} logActivity={logActivity}/>}
+                {page === 5 && <Installs ships={ships} setShips={setShips} installs={installs} setInstalls={setInstalls} toast={toast} logActivity={logActivity}/>}
                 {page === 6 && <Parts parts={parts} setParts={setParts} toast={toast} logActivity={logActivity}/>}
                 {page === 7 && <EmailStatus ships={ships} setShips={setShips} issues={issues} toast={toast} logActivity={logActivity}/>}
                 {page === 8 && <DataSettings ships={ships} setShips={setShips} issues={issues} setIssues={setIssues} dailyChecks={dailyChecks} setDailyChecks={setDailyChecks} installs={installs} setInstalls={setInstalls} parts={parts} setParts={setParts} activityLog={activityLog} setActivityLog={setActivityLog} toast={toast} backupSettings={backupSettings} setBackupSettings={setBackupSettings} downloadBackup={downloadBackup}/>}
@@ -4324,9 +4324,11 @@ function Inventory({ ships, setShips, toast, logActivity }) {
     );
 }
 
-function Installs({ ships, installs, setInstalls, toast, logActivity }) {
+function Installs({ ships, setShips, installs, setInstalls, toast, logActivity }) {
     const sorted = useMemo(() => [...ships].sort(sortHull), [ships]);
-    const [form, setForm] = useState({ ship: '', start: '', end: '', location: 'Mayport, FL', purpose: '', notes: '', status: 'Scheduled' });
+    const [form, setForm] = useState({ ship: '', start: '', end: '', location: 'Mayport, FL', purpose: '', notes: '', status: 'Scheduled', techs: [] });
+    const techNames = ['Daniel', 'Uriel', 'Jay', 'Moe'];
+    const toggleTech = (name) => setForm(f => ({ ...f, techs: f.techs.includes(name) ? f.techs.filter(t => t !== name) : [...f.techs, name] }));
     const [viewMode, setViewMode] = useState('list');
     const [calMonth, setCalMonth] = useState(new Date());
     const [selectedDate, setSelectedDate] = useState(null);
@@ -4354,6 +4356,38 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
         { key: 'rota', label: 'Rota', location: 'NAVSTA Rota', attn: '' },
     ];
     const [activeShipDest, setActiveShipDest] = useState(null);
+    
+    // Ship management from trips
+    const [showShipManager, setShowShipManager] = useState(false);
+    const [editingShipId, setEditingShipId] = useState(null);
+    const shipLocations = ['San Diego, CA', 'Norfolk, VA', 'Mayport, FL', 'Pearl Harbor, HI', 'Yokosuka, Japan', 'Rota, Spain', 'Everett, WA', 'Deployed', 'In Port', 'Other'];
+    const emptyNewShip = { name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', notes: '', ciscoRouter: '', hdd: '', crna1: '', crna2: '', tags: [] };
+    const [newShipForm, setNewShipForm] = useState({...emptyNewShip});
+    const submitShip = () => {
+        if (!newShipForm.name.trim()) { toast('Ship name required', 'error'); return; }
+        const next = new Date(); next.setDate(next.getDate() + 7);
+        if (editingShipId) {
+            setShips(p => p.map(s => s.id === editingShipId ? { ...s, ...newShipForm } : s));
+            logActivity('Updated ship ' + newShipForm.name + ' from Trips');
+            toast('Ship updated!', 'success');
+        } else {
+            setShips(p => [...p, { id: genId('S'), ...newShipForm, threat: 'NoIssue', lastContact: new Date().toISOString(), nextCheck: next.toISOString(), contactedBy: '' }]);
+            logActivity('Added ship ' + newShipForm.name + ' from Trips');
+            toast('Ship added!', 'success');
+        }
+        setNewShipForm({...emptyNewShip});
+        setEditingShipId(null);
+    };
+    const startEditShip = (s) => {
+        setEditingShipId(s.id);
+        setNewShipForm({ name: s.name, type: s.type || 'Full REAP', location: s.location || 'San Diego, CA', poc: s.poc || '', email: s.email || '', notes: s.notes || '', ciscoRouter: s.ciscoRouter || '', hdd: s.hdd || '', crna1: s.crna1 || '', crna2: s.crna2 || '', tags: s.tags || [] });
+    };
+    const deleteShip = (s) => {
+        if (!confirm('Delete ' + s.name + '?')) return;
+        setShips(p => p.filter(x => x.id !== s.id));
+        logActivity('Deleted ship ' + s.name + ' from Trips');
+        toast(s.name + ' deleted', 'info');
+    };
     const resetShipForm = () => {
         if (shipType === 'class') setShipForm({...classDefaults, location: '', attn: classDefaults.attn});
         else setShipForm({...emptyShipForm});
@@ -4725,11 +4759,11 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
     };
     
     const add = () => { 
-        if (!form.ship) { toast('Select a ship', 'error'); return; } 
+        if (!form.ship) { toast('Enter a ship name', 'error'); return; } 
         if (!form.start) { toast('Select a start date', 'error'); return; }
         setInstalls(p => [...p, { id: genId('T'), ...form }]); 
-        logActivity(`Scheduled trip: ${form.ship} to ${form.location} on ${fmtDate(form.start)}`, { ship: form.ship, location: form.location, start: form.start, end: form.end });
-        setForm({ ship: '', start: '', end: '', location: 'Mayport, FL', purpose: '', notes: '', status: 'Scheduled' }); 
+        logActivity(`Scheduled trip: ${form.ship} to ${form.location} on ${fmtDate(form.start)}${form.techs.length > 0 ? ' — Techs: ' + form.techs.join(', ') : ''}`, { ship: form.ship, location: form.location, start: form.start, end: form.end, techs: form.techs });
+        setForm({ ship: '', start: '', end: '', location: 'Mayport, FL', purpose: '', notes: '', status: 'Scheduled', techs: [] }); 
         toast('Trip added!', 'success'); 
     };
     const del = (id) => { 
@@ -4777,6 +4811,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                     <button className={`btn ${viewMode==='list'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('list')}>📋 List</button>
                     <button className={`btn ${viewMode==='calendar'?'btn-primary':'btn-secondary'}`} onClick={() => setViewMode('calendar')}>📅 Calendar</button>
                     <button className="btn btn-secondary" onClick={() => { setShowShipping(true); setShipType('unclass'); setShipForm({...emptyShipForm}); setActiveShipDest(null); }}>📦 Shipping</button>
+                    <button className="btn btn-secondary" onClick={() => { setShowShipManager(true); setEditingShipId(null); setNewShipForm({...emptyNewShip}); }}>🚢 Manage Ships</button>
                 </div>}
             </div>
             
@@ -4946,6 +4981,76 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                             <button style={{padding:'14px 20px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text-muted)',fontSize:'13px',fontWeight:600,cursor:'pointer'}} onClick={resetShipForm}>
                                 🔄 Reset
                             </button>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            {/* Ship Manager Modal */}
+            {showShipManager && (
+                <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={(e) => { if(e.target === e.currentTarget) setShowShipManager(false); }}>
+                    <div style={{background:'var(--bg-card)',borderRadius:'16px',padding:'28px',width:'680px',maxWidth:'95vw',maxHeight:'90vh',overflow:'auto',border:'1px solid var(--border)',boxShadow:'0 20px 60px rgba(0,0,0,0.4)'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'20px'}}>
+                            <div>
+                                <div style={{fontSize:'18px',fontWeight:700}}>🚢 Manage Ships</div>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>Add, edit, or remove ships • {ships.length} total</div>
+                            </div>
+                            <button className="btn btn-sm btn-secondary" onClick={() => setShowShipManager(false)} style={{width:'32px',height:'32px',padding:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%'}}>✕</button>
+                        </div>
+                        
+                        {/* Add/Edit Form */}
+                        <div style={{padding:'16px',background:'var(--bg-input)',borderRadius:'10px',border:'1px solid var(--border)',marginBottom:'16px'}}>
+                            <div style={{fontSize:'12px',fontWeight:700,color:'var(--primary)',marginBottom:'10px'}}>{editingShipId ? '✏️ Edit Ship' : '➕ Add New Ship'}</div>
+                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'8px'}}>
+                                <div>
+                                    <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'3px'}}>Ship Name *</label>
+                                    <input className="form-input" style={{padding:'8px',fontSize:'13px'}} placeholder="e.g., DDG54" value={newShipForm.name} onChange={e => setNewShipForm({...newShipForm, name: e.target.value})}/>
+                                </div>
+                                <div>
+                                    <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'3px'}}>Type</label>
+                                    <select className="form-select" style={{padding:'8px',fontSize:'13px'}} value={newShipForm.type} onChange={e => setNewShipForm({...newShipForm, type: e.target.value})}><option>Full REAP</option><option>Mini REAP</option></select>
+                                </div>
+                                <div>
+                                    <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'3px'}}>Homeport</label>
+                                    <select className="form-select" style={{padding:'8px',fontSize:'13px'}} value={newShipForm.location} onChange={e => setNewShipForm({...newShipForm, location: e.target.value})}>{shipLocations.map(l => <option key={l}>{l}</option>)}</select>
+                                </div>
+                            </div>
+                            <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'8px',marginBottom:'8px'}}>
+                                <div>
+                                    <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'3px'}}>POC / Contact</label>
+                                    <input className="form-input" style={{padding:'8px',fontSize:'13px'}} placeholder="Ship STO name" value={newShipForm.poc} onChange={e => setNewShipForm({...newShipForm, poc: e.target.value})}/>
+                                </div>
+                                <div>
+                                    <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'3px'}}>Email</label>
+                                    <input className="form-input" style={{padding:'8px',fontSize:'13px'}} placeholder="STO@ship.navy.mil" value={newShipForm.email} onChange={e => setNewShipForm({...newShipForm, email: e.target.value})}/>
+                                </div>
+                            </div>
+                            <div style={{marginBottom:'8px'}}>
+                                <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'3px'}}>Notes</label>
+                                <input className="form-input" style={{padding:'8px',fontSize:'13px'}} placeholder="Optional notes..." value={newShipForm.notes} onChange={e => setNewShipForm({...newShipForm, notes: e.target.value})}/>
+                            </div>
+                            <div style={{display:'flex',gap:'8px'}}>
+                                <button className="btn btn-primary" style={{padding:'8px 20px',fontSize:'12px'}} onClick={submitShip}>{editingShipId ? '💾 Update Ship' : '➕ Add Ship'}</button>
+                                {editingShipId && <button className="btn btn-secondary" style={{padding:'8px 16px',fontSize:'12px'}} onClick={() => { setEditingShipId(null); setNewShipForm({...emptyNewShip}); }}>Cancel</button>}
+                            </div>
+                        </div>
+                        
+                        {/* Ship List */}
+                        <div style={{fontSize:'11px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'8px'}}>🚢 CURRENT SHIPS</div>
+                        <div style={{maxHeight:'320px',overflow:'auto',display:'flex',flexDirection:'column',gap:'4px'}}>
+                            {sorted.map(s => (
+                                <div key={s.id} style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 12px',background: editingShipId === s.id ? 'var(--primary-glow)' : 'var(--bg-main)',borderRadius:'8px',border: editingShipId === s.id ? '1px solid var(--primary)' : '1px solid var(--border)'}}>
+                                    <div style={{display:'flex',alignItems:'center',gap:'10px',flex:1,minWidth:0}}>
+                                        <span style={{fontWeight:800,fontSize:'13px',color:'var(--text)',minWidth:'70px'}}>{s.name}</span>
+                                        <span style={{fontSize:'11px',color:'var(--text-muted)',whiteSpace:'nowrap',overflow:'hidden',textOverflow:'ellipsis'}}>{s.location || '—'}</span>
+                                        <span style={{fontSize:'10px',padding:'2px 6px',borderRadius:'4px',background:'var(--bg-input)',color:'var(--text-dim)'}}>{s.type || 'Full REAP'}</span>
+                                    </div>
+                                    <div style={{display:'flex',gap:'4px',flexShrink:0}}>
+                                        <button className="btn btn-sm" style={{padding:'3px 8px',fontSize:'10px',background:'transparent',color:'var(--primary)',border:'1px solid var(--primary)'}} onClick={() => startEditShip(s)}>✏️ Edit</button>
+                                        <button className="btn btn-sm" style={{padding:'3px 8px',fontSize:'10px',background:'transparent',color:'var(--red)',border:'1px solid var(--red)'}} onClick={() => deleteShip(s)}>🗑️</button>
+                                    </div>
+                                </div>
+                            ))}
                         </div>
                     </div>
                 </div>
@@ -5178,7 +5283,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     <div style={{marginTop:'12px',padding:'12px',background:'var(--green-glow)',borderRadius:'8px',border:'1px solid var(--green)'}}>
                                         <div style={{fontSize:'11px',fontWeight:600,color:'var(--green)',marginBottom:'6px'}}>✈️ UPCOMING TRIPS ({siteTrips.length})</div>
                                         {siteTrips.slice(0,3).map(t => (
-                                            <div key={t.id} style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'4px'}}>• {t.ship} — {fmtDate(t.start)} {t.purpose ? `(${t.purpose})` : ''}</div>
+                                            <div key={t.id} style={{fontSize:'12px',color:'var(--text-dim)',marginBottom:'4px'}}>• {t.ship} — {fmtDate(t.start)} {t.purpose ? `(${t.purpose})` : ''}{t.techs && t.techs.length > 0 ? ` — 👷 ${t.techs.join(', ')}` : ''}</div>
                                         ))}
                                     </div>
                                 )}
@@ -5265,6 +5370,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                             {fmtDate(trip.start)}{trip.end ? ` - ${fmtDate(trip.end)}` : ''}
                                         </div>
                                         {trip.purpose && <div style={{fontSize:'10px',color:'var(--text-muted)',marginTop:'4px'}}>🎯 {trip.purpose}</div>}
+                                        {trip.techs && trip.techs.length > 0 && <div style={{fontSize:'10px',color:'var(--text-muted)',marginTop:'2px'}}>👷 {trip.techs.join(', ')}</div>}
                                         <button className="btn btn-sm btn-danger" style={{marginTop:'8px',padding:'2px 8px',fontSize:'9px'}} onClick={() => del(trip.id)}>Delete</button>
                                     </div>
                                 ))}
@@ -5285,6 +5391,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                     <th>Dates</th>
                                     <th>Location</th>
                                     <th>Purpose</th>
+                                    <th>Techs</th>
                                     <th>Status</th>
                                     <th>Action</th>
                                 </tr>
@@ -5296,6 +5403,7 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                                         <td style={{fontSize:'12px'}}>{fmtDate(i.start)}{i.end ? ` - ${fmtDate(i.end)}` : ''}</td>
                                         <td>{i.location}</td>
                                         <td style={{fontSize:'12px',color:'var(--text-dim)'}}>{i.purpose || '—'}</td>
+                                        <td style={{fontSize:'11px'}}>{i.techs && i.techs.length > 0 ? i.techs.join(', ') : '—'}</td>
                                         <td><span className={`badge ${i.status==='Completed'?'badge-success':i.status==='Cancelled'?'badge-mild':'badge-info'}`}>{i.status}</span></td>
                                         <td><button className="btn btn-sm btn-danger" onClick={() => del(i.id)}>Del</button></td>
                                     </tr>
@@ -5311,10 +5419,10 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                 <div className="form-row mt-md">
                     <div className="form-group">
                         <label className="form-label">Ship *</label>
-                        <select className="form-select" value={form.ship} onChange={e => setForm({...form, ship: e.target.value})}>
-                            <option value="">Select...</option>
-                            {sorted.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                        </select>
+                        <input className="form-input" list="ship-list" placeholder="Type or select ship..." value={form.ship} onChange={e => setForm({...form, ship: e.target.value})}/>
+                        <datalist id="ship-list">
+                            {sorted.map(s => <option key={s.id} value={s.name}/>)}
+                        </datalist>
                     </div>
                     <div className="form-group">
                         <label className="form-label">Destination</label>
@@ -5343,9 +5451,26 @@ function Installs({ ships, installs, setInstalls, toast, logActivity }) {
                         <input className="form-input" placeholder="e.g., Install, Maintenance, Training..." value={form.purpose} onChange={e => setForm({...form, purpose: e.target.value})}/>
                     </div>
                 </div>
-                <div className="form-group">
-                    <label className="form-label">Notes</label>
-                    <input className="form-input" placeholder="Additional details..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/>
+                <div className="form-row">
+                    <div className="form-group" style={{flex:2}}>
+                        <label className="form-label">Assigned Techs</label>
+                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap'}}>
+                            {techNames.map(name => (
+                                <button key={name} type="button" onClick={() => toggleTech(name)} style={{
+                                    padding:'7px 14px',borderRadius:'8px',fontSize:'12px',fontWeight:600,cursor:'pointer',transition:'all 0.15s',
+                                    border: form.techs.includes(name) ? '2px solid var(--primary)' : '1px solid var(--border)',
+                                    background: form.techs.includes(name) ? 'var(--primary-glow)' : 'var(--bg-input)',
+                                    color: form.techs.includes(name) ? 'var(--primary)' : 'var(--text-muted)'
+                                }}>
+                                    {form.techs.includes(name) ? '✓ ' : ''}{name}
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                    <div className="form-group" style={{flex:1}}>
+                        <label className="form-label">Notes</label>
+                        <input className="form-input" placeholder="Additional details..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/>
+                    </div>
                 </div>
                 <button className="btn btn-primary mt-md" onClick={add}>+ Add Trip</button>
             </div>}
