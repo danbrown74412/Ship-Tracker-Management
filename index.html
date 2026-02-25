@@ -1632,7 +1632,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         urgent: issues.filter(i => i.threat === 'Urgent' && !i.resolved).length, 
         due: ships.filter(s => s.nextCheck && new Date(s.nextCheck) <= new Date(Date.now() + 7*86400000)).length, 
         total: ships.length, 
-        missing: ships.filter(s => !s.ciscoRouter || !s.hdd || (!s.crna1 && !s.crna2)).length 
+        missing: ships.filter(s => !s.ciscoRouter || (!s.hddStar && !s.hdd) || !s.hddData || !s.crna1 || !s.crna2).length 
     }), [ships, issues]);
     
     // Chart data calculations
@@ -1669,7 +1669,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         const miniReap = ships.filter(s => s.type === 'Mini REAP').length;
         
         // Documentation completeness
-        const complete = ships.filter(s => s.ciscoRouter && s.hdd && (s.crna1 || s.crna2)).length;
+        const complete = ships.filter(s => s.ciscoRouter && (s.hddStar || s.hdd) && s.hddData && s.crna1 && s.crna2).length;
         const incomplete = ships.length - complete;
         
         return { 
@@ -2614,7 +2614,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                     <div style={{fontSize:'10px',color:'var(--text-muted)',marginBottom:'16px',letterSpacing:'0.5px'}}>ASSET SERIAL NUMBERS & IDENTIFIERS</div>
                                     <div className="form-row">
                                         <div className="form-group"><label className="form-label">Cisco Router</label><input className="form-input" placeholder="Serial number..." value={sel.ciscoRouter || ''} onChange={e => setSel({...sel, ciscoRouter: e.target.value})}/></div>
-                                        <div className="form-group"><label className="form-label">HDD</label><input className="form-input" placeholder="Serial number..." value={sel.hdd || ''} onChange={e => setSel({...sel, hdd: e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">HDD Star</label><input className="form-input" placeholder="Serial number..." value={sel.hddStar || sel.hdd || ''} onChange={e => setSel({...sel, hddStar: e.target.value})}/></div>
+                                        <div className="form-group"><label className="form-label">HDD Data</label><input className="form-input" placeholder="Serial number..." value={sel.hddData || ''} onChange={e => setSel({...sel, hddData: e.target.value})}/></div>
                                     </div>
                                     <div className="form-row">
                                         <div className="form-group"><label className="form-label">Star CRNA</label><input className="form-input" placeholder="Serial number..." value={sel.crna1 || ''} onChange={e => setSel({...sel, crna1: e.target.value})}/></div>
@@ -2627,7 +2628,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         <div style={{display:'flex',gap:'8px',flexWrap:'wrap'}}>
                                             {[
                                                 { label: 'Router', value: sel.ciscoRouter },
-                                                { label: 'HDD', value: sel.hdd },
+                                                { label: 'HDD Star', value: sel.hddStar || sel.hdd },
+                                                { label: 'HDD Data', value: sel.hddData },
                                                 { label: 'Star CRNA', value: sel.crna1 },
                                                 { label: 'Data CRNA', value: sel.crna2 },
                                             ].map(asset => (
@@ -4187,11 +4189,11 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
 }
 
 function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActivity }) {
-    const [form, setForm] = useState({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hdd: '', crna1: '', crna2: '', notes: '', tags: [] });
+    const [form, setForm] = useState({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [] });
     const [tagInput, setTagInput] = useState('');
     const locations = ['San Diego, CA', 'Norfolk, VA', 'Mayport, FL', 'Pearl Harbor, HI', 'Yokosuka, Japan', 'Rota, Spain', 'Everett, WA', 'Point Mugu, CA', 'Deployed', 'In Port', 'Other'];
     
-    useEffect(() => { if (editing) setForm({ name: editing.name, type: editing.type, location: editing.location || 'San Diego, CA', poc: editing.poc, email: editing.email, reminder: '7', lastSaid: editing.lastSaid, ciscoRouter: editing.ciscoRouter, hdd: editing.hdd, crna1: editing.crna1, crna2: editing.crna2, notes: editing.notes, tags: editing.tags || [] }); }, [editing]);
+    useEffect(() => { if (editing) setForm({ name: editing.name, type: editing.type, location: editing.location || 'San Diego, CA', poc: editing.poc, email: editing.email, reminder: '7', lastSaid: editing.lastSaid, ciscoRouter: editing.ciscoRouter, hddStar: editing.hddStar || editing.hdd || '', hddData: editing.hddData || '', crna1: editing.crna1, crna2: editing.crna2, notes: editing.notes, tags: editing.tags || [] }); }, [editing]);
     
     const addTag = () => { if (tagInput.trim() && !form.tags.includes(tagInput.trim())) { setForm({...form, tags: [...form.tags, tagInput.trim()]}); setTagInput(''); } };
     const removeTag = (t) => setForm({...form, tags: form.tags.filter(x => x !== t)});
@@ -4234,25 +4236,48 @@ function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActi
 function Inventory({ ships, setShips, toast, logActivity }) {
     const [filter, setFilter] = useState('missing');
     const [sel, setSel] = useState(null);
-    const [form, setForm] = useState({ ciscoRouter: '', hdd: '', crna1: '', crna2: '' });
-    const filtered = useMemo(() => { let r = [...ships].sort(sortHull); if (filter === 'missing') r = r.filter(s => !s.ciscoRouter || !s.hdd || (!s.crna1 && !s.crna2)); else if (filter === 'complete') r = r.filter(s => s.ciscoRouter && s.hdd && (s.crna1 || s.crna2)); return r; }, [ships, filter]);
-    const select = (s) => { setSel(s); setForm({ ciscoRouter: s.ciscoRouter, hdd: s.hdd, crna1: s.crna1, crna2: s.crna2 }); };
+    const [form, setForm] = useState({ ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '' });
+    const [emailModal, setEmailModal] = useState(null);
+    const filtered = useMemo(() => { let r = [...ships].sort(sortHull); if (filter === 'missing') r = r.filter(s => !s.ciscoRouter || !s.hddStar || !s.hddData || !s.crna1 || !s.crna2); else if (filter === 'complete') r = r.filter(s => s.ciscoRouter && s.hddStar && s.hddData && s.crna1 && s.crna2); return r; }, [ships, filter]);
+    const select = (s) => { setSel(s); setForm({ ciscoRouter: s.ciscoRouter || '', hddStar: s.hddStar || s.hdd || '', hddData: s.hddData || '', crna1: s.crna1 || '', crna2: s.crna2 || '' }); };
     const update = () => { 
         if (!sel) return; 
         const changes = [];
         if (form.ciscoRouter !== (sel.ciscoRouter || '')) changes.push(`Cisco: ${form.ciscoRouter || '(cleared)'}`);
-        if (form.hdd !== (sel.hdd || '')) changes.push(`HDD: ${form.hdd || '(cleared)'}`);
+        if (form.hddStar !== (sel.hddStar || '')) changes.push(`HDD Star: ${form.hddStar || '(cleared)'}`);
+        if (form.hddData !== (sel.hddData || '')) changes.push(`HDD Data: ${form.hddData || '(cleared)'}`);
         if (form.crna1 !== (sel.crna1 || '')) changes.push(`Star CRNA: ${form.crna1 || '(cleared)'}`);
         if (form.crna2 !== (sel.crna2 || '')) changes.push(`Data CRNA: ${form.crna2 || '(cleared)'}`);
         setShips(p => p.map(s => s.id === sel.id ? {...s, ...form} : s)); 
+        setSel(prev => ({...prev, ...form}));
         logActivity(`${sel.name} inventory: ${changes.length > 0 ? changes.join(', ') : 'no changes'}`, { ship: sel.name, ...form }); 
         toast('Assets updated!', 'success'); 
     };
-    const getStatus = (s) => { const m = []; if (!s.ciscoRouter) m.push('Cisco'); if (!s.hdd) m.push('HDD'); if (!s.crna1 && !s.crna2) m.push('CRNA'); return m.length === 0 ? 'Complete' : `${m.length} Missing`; };
+    const getStatus = (s) => { const m = []; if (!s.ciscoRouter) m.push('Cisco'); if (!s.hddStar && !s.hdd) m.push('HDD Star'); if (!s.hddData) m.push('HDD Data'); if (!s.crna1) m.push('Star CRNA'); if (!s.crna2) m.push('Data CRNA'); return m.length === 0 ? 'Complete' : `${m.length} Missing`; };
+    const getMissing = (s) => {
+        const m = [];
+        if (!s.ciscoRouter) m.push('Cisco Router S/N');
+        if (!s.hddStar && !s.hdd) m.push('HDD Star S/N');
+        if (!s.hddData) m.push('HDD Data S/N');
+        if (!s.crna1) m.push('Star CRNA S/N');
+        if (!s.crna2) m.push('Data CRNA S/N');
+        return m;
+    };
+    const buildEmail = (s) => {
+        const missing = getMissing(s);
+        if (missing.length === 0) return null;
+        const has = [];
+        if (s.ciscoRouter) has.push(`Cisco Router: ${s.ciscoRouter}`);
+        if (s.hddStar || s.hdd) has.push(`HDD Star: ${s.hddStar || s.hdd}`);
+        if (s.hddData) has.push(`HDD Data: ${s.hddData}`);
+        if (s.crna1) has.push(`Star CRNA: ${s.crna1}`);
+        if (s.crna2) has.push(`Data CRNA: ${s.crna2}`);
+        return `Good morning/afternoon,\n\nWe are currently updating our asset records for ${s.name} and are missing the following serial numbers:\n\n${missing.map(m => `  - ${m}`).join('\n')}\n\n${has.length > 0 ? `We currently have on file:\n\n${has.map(h => `  - ${h}`).join('\n')}\n\n` : ''}Could you please provide the missing serial number${missing.length > 1 ? 's' : ''} at your earliest convenience?\n\nThank you,\nREAP Team`;
+    };
     
     const exportCSV = () => { 
-        let csv = 'Hull,Type,Cisco,HDD,CRNA1,CRNA2,Status\n'; 
-        ships.sort(sortHull).forEach(s => csv += `${s.name},${s.type},${s.ciscoRouter||'---'},${s.hdd||'---'},${s.crna1||'---'},${s.crna2||'---'},${getStatus(s)}\n`); 
+        let csv = 'Hull,Type,Cisco,HDD Star,HDD Data,Star CRNA,Data CRNA,Status\n'; 
+        ships.sort(sortHull).forEach(s => csv += `${s.name},${s.type},${s.ciscoRouter||'---'},${s.hddStar||s.hdd||'---'},${s.hddData||'---'},${s.crna1||'---'},${s.crna2||'---'},${getStatus(s)}\n`); 
         const blob = new Blob([csv], { type: 'text/csv' }), url = URL.createObjectURL(blob), a = document.createElement('a'); 
         a.href = url; a.download = `Inventory_${toDateString(new Date())}.csv`; a.click(); 
         logActivity('Exported inventory to CSV');
@@ -4260,11 +4285,10 @@ function Inventory({ ships, setShips, toast, logActivity }) {
     };
     
     const exportExcel = () => {
-        // Create Excel XML format
         let xml = '<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"><Worksheet ss:Name="Inventory"><Table>';
-        xml += '<Row><Cell><Data ss:Type="String">Hull</Data></Cell><Cell><Data ss:Type="String">Type</Data></Cell><Cell><Data ss:Type="String">Cisco</Data></Cell><Cell><Data ss:Type="String">HDD</Data></Cell><Cell><Data ss:Type="String">CRNA1</Data></Cell><Cell><Data ss:Type="String">CRNA2</Data></Cell><Cell><Data ss:Type="String">Status</Data></Cell></Row>';
+        xml += '<Row><Cell><Data ss:Type="String">Hull</Data></Cell><Cell><Data ss:Type="String">Type</Data></Cell><Cell><Data ss:Type="String">Cisco</Data></Cell><Cell><Data ss:Type="String">HDD Star</Data></Cell><Cell><Data ss:Type="String">HDD Data</Data></Cell><Cell><Data ss:Type="String">Star CRNA</Data></Cell><Cell><Data ss:Type="String">Data CRNA</Data></Cell><Cell><Data ss:Type="String">Status</Data></Cell></Row>';
         ships.sort(sortHull).forEach(s => {
-            xml += `<Row><Cell><Data ss:Type="String">${s.name}</Data></Cell><Cell><Data ss:Type="String">${s.type}</Data></Cell><Cell><Data ss:Type="String">${s.ciscoRouter||'---'}</Data></Cell><Cell><Data ss:Type="String">${s.hdd||'---'}</Data></Cell><Cell><Data ss:Type="String">${s.crna1||'---'}</Data></Cell><Cell><Data ss:Type="String">${s.crna2||'---'}</Data></Cell><Cell><Data ss:Type="String">${getStatus(s)}</Data></Cell></Row>`;
+            xml += `<Row><Cell><Data ss:Type="String">${s.name}</Data></Cell><Cell><Data ss:Type="String">${s.type}</Data></Cell><Cell><Data ss:Type="String">${s.ciscoRouter||'---'}</Data></Cell><Cell><Data ss:Type="String">${s.hddStar||s.hdd||'---'}</Data></Cell><Cell><Data ss:Type="String">${s.hddData||'---'}</Data></Cell><Cell><Data ss:Type="String">${s.crna1||'---'}</Data></Cell><Cell><Data ss:Type="String">${s.crna2||'---'}</Data></Cell><Cell><Data ss:Type="String">${getStatus(s)}</Data></Cell></Row>`;
         });
         xml += '</Table></Worksheet></Workbook>';
         const blob = new Blob([xml], { type: 'application/vnd.ms-excel' }), url = URL.createObjectURL(blob), a = document.createElement('a');
@@ -4282,19 +4306,61 @@ function Inventory({ ships, setShips, toast, logActivity }) {
             <div className="card" style={{background: sel ? 'var(--primary-glow)' : 'var(--bg-card)', borderColor: sel ? 'var(--primary)' : 'var(--border)'}}>
                 <span className="card-title">{sel ? `✏️ Editing: ${sel.name}` : 'Select a ship below to edit'}</span>
                 <div className="form-row">
-                    <div className="form-group"><label className="form-label">Cisco Router</label><input className="form-input" placeholder={sel ? 'Enter Cisco Router' : 'Select a ship...'} value={form.ciscoRouter} onChange={e => setForm({...form, ciscoRouter: e.target.value})} disabled={!sel}/></div>
-                    <div className="form-group"><label className="form-label">HDD</label><input className="form-input" placeholder={sel ? 'Enter HDD' : 'Select a ship...'} value={form.hdd} onChange={e => setForm({...form, hdd: e.target.value})} disabled={!sel}/></div>
+                    <div className="form-group"><label className="form-label">Cisco Router</label><input className="form-input" placeholder={sel ? 'Enter Cisco Router S/N' : 'Select a ship...'} value={form.ciscoRouter} onChange={e => setForm({...form, ciscoRouter: e.target.value})} disabled={!sel}/></div>
+                    <div className="form-group"><label className="form-label">HDD Star</label><input className="form-input" placeholder={sel ? 'Enter HDD Star S/N' : 'Select a ship...'} value={form.hddStar} onChange={e => setForm({...form, hddStar: e.target.value})} disabled={!sel}/></div>
+                    <div className="form-group"><label className="form-label">HDD Data</label><input className="form-input" placeholder={sel ? 'Enter HDD Data S/N' : 'Select a ship...'} value={form.hddData} onChange={e => setForm({...form, hddData: e.target.value})} disabled={!sel}/></div>
+                </div>
+                <div className="form-row">
                     <div className="form-group"><label className="form-label">Star CRNA</label><input className="form-input" placeholder={sel ? 'Enter Star CRNA' : 'Select a ship...'} value={form.crna1} onChange={e => setForm({...form, crna1: e.target.value})} disabled={!sel}/></div>
                     <div className="form-group"><label className="form-label">Data CRNA</label><input className="form-input" placeholder={sel ? 'Enter Data CRNA' : 'Select a ship...'} value={form.crna2} onChange={e => setForm({...form, crna2: e.target.value})} disabled={!sel}/></div>
                     <div className="form-group" style={{display:'flex',alignItems:'flex-end',gap:'8px'}}>
                         <button className="btn btn-primary" onClick={update} disabled={!sel}>Save</button>
-                        <button className="btn btn-secondary" onClick={() => { setSel(null); setForm({ciscoRouter:'',hdd:'',crna1:'',crna2:''}); }}>Clear</button>
+                        {sel && getMissing(sel).length > 0 && <button className="btn" style={{background:'var(--blue)',color:'#fff'}} onClick={() => setEmailModal({ship: sel, text: buildEmail(sel)})}>📧 Request S/N</button>}
+                        <button className="btn btn-secondary" onClick={() => { setSel(null); setForm({ciscoRouter:'',hddStar:'',hddData:'',crna1:'',crna2:''}); }}>Clear</button>
                     </div>
                 </div>
             </div>
             
             {/* Ship Table */}
-            <div className="card"><span className="card-title">Ship Documentation Status <span style={{fontWeight:'normal',color:'var(--text-muted)',marginLeft:'8px'}}>({filtered.length} ships)</span></span><table className="table mt-md"><thead><tr><th>Ship</th><th>Type</th><th>Cisco</th><th>HDD</th><th>CRNA</th><th>Status</th></tr></thead><tbody>{filtered.map(s => { const st = getStatus(s); return (<tr key={s.id} className={sel?.id === s.id ? 'selected' : ''} onClick={() => select(s)} style={{cursor:'pointer'}}><td style={{fontWeight:600,fontFamily:'JetBrains Mono'}}>{s.name}</td><td>{s.type}</td><td style={{color:s.ciscoRouter?'var(--text)':'var(--red)'}}>{s.ciscoRouter||'---'}</td><td style={{color:s.hdd?'var(--text)':'var(--red)'}}>{s.hdd||'---'}</td><td style={{color:(s.crna1||s.crna2)?'var(--text)':'var(--red)'}}>{s.crna1&&s.crna2?`${s.crna1}/${s.crna2}`:s.crna1||s.crna2||'---'}</td><td><span className={`badge ${st==='Complete'?'badge-complete':'badge-missing'}`}>{st}</span></td></tr>); })}</tbody></table></div>
+            <div className="card"><span className="card-title">Ship Documentation Status <span style={{fontWeight:'normal',color:'var(--text-muted)',marginLeft:'8px'}}>({filtered.length} ships)</span></span><table className="table mt-md"><thead><tr><th>Ship</th><th>Type</th><th>Cisco</th><th>HDD ⭐</th><th>HDD 📊</th><th>CRNA ⭐</th><th>CRNA 📊</th><th>Status</th><th></th></tr></thead><tbody>{filtered.map(s => { const st = getStatus(s); const missing = getMissing(s); return (<tr key={s.id} className={sel?.id === s.id ? 'selected' : ''} onClick={() => select(s)} style={{cursor:'pointer'}}><td style={{fontWeight:600,fontFamily:'JetBrains Mono'}}>{s.name}</td><td>{s.type}</td><td style={{color:s.ciscoRouter?'var(--text)':'var(--red)',fontSize:'11px',fontFamily:'monospace'}}>{s.ciscoRouter||'---'}</td><td style={{color:(s.hddStar||s.hdd)?'var(--text)':'var(--red)',fontSize:'11px',fontFamily:'monospace'}}>{s.hddStar||s.hdd||'---'}</td><td style={{color:s.hddData?'var(--text)':'var(--red)',fontSize:'11px',fontFamily:'monospace'}}>{s.hddData||'---'}</td><td style={{color:s.crna1?'var(--text)':'var(--red)',fontSize:'11px',fontFamily:'monospace'}}>{s.crna1||'---'}</td><td style={{color:s.crna2?'var(--text)':'var(--red)',fontSize:'11px',fontFamily:'monospace'}}>{s.crna2||'---'}</td><td><span className={`badge ${st==='Complete'?'badge-complete':'badge-missing'}`}>{st}</span></td><td>{missing.length > 0 && <button className="btn btn-sm" style={{padding:'2px 8px',fontSize:'9px',background:'var(--blue)',color:'#fff',borderRadius:'4px'}} onClick={(e) => { e.stopPropagation(); setEmailModal({ship: s, text: buildEmail(s)}); }}>📧</button>}</td></tr>); })}</tbody></table></div>
+            
+            {/* Email Modal */}
+            {emailModal && (
+                <div style={{position:'fixed',top:0,left:0,right:0,bottom:0,background:'rgba(0,0,0,0.6)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'20px'}} onClick={(e) => { if(e.target === e.currentTarget) setEmailModal(null); }}>
+                    <div style={{background:'var(--bg-card)',borderRadius:'16px',padding:'28px',width:'580px',maxWidth:'95vw',maxHeight:'85vh',overflow:'auto',border:'1px solid var(--border)',boxShadow:'0 20px 60px rgba(0,0,0,0.4)'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'16px'}}>
+                            <div>
+                                <div style={{fontSize:'16px',fontWeight:700}}>📧 Request Missing S/N — {emailModal.ship.name}</div>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>{getMissing(emailModal.ship).length} missing serial number{getMissing(emailModal.ship).length > 1 ? 's' : ''}</div>
+                            </div>
+                            <button className="btn btn-sm btn-secondary" onClick={() => setEmailModal(null)} style={{width:'32px',height:'32px',padding:0,display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'50%'}}>✕</button>
+                        </div>
+                        
+                        <div style={{display:'flex',gap:'6px',flexWrap:'wrap',marginBottom:'12px'}}>
+                            {getMissing(emailModal.ship).map(m => (
+                                <span key={m} style={{padding:'4px 10px',borderRadius:'6px',fontSize:'11px',fontWeight:600,background:'var(--red-glow)',color:'var(--red)',border:'1px solid var(--red)'}}>❌ {m}</span>
+                            ))}
+                        </div>
+                        
+                        <textarea style={{width:'100%',minHeight:'250px',padding:'16px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text)',fontSize:'13px',fontFamily:'inherit',lineHeight:'1.6',resize:'vertical'}} value={emailModal.text} onChange={e => setEmailModal({...emailModal, text: e.target.value})}/>
+                        
+                        <div style={{display:'flex',gap:'8px',marginTop:'16px'}}>
+                            <button style={{flex:1,padding:'14px',borderRadius:'10px',border:'none',background:'var(--blue)',color:'#fff',fontSize:'14px',fontWeight:700,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} onClick={() => {
+                                const to = emailModal.ship.email || '';
+                                const subject = encodeURIComponent(`${emailModal.ship.name} - Missing Serial Numbers Request`);
+                                const body = encodeURIComponent(emailModal.text);
+                                window.open(`mailto:${to}?subject=${subject}&body=${body}`, '_self');
+                            }}>📧 Open in Outlook</button>
+                            <button style={{padding:'14px 20px',borderRadius:'10px',border:'none',background:'var(--primary)',color:'#fff',fontSize:'13px',fontWeight:600,cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'}} onClick={() => {
+                                navigator.clipboard.writeText(emailModal.text).then(() => toast('Email copied to clipboard!', 'success')).catch(() => {
+                                    const ta = document.createElement('textarea'); ta.value = emailModal.text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); toast('Email copied to clipboard!', 'success');
+                                });
+                            }}>📋 Copy</button>
+                            <button style={{padding:'14px 20px',borderRadius:'10px',border:'1px solid var(--border)',background:'var(--bg-input)',color:'var(--text-muted)',fontSize:'13px',fontWeight:600,cursor:'pointer'}} onClick={() => setEmailModal(null)}>Close</button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }
