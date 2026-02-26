@@ -1649,8 +1649,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const chartData = useMemo(() => {
         // Online/Offline from today's daily checks
         const todayChecks = dailyChecks.filter(c => c.date === today);
-        let online = 0, offline = 0, noData = 0;
+        let online = 0, offline = 0, noData = 0, pendingInstall = 0, pendingDeinstall = 0;
         ships.forEach(ship => {
+            if (ship.pendingInstall) { pendingInstall++; return; }
+            if (ship.pendingDeinstall) { pendingDeinstall++; }
             const check = todayChecks.find(c => c.shipId === ship.id);
             if (!check) noData++;
             else if (check.statusAM && check.statusPM) online++;
@@ -1683,7 +1685,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         const incomplete = ships.length - complete;
         
         return { 
-            online, offline, noData,
+            online, offline, noData, pendingInstall, pendingDeinstall,
             urgentCount, mildCount, noIssueCount,
             emailOk, emailDue, emailOverdue, emailWaiting, emailInPort,
             fullReap, miniReap,
@@ -2267,11 +2269,13 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             <div className="charts-row">
                 <div className="chart-card">
                     <div className="card-title">Fleet Status (Today)</div>
-                    <DonutChart value={chartData.online} total={ships.length} color="var(--green)" label="Online" sublabel={`of ${ships.length}`}/>
+                    <PieChart data={[chartData.online, chartData.offline, chartData.noData, chartData.pendingInstall, chartData.pendingDeinstall]} colors={['var(--green)', 'var(--red)', 'var(--text-muted)', 'var(--amber)', '#f87171']}/>
                     <div className="chart-legend">
                         <span className="legend-item"><span className="legend-dot" style={{background:'var(--green)'}}></span> Online: {chartData.online}</span>
                         <span className="legend-item"><span className="legend-dot" style={{background:'var(--red)'}}></span> Offline: {chartData.offline}</span>
                         <span className="legend-item"><span className="legend-dot" style={{background:'var(--text-muted)'}}></span> No Data: {chartData.noData}</span>
+                        {chartData.pendingInstall > 0 && <span className="legend-item"><span className="legend-dot" style={{background:'var(--amber)'}}></span> Pending Install: {chartData.pendingInstall}</span>}
+                        {chartData.pendingDeinstall > 0 && <span className="legend-item"><span className="legend-dot" style={{background:'#f87171'}}></span> Pending Deinstall: {chartData.pendingDeinstall}</span>}
                     </div>
                 </div>
                 
