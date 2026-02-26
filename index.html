@@ -1236,6 +1236,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const [showAllActivity, setShowAllActivity] = useState(false);
     const [inPortModal, setInPortModal] = useState(false);
     const [inPortDate, setInPortDate] = useState('');
+    const [pendingInstallModal, setPendingInstallModal] = useState(false);
+    const [pendingInstallDate, setPendingInstallDate] = useState('');
+    const [pendingDeinstallModal, setPendingDeinstallModal] = useState(false);
+    const [pendingDeinstallDate, setPendingDeinstallDate] = useState('');
     const [clearWaitingModal, setClearWaitingModal] = useState(false);
     const [clearWaitingForm, setClearWaitingForm] = useState({ reply: '', resolution: 'received' });
     const [resolveIssueModal, setResolveIssueModal] = useState(null);
@@ -2331,9 +2335,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                             const isOnline = todayCheck ? (todayCheck.statusAM && todayCheck.statusPM) : null;
                             const isInPort = ship.inPort && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
                             const isPending = ship.pendingInstall;
+                            const isDeinstall = ship.pendingDeinstall;
                             const topIssue = si.length > 0 ? si.sort((a,b) => a.threat === 'Urgent' ? -1 : 1)[0] : null;
                             const updatedToday = ship.lastContact && fmtDateInput(ship.lastContact) === today;
-                            return (<div key={ship.id} onClick={() => setSel(ship)} style={{cursor:'pointer'}}><div className={`ship-item ${sel?.id === ship.id ? 'selected' : ''}`} style={{...topIssue ? {borderBottom:'none'} : {}, ...(updatedToday && sel?.id !== ship.id ? {background:'rgba(16, 185, 129, 0.08)', borderLeft:'3px solid var(--green)'} : {}), ...(isPending ? {background:'rgba(245,158,11,0.06)', borderLeft:'3px solid var(--amber)'} : {})}}><span>{hasU ? <span className="badge badge-urgent">!</span> : hasM ? <span className="badge badge-mild">!</span> : isInPort ? <span className="badge" style={{background:'var(--blue)',color:'#fff'}}>⚓</span> : isPending ? <span className="badge" style={{background:'var(--amber)',color:'#fff',fontSize:'8px'}}>🔧</span> : isOnline === false ? <span className="badge badge-missing">DOWN</span> : <span className="badge badge-ok">{isOnline ? 'UP' : '—'}</span>}</span><span className="ship-name">{ship.name}{updatedToday && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--green)',fontWeight:500}}>✓ Today</span>}{isPending && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--amber)',fontWeight:500}}>Pending Install{ship.installDate ? ` • ${fmtDate(ship.installDate)}` : ''}</span>}</span><span className="ship-type">{ship.type}</span><span>{ship.waitingReply ? <span style={{fontSize:'9px',color:'var(--blue)',fontWeight:500}}>Waiting on reply</span> : isPending ? <span style={{fontSize:'9px',color:'var(--amber)',fontWeight:500}}>Not yet installed</span> : <span style={{color:'var(--text-muted)',fontSize:'10px'}}>—</span>}</span><span style={{fontSize:'11px',color: isInPort ? 'var(--blue)' : isPending ? 'var(--amber)' : 'var(--text-muted)'}}>{isInPort ? `Back ${fmtDate(ship.inPortUntil)}` : (ship.location || '—')}</span></div>{topIssue && <div style={{padding:'4px 12px 8px 67px',fontSize:'11px',color: topIssue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)',borderBottom:'1px solid var(--border)',background: sel?.id === ship.id ? 'var(--primary-glow)' : updatedToday ? 'rgba(16, 185, 129, 0.08)' : 'transparent'}}>↳ {topIssue.details.substring(0, 50)}{topIssue.details.length > 50 ? '...' : ''}{si.length > 1 && <span style={{color:'var(--text-muted)',marginLeft:'8px'}}>+{si.length - 1} more</span>}</div>}</div>);
+                            return (<div key={ship.id} onClick={() => setSel(ship)} style={{cursor:'pointer'}}><div className={`ship-item ${sel?.id === ship.id ? 'selected' : ''}`} style={{...topIssue ? {borderBottom:'none'} : {}, ...(updatedToday && sel?.id !== ship.id ? {background:'rgba(16, 185, 129, 0.08)', borderLeft:'3px solid var(--green)'} : {}), ...(isPending ? {background:'rgba(245,158,11,0.06)', borderLeft:'3px solid var(--amber)'} : {}), ...(isDeinstall ? {background:'rgba(239,68,68,0.06)', borderLeft:'3px solid var(--red)'} : {})}}><span>{hasU ? <span className="badge badge-urgent">!</span> : hasM ? <span className="badge badge-mild">!</span> : isInPort ? <span className="badge" style={{background:'var(--blue)',color:'#fff'}}>⚓</span> : isPending ? <span className="badge" style={{background:'var(--amber)',color:'#fff',fontSize:'8px'}}>🔧</span> : isDeinstall ? <span className="badge" style={{background:'var(--red)',color:'#fff',fontSize:'8px'}}>🔻</span> : isOnline === false ? <span className="badge badge-missing">DOWN</span> : <span className="badge badge-ok">{isOnline ? 'UP' : '—'}</span>}</span><span className="ship-name">{ship.name}{updatedToday && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--green)',fontWeight:500}}>✓ Today</span>}{isPending && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--amber)',fontWeight:500}}>Pending Install{ship.installDate ? ` • ${fmtDate(ship.installDate)}` : ''}</span>}{isDeinstall && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--red)',fontWeight:500}}>Pending Deinstall{ship.deinstallDate ? ` • ${fmtDate(ship.deinstallDate)}` : ''}</span>}</span><span className="ship-type">{ship.type}</span><span>{ship.waitingReply ? <span style={{fontSize:'9px',color:'var(--blue)',fontWeight:500}}>Waiting on reply</span> : isPending ? <span style={{fontSize:'9px',color:'var(--amber)',fontWeight:500}}>Not yet installed</span> : isDeinstall ? <span style={{fontSize:'9px',color:'var(--red)',fontWeight:500}}>Scheduled for removal</span> : <span style={{color:'var(--text-muted)',fontSize:'10px'}}>—</span>}</span><span style={{fontSize:'11px',color: isInPort ? 'var(--blue)' : isPending ? 'var(--amber)' : isDeinstall ? 'var(--red)' : 'var(--text-muted)'}}>{isInPort ? `Back ${fmtDate(ship.inPortUntil)}` : (ship.location || '—')}</span></div>{topIssue && <div style={{padding:'4px 12px 8px 67px',fontSize:'11px',color: topIssue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)',borderBottom:'1px solid var(--border)',background: sel?.id === ship.id ? 'var(--primary-glow)' : updatedToday ? 'rgba(16, 185, 129, 0.08)' : 'transparent'}}>↳ {topIssue.details.substring(0, 50)}{topIssue.details.length > 50 ? '...' : ''}{si.length > 1 && <span style={{color:'var(--text-muted)',marginLeft:'8px'}}>+{si.length - 1} more</span>}</div>}</div>);
                         })}
                     </div>
                 </div>
@@ -2365,6 +2370,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 <div className={`status status-${selIssues.some(i => i.threat === 'Urgent') ? 'urgent' : selIssues.some(i => i.threat === 'Mild') ? 'mild' : 'ok'}`} style={{fontSize:'11px'}}>{selIssues.some(i => i.threat === 'Urgent') ? `🚨 ${selIssues.length} URGENT` : selIssues.some(i => i.threat === 'Mild') ? `⚠️ ${selIssues.length} ISSUE${selIssues.length > 1 ? 'S' : ''}` : '✓ NO ISSUES'}</div>
                                 {getEmailStatus(sel, issues).status !== 'OK' && getEmailStatus(sel, issues).status !== 'PENDING' && <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`} style={{padding:'4px 10px'}}>{getEmailStatus(sel, issues).status === 'IN PORT' ? '⚓ IN PORT' : getEmailStatus(sel, issues).status}</span>}
                                 {sel.pendingInstall && <span className="badge" style={{background:'var(--amber)',color:'#fff',padding:'4px 10px'}}>🔧 Pending Install{sel.installDate ? ` • ${fmtDate(sel.installDate)}` : ''}</span>}
+                                {sel.pendingDeinstall && <span className="badge" style={{background:'var(--red)',color:'#fff',padding:'4px 10px'}}>🔻 Pending Deinstall{sel.deinstallDate ? ` • ${fmtDate(sel.deinstallDate)}` : ''}</span>}
                                 {sel.waitingReply && <span className="badge" style={{background:'var(--blue)',color:'#fff',padding:'4px 10px'}}>⏳ Waiting Reply</span>}
                             </div>
 
@@ -2424,13 +2430,37 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                         {sel.installDate && <span style={{marginLeft:'8px',color:'var(--amber)',fontWeight:500}}>Est. install: {fmtDate(sel.installDate)}</span>}
                                                     </div>
                                                 </div>
-                                                <button className="btn btn-sm" style={{background:'var(--green)',color:'#fff',fontWeight:600}} onClick={() => { const updated = {...sel, pendingInstall: false, installDate: '', lastContact: new Date().toISOString()}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Marked ${sel.name} as installed`); toast(`${sel.name} marked as installed!`, 'success'); }}>✓ Mark Installed</button>
+                                                <div style={{display:'flex',gap:'6px'}}>
+                                                    <button className="btn btn-sm" style={{background:'var(--green)',color:'#fff',fontWeight:600}} onClick={() => { const updated = {...sel, pendingInstall: false, installDate: '', lastContact: new Date().toISOString()}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Marked ${sel.name} as installed`); toast(`${sel.name} marked as installed!`, 'success'); }}>✓ Mark Installed</button>
+                                                    <button className="btn btn-sm btn-secondary" onClick={() => { const updated = {...sel, pendingInstall: false, installDate: ''}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Cleared pending install for ${sel.name}`); toast('Pending install cleared', 'info'); }}>Clear</button>
+                                                </div>
                                             </div>
                                         </div>
                                     )}
 
-                                    <div className="btn-group mt-md">
+                                    {/* Pending Deinstall Status */}
+                                    {sel.pendingDeinstall && (
+                                        <div style={{padding:'12px',background:'rgba(239,68,68,0.08)',borderRadius:'8px',border:'1px solid var(--red)',marginTop:'12px'}}>
+                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                                <div>
+                                                    <span style={{color:'var(--red)',fontWeight:600}}>🔻 PENDING DEINSTALL</span>
+                                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>
+                                                        REAP scheduled for removal
+                                                        {sel.deinstallDate && <span style={{marginLeft:'8px',color:'var(--red)',fontWeight:500}}>Est. deinstall: {fmtDate(sel.deinstallDate)}</span>}
+                                                    </div>
+                                                </div>
+                                                <div style={{display:'flex',gap:'6px'}}>
+                                                    <button className="btn btn-sm" style={{background:'var(--red)',color:'#fff',fontWeight:600}} onClick={() => { const updated = {...sel, pendingDeinstall: false, deinstallDate: '', pendingInstall: false}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Marked ${sel.name} as deinstalled`); toast(`${sel.name} marked as deinstalled`, 'success'); }}>✓ Mark Deinstalled</button>
+                                                    <button className="btn btn-sm btn-secondary" onClick={() => { const updated = {...sel, pendingDeinstall: false, deinstallDate: ''}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Cleared pending deinstall for ${sel.name}`); toast('Pending deinstall cleared', 'info'); }}>Clear</button>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    <div className="btn-group mt-md" style={{flexWrap:'wrap'}}>
                                         <button className="btn btn-sm" style={{background:'var(--blue)',color:'#fff'}} onClick={() => { setInPortDate(''); setInPortModal(true); }}>⚓ Set In Port</button>
+                                        {!sel.pendingInstall && <button className="btn btn-sm" style={{background:'var(--amber)',color:'#fff'}} onClick={() => { setPendingInstallDate(''); setPendingInstallModal(true); }}>🔧 Pending Install</button>}
+                                        {!sel.pendingDeinstall && <button className="btn btn-sm" style={{background:'var(--red)',color:'#fff'}} onClick={() => { setPendingDeinstallDate(''); setPendingDeinstallModal(true); }}>🔻 Pending Deinstall</button>}
                                     </div>
                                 </div>
                             )}
@@ -2959,6 +2989,52 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                             setInPortModal(false);
                         }}>⚓ Mark In Port</button>
                         <button className="btn btn-secondary" onClick={() => setInPortModal(false)}>Cancel</button>
+                    </div>
+                </>}
+            </Modal>
+            
+            {/* Pending Install Modal */}
+            <Modal open={pendingInstallModal} onClose={() => setPendingInstallModal(false)} title="🔧 Set Pending Install">
+                {sel && <>
+                    <p style={{marginBottom:'16px',color:'var(--text-dim)'}}>Mark <strong>{sel.name}</strong> as pending REAP installation. The ship will be excluded from daily checks and email tracking until marked as installed.</p>
+                    <div className="form-group">
+                        <label className="form-label">Estimated Install Date (optional)</label>
+                        <input type="date" className="form-input" value={pendingInstallDate} onChange={e => setPendingInstallDate(e.target.value)}/>
+                        <p style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>When is the REAP install expected?</p>
+                    </div>
+                    <div className="btn-group mt-md">
+                        <button className="btn btn-primary" style={{background:'var(--amber)'}} onClick={() => {
+                            const updated = {...sel, pendingInstall: true, installDate: pendingInstallDate || ''};
+                            setSel(updated);
+                            setShips(p => p.map(s => s.id === sel.id ? updated : s));
+                            logActivity(`Marked ${sel.name} as Pending Install${pendingInstallDate ? ' (est. ' + fmtDate(pendingInstallDate) + ')' : ''}`, { ship: sel.name, installDate: pendingInstallDate });
+                            toast(`${sel.name} marked as Pending Install`, 'success');
+                            setPendingInstallModal(false);
+                        }}>🔧 Set Pending Install</button>
+                        <button className="btn btn-secondary" onClick={() => setPendingInstallModal(false)}>Cancel</button>
+                    </div>
+                </>}
+            </Modal>
+            
+            {/* Pending Deinstall Modal */}
+            <Modal open={pendingDeinstallModal} onClose={() => setPendingDeinstallModal(false)} title="🔻 Set Pending Deinstall">
+                {sel && <>
+                    <p style={{marginBottom:'16px',color:'var(--text-dim)'}}>Mark <strong>{sel.name}</strong> as pending REAP removal. The ship will still be tracked but flagged for upcoming deinstallation.</p>
+                    <div className="form-group">
+                        <label className="form-label">Estimated Deinstall Date (optional)</label>
+                        <input type="date" className="form-input" value={pendingDeinstallDate} onChange={e => setPendingDeinstallDate(e.target.value)}/>
+                        <p style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>When is the REAP deinstall expected?</p>
+                    </div>
+                    <div className="btn-group mt-md">
+                        <button className="btn btn-primary" style={{background:'var(--red)'}} onClick={() => {
+                            const updated = {...sel, pendingDeinstall: true, deinstallDate: pendingDeinstallDate || ''};
+                            setSel(updated);
+                            setShips(p => p.map(s => s.id === sel.id ? updated : s));
+                            logActivity(`Marked ${sel.name} as Pending Deinstall${pendingDeinstallDate ? ' (est. ' + fmtDate(pendingDeinstallDate) + ')' : ''}`, { ship: sel.name, deinstallDate: pendingDeinstallDate });
+                            toast(`${sel.name} marked as Pending Deinstall`, 'success');
+                            setPendingDeinstallModal(false);
+                        }}>🔻 Set Pending Deinstall</button>
+                        <button className="btn btn-secondary" onClick={() => setPendingDeinstallModal(false)}>Cancel</button>
                     </div>
                 </>}
             </Modal>
@@ -3955,6 +4031,7 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
     // Get row status for coloring
     const getRowStatus = (ship, check) => {
         if (ship.pendingInstall) return 'pending';
+        if (ship.pendingDeinstall) return 'deinstall';
         const isInPort = ship.inPort && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
         if (isInPort) return 'inport';
         if (!check.statusAM && !check.statusPM) return 'offline';
@@ -4092,15 +4169,15 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                         const c = getCheck(s.id);
                         const yc = getYesterdayCheck(s.id);
                         const status = getRowStatus(s, c);
-                        const rowBg = status === 'pending' ? 'rgba(245,158,11,0.08)' : status === 'inport' ? 'var(--blue-glow)' : status === 'offline' ? 'var(--red-glow)' : status === 'partial' ? 'var(--amber-glow)' : status === 'alert' ? 'rgba(251, 191, 36, 0.1)' : 'transparent';
+                        const rowBg = status === 'pending' ? 'rgba(245,158,11,0.08)' : status === 'deinstall' ? 'rgba(239,68,68,0.06)' : status === 'inport' ? 'var(--blue-glow)' : status === 'offline' ? 'var(--red-glow)' : status === 'partial' ? 'var(--amber-glow)' : status === 'alert' ? 'rgba(251, 191, 36, 0.1)' : 'transparent';
                         const trendAM = yc ? getTrend(c.pingAM, yc.pingAM, 'ping') : null;
                         const trendPM = yc ? getTrend(c.pingPM, yc.pingPM, 'ping') : null;
                         const trendHD = yc ? getTrend(c.hdSpace, yc.hdSpace, 'hd') : null;
 
                         return (
-                            <div key={s.id} className="check-row" style={{background: rowBg, borderLeft: status === 'pending' ? '3px solid var(--amber)' : status === 'offline' ? '3px solid var(--red)' : status === 'partial' ? '3px solid var(--amber)' : status === 'inport' ? '3px solid var(--blue)' : '3px solid transparent'}}>
+                            <div key={s.id} className="check-row" style={{background: rowBg, borderLeft: status === 'pending' ? '3px solid var(--amber)' : status === 'deinstall' ? '3px solid var(--red)' : status === 'offline' ? '3px solid var(--red)' : status === 'partial' ? '3px solid var(--amber)' : status === 'inport' ? '3px solid var(--blue)' : '3px solid transparent'}}>
                                 <span style={{fontWeight:600,fontFamily:'JetBrains Mono',fontSize:'12px'}}>{s.name}</span>
-                                <span style={{fontSize:'11px',color: status === 'inport' ? 'var(--blue)' : status === 'pending' ? 'var(--amber)' : 'var(--text-dim)'}}>{status === 'inport' ? '⚓' : status === 'pending' ? '🔧' : ''} {status === 'pending' ? `Pending Install${s.installDate ? ' • ' + fmtDate(s.installDate) : ''}` : s.location || '—'}</span>
+                                <span style={{fontSize:'11px',color: status === 'inport' ? 'var(--blue)' : status === 'pending' ? 'var(--amber)' : status === 'deinstall' ? 'var(--red)' : 'var(--text-dim)'}}>{status === 'inport' ? '⚓' : status === 'pending' ? '🔧' : status === 'deinstall' ? '🔻' : ''} {status === 'pending' ? `Pending Install${s.installDate ? ' • ' + fmtDate(s.installDate) : ''}` : status === 'deinstall' ? `Pending Deinstall${s.deinstallDate ? ' • ' + fmtDate(s.deinstallDate) : ''}` : s.location || '—'}</span>
                                 <div style={{display:'flex',alignItems:'center'}}>
                                     <input
                                         ref={el => inputRefs.current[`${s.id}-pingAM`] = el}
@@ -4150,14 +4227,14 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                         const status = getRowStatus(s, c);
 
                         return (
-                            <div key={s.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: `4px solid ${status === 'online' ? 'var(--green)' : status === 'offline' ? 'var(--red)' : status === 'partial' ? 'var(--amber)' : status === 'pending' ? 'var(--amber)' : 'var(--blue)'}`}}>
+                            <div key={s.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: `4px solid ${status === 'online' ? 'var(--green)' : status === 'offline' ? 'var(--red)' : status === 'partial' ? 'var(--amber)' : status === 'pending' ? 'var(--amber)' : status === 'deinstall' ? 'var(--red)' : 'var(--blue)'}`}}>
                                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
                                     <div style={{fontWeight:700,fontSize:'16px',fontFamily:'JetBrains Mono'}}>{s.name}</div>
-                                    <span className={`badge badge-${status === 'online' ? 'ok' : status === 'offline' ? 'urgent' : status === 'partial' ? 'mild' : 'info'}`} style={status === 'pending' ? {background:'var(--amber)',color:'#fff'} : {}}>
-                                        {status === 'online' ? '✓ Online' : status === 'offline' ? '✕ Offline' : status === 'partial' ? '⚠ Partial' : status === 'pending' ? '🔧 Pending Install' : '⚓ In Port'}
+                                    <span className={`badge badge-${status === 'online' ? 'ok' : status === 'offline' ? 'urgent' : status === 'partial' ? 'mild' : 'info'}`} style={status === 'pending' ? {background:'var(--amber)',color:'#fff'} : status === 'deinstall' ? {background:'var(--red)',color:'#fff'} : {}}>
+                                        {status === 'online' ? '✓ Online' : status === 'offline' ? '✕ Offline' : status === 'partial' ? '⚠ Partial' : status === 'pending' ? '🔧 Pending Install' : status === 'deinstall' ? '🔻 Pending Deinstall' : '⚓ In Port'}
                                     </span>
                                 </div>
-                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'12px'}}>{status === 'pending' ? `Pending Install${s.installDate ? ' • Est. ' + fmtDate(s.installDate) : ''}` : s.location || 'No location'}</div>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'12px'}}>{status === 'pending' ? `Pending Install${s.installDate ? ' • Est. ' + fmtDate(s.installDate) : ''}` : status === 'deinstall' ? `Pending Deinstall${s.deinstallDate ? ' • Est. ' + fmtDate(s.deinstallDate) : ''}` : s.location || 'No location'}</div>
 
                                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'12px'}}>
                                     <div>
@@ -4223,11 +4300,11 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
 }
 
 function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActivity }) {
-    const [form, setForm] = useState({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '' });
+    const [form, setForm] = useState({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '', pendingDeinstall: false, deinstallDate: '' });
     const [tagInput, setTagInput] = useState('');
     const locations = ['San Diego, CA', 'Norfolk, VA', 'Mayport, FL', 'Pearl Harbor, HI', 'Yokosuka, Japan', 'Rota, Spain', 'Everett, WA', 'Point Mugu, CA', 'Deployed', 'In Port', 'Other'];
     
-    useEffect(() => { if (editing) setForm({ name: editing.name, type: editing.type, location: editing.location || 'San Diego, CA', poc: editing.poc, email: editing.email, reminder: '7', lastSaid: editing.lastSaid, ciscoRouter: editing.ciscoRouter, hddStar: editing.hddStar || editing.hdd || '', hddData: editing.hddData || '', crna1: editing.crna1, crna2: editing.crna2, notes: editing.notes, tags: editing.tags || [], pendingInstall: editing.pendingInstall || false, installDate: editing.installDate || '' }); }, [editing]);
+    useEffect(() => { if (editing) setForm({ name: editing.name, type: editing.type, location: editing.location || 'San Diego, CA', poc: editing.poc, email: editing.email, reminder: '7', lastSaid: editing.lastSaid, ciscoRouter: editing.ciscoRouter, hddStar: editing.hddStar || editing.hdd || '', hddData: editing.hddData || '', crna1: editing.crna1, crna2: editing.crna2, notes: editing.notes, tags: editing.tags || [], pendingInstall: editing.pendingInstall || false, installDate: editing.installDate || '', pendingDeinstall: editing.pendingDeinstall || false, deinstallDate: editing.deinstallDate || '' }); }, [editing]);
     
     const addTag = () => { if (tagInput.trim() && !form.tags.includes(tagInput.trim())) { setForm({...form, tags: [...form.tags, tagInput.trim()]}); setTagInput(''); } };
     const removeTag = (t) => setForm({...form, tags: form.tags.filter(x => x !== t)});
@@ -4245,10 +4322,10 @@ function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActi
             logActivity(`Added new ship ${form.name}${form.pendingInstall ? ' (Pending Install)' : ''}`);
             toast('Ship added!', 'success'); 
         } 
-        setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '' }); 
+        setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '', pendingDeinstall: false, deinstallDate: '' }); 
         setPage(0); 
     };
-    const clear = () => { setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '' }); setEditing(null); };
+    const clear = () => { setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '', pendingDeinstall: false, deinstallDate: '' }); setEditing(null); };
 
     return (
         <div className="page active">
