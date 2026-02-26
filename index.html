@@ -814,6 +814,8 @@ const fmtTime = (d) => { const now = new Date(), then = new Date(d), diff = (now
 const genId = (p) => `${p}${Date.now()}`;
 
 const getEmailStatus = (ship, issues) => {
+    // If ship is pending install, no email tracking needed
+    if (ship.pendingInstall) return { status: 'PENDING', days: 0 };
     // If ship is in port with future return date, email status is paused
     if (ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0))) {
         return { status: 'IN PORT', days: 0 };
@@ -1318,14 +1320,16 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         }
         
         // Categorize ships
-        let onlineCount = 0, partialCount = 0, offlineCount = 0, inPortCount = 0;
+        let onlineCount = 0, partialCount = 0, offlineCount = 0, inPortCount = 0, pendingCount = 0;
         const waitingShips = ships.filter(s => s.waitingReply);
         
         ships.forEach(ship => {
             const latestCheck = dailyChecks.filter(c => c.shipId === ship.id).sort((a,b) => b.date.localeCompare(a.date))[0];
             const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
             
-            if (isInPort) {
+            if (ship.pendingInstall) {
+                pendingCount++;
+            } else if (isInPort) {
                 inPortCount++;
             } else if (!latestCheck || (!latestCheck.statusAM && !latestCheck.statusPM)) {
                 offlineCount++;
@@ -2326,9 +2330,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                             const todayCheck = dailyChecks.find(c => c.shipId === ship.id && c.date === today);
                             const isOnline = todayCheck ? (todayCheck.statusAM && todayCheck.statusPM) : null;
                             const isInPort = ship.inPort && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
+                            const isPending = ship.pendingInstall;
                             const topIssue = si.length > 0 ? si.sort((a,b) => a.threat === 'Urgent' ? -1 : 1)[0] : null;
                             const updatedToday = ship.lastContact && fmtDateInput(ship.lastContact) === today;
-                            return (<div key={ship.id} onClick={() => setSel(ship)} style={{cursor:'pointer'}}><div className={`ship-item ${sel?.id === ship.id ? 'selected' : ''}`} style={{...topIssue ? {borderBottom:'none'} : {}, ...(updatedToday && sel?.id !== ship.id ? {background:'rgba(16, 185, 129, 0.08)', borderLeft:'3px solid var(--green)'} : {})}}><span>{hasU ? <span className="badge badge-urgent">!</span> : hasM ? <span className="badge badge-mild">!</span> : isInPort ? <span className="badge" style={{background:'var(--blue)',color:'#fff'}}>⚓</span> : isOnline === false ? <span className="badge badge-missing">DOWN</span> : <span className="badge badge-ok">{isOnline ? 'UP' : '—'}</span>}</span><span className="ship-name">{ship.name}{updatedToday && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--green)',fontWeight:500}}>✓ Today</span>}</span><span className="ship-type">{ship.type}</span><span>{ship.waitingReply ? <span style={{fontSize:'9px',color:'var(--blue)',fontWeight:500}}>Waiting on reply</span> : <span style={{color:'var(--text-muted)',fontSize:'10px'}}>—</span>}</span><span style={{fontSize:'11px',color: isInPort ? 'var(--blue)' : 'var(--text-muted)'}}>{isInPort ? `Back ${fmtDate(ship.inPortUntil)}` : (ship.location || '—')}</span></div>{topIssue && <div style={{padding:'4px 12px 8px 67px',fontSize:'11px',color: topIssue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)',borderBottom:'1px solid var(--border)',background: sel?.id === ship.id ? 'var(--primary-glow)' : updatedToday ? 'rgba(16, 185, 129, 0.08)' : 'transparent'}}>↳ {topIssue.details.substring(0, 50)}{topIssue.details.length > 50 ? '...' : ''}{si.length > 1 && <span style={{color:'var(--text-muted)',marginLeft:'8px'}}>+{si.length - 1} more</span>}</div>}</div>);
+                            return (<div key={ship.id} onClick={() => setSel(ship)} style={{cursor:'pointer'}}><div className={`ship-item ${sel?.id === ship.id ? 'selected' : ''}`} style={{...topIssue ? {borderBottom:'none'} : {}, ...(updatedToday && sel?.id !== ship.id ? {background:'rgba(16, 185, 129, 0.08)', borderLeft:'3px solid var(--green)'} : {}), ...(isPending ? {background:'rgba(245,158,11,0.06)', borderLeft:'3px solid var(--amber)'} : {})}}><span>{hasU ? <span className="badge badge-urgent">!</span> : hasM ? <span className="badge badge-mild">!</span> : isInPort ? <span className="badge" style={{background:'var(--blue)',color:'#fff'}}>⚓</span> : isPending ? <span className="badge" style={{background:'var(--amber)',color:'#fff',fontSize:'8px'}}>🔧</span> : isOnline === false ? <span className="badge badge-missing">DOWN</span> : <span className="badge badge-ok">{isOnline ? 'UP' : '—'}</span>}</span><span className="ship-name">{ship.name}{updatedToday && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--green)',fontWeight:500}}>✓ Today</span>}{isPending && <span style={{marginLeft:'6px',fontSize:'9px',color:'var(--amber)',fontWeight:500}}>Pending Install{ship.installDate ? ` • ${fmtDate(ship.installDate)}` : ''}</span>}</span><span className="ship-type">{ship.type}</span><span>{ship.waitingReply ? <span style={{fontSize:'9px',color:'var(--blue)',fontWeight:500}}>Waiting on reply</span> : isPending ? <span style={{fontSize:'9px',color:'var(--amber)',fontWeight:500}}>Not yet installed</span> : <span style={{color:'var(--text-muted)',fontSize:'10px'}}>—</span>}</span><span style={{fontSize:'11px',color: isInPort ? 'var(--blue)' : isPending ? 'var(--amber)' : 'var(--text-muted)'}}>{isInPort ? `Back ${fmtDate(ship.inPortUntil)}` : (ship.location || '—')}</span></div>{topIssue && <div style={{padding:'4px 12px 8px 67px',fontSize:'11px',color: topIssue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)',borderBottom:'1px solid var(--border)',background: sel?.id === ship.id ? 'var(--primary-glow)' : updatedToday ? 'rgba(16, 185, 129, 0.08)' : 'transparent'}}>↳ {topIssue.details.substring(0, 50)}{topIssue.details.length > 50 ? '...' : ''}{si.length > 1 && <span style={{color:'var(--text-muted)',marginLeft:'8px'}}>+{si.length - 1} more</span>}</div>}</div>);
                         })}
                     </div>
                 </div>
@@ -2358,7 +2363,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                             {/* Status Badges Row */}
                             <div style={{display:'flex',gap:'8px',marginBottom:'16px',flexWrap:'wrap'}}>
                                 <div className={`status status-${selIssues.some(i => i.threat === 'Urgent') ? 'urgent' : selIssues.some(i => i.threat === 'Mild') ? 'mild' : 'ok'}`} style={{fontSize:'11px'}}>{selIssues.some(i => i.threat === 'Urgent') ? `🚨 ${selIssues.length} URGENT` : selIssues.some(i => i.threat === 'Mild') ? `⚠️ ${selIssues.length} ISSUE${selIssues.length > 1 ? 'S' : ''}` : '✓ NO ISSUES'}</div>
-                                {getEmailStatus(sel, issues).status !== 'OK' && <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`} style={{padding:'4px 10px'}}>{getEmailStatus(sel, issues).status === 'IN PORT' ? '⚓ IN PORT' : getEmailStatus(sel, issues).status}</span>}
+                                {getEmailStatus(sel, issues).status !== 'OK' && getEmailStatus(sel, issues).status !== 'PENDING' && <span className={`badge badge-${getEmailStatus(sel, issues).status.toLowerCase()}`} style={{padding:'4px 10px'}}>{getEmailStatus(sel, issues).status === 'IN PORT' ? '⚓ IN PORT' : getEmailStatus(sel, issues).status}</span>}
+                                {sel.pendingInstall && <span className="badge" style={{background:'var(--amber)',color:'#fff',padding:'4px 10px'}}>🔧 Pending Install{sel.installDate ? ` • ${fmtDate(sel.installDate)}` : ''}</span>}
                                 {sel.waitingReply && <span className="badge" style={{background:'var(--blue)',color:'#fff',padding:'4px 10px'}}>⏳ Waiting Reply</span>}
                             </div>
 
@@ -2403,6 +2409,22 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                             <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
                                                 <div><span style={{color:'var(--blue)',fontWeight:600}}>⚓ IN PORT - Expected Offline</span><div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>Back online: {fmtDate(sel.inPortUntil)}</div></div>
                                                 <button className="btn btn-sm btn-secondary" onClick={() => { const updated = {...sel, inPort: false, inPortUntil: null}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Cleared In Port status for ${sel.name}`); toast('In Port status cleared', 'info'); }}>Clear Status</button>
+                                            </div>
+                                        </div>
+                                    )}
+
+                                    {/* Pending Install Status */}
+                                    {sel.pendingInstall && (
+                                        <div style={{padding:'12px',background:'var(--amber-glow)',borderRadius:'8px',border:'1px solid var(--amber)',marginTop:'12px'}}>
+                                            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+                                                <div>
+                                                    <span style={{color:'var(--amber)',fontWeight:600}}>🔧 PENDING INSTALL</span>
+                                                    <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'4px'}}>
+                                                        REAP not yet installed — excluded from daily checks & email tracking
+                                                        {sel.installDate && <span style={{marginLeft:'8px',color:'var(--amber)',fontWeight:500}}>Est. install: {fmtDate(sel.installDate)}</span>}
+                                                    </div>
+                                                </div>
+                                                <button className="btn btn-sm" style={{background:'var(--green)',color:'#fff',fontWeight:600}} onClick={() => { const updated = {...sel, pendingInstall: false, installDate: '', lastContact: new Date().toISOString()}; setSel(updated); setShips(p => p.map(s => s.id === sel.id ? updated : s)); logActivity(`Marked ${sel.name} as installed`); toast(`${sel.name} marked as installed!`, 'success'); }}>✓ Mark Installed</button>
                                             </div>
                                         </div>
                                     )}
@@ -3932,6 +3954,7 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
 
     // Get row status for coloring
     const getRowStatus = (ship, check) => {
+        if (ship.pendingInstall) return 'pending';
         const isInPort = ship.inPort && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
         if (isInPort) return 'inport';
         if (!check.statusAM && !check.statusPM) return 'offline';
@@ -4069,15 +4092,15 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                         const c = getCheck(s.id);
                         const yc = getYesterdayCheck(s.id);
                         const status = getRowStatus(s, c);
-                        const rowBg = status === 'inport' ? 'var(--blue-glow)' : status === 'offline' ? 'var(--red-glow)' : status === 'partial' ? 'var(--amber-glow)' : status === 'alert' ? 'rgba(251, 191, 36, 0.1)' : 'transparent';
+                        const rowBg = status === 'pending' ? 'rgba(245,158,11,0.08)' : status === 'inport' ? 'var(--blue-glow)' : status === 'offline' ? 'var(--red-glow)' : status === 'partial' ? 'var(--amber-glow)' : status === 'alert' ? 'rgba(251, 191, 36, 0.1)' : 'transparent';
                         const trendAM = yc ? getTrend(c.pingAM, yc.pingAM, 'ping') : null;
                         const trendPM = yc ? getTrend(c.pingPM, yc.pingPM, 'ping') : null;
                         const trendHD = yc ? getTrend(c.hdSpace, yc.hdSpace, 'hd') : null;
 
                         return (
-                            <div key={s.id} className="check-row" style={{background: rowBg, borderLeft: status === 'offline' ? '3px solid var(--red)' : status === 'partial' ? '3px solid var(--amber)' : status === 'inport' ? '3px solid var(--blue)' : '3px solid transparent'}}>
+                            <div key={s.id} className="check-row" style={{background: rowBg, borderLeft: status === 'pending' ? '3px solid var(--amber)' : status === 'offline' ? '3px solid var(--red)' : status === 'partial' ? '3px solid var(--amber)' : status === 'inport' ? '3px solid var(--blue)' : '3px solid transparent'}}>
                                 <span style={{fontWeight:600,fontFamily:'JetBrains Mono',fontSize:'12px'}}>{s.name}</span>
-                                <span style={{fontSize:'11px',color: status === 'inport' ? 'var(--blue)' : 'var(--text-dim)'}}>{status === 'inport' ? '⚓' : ''} {s.location || '—'}</span>
+                                <span style={{fontSize:'11px',color: status === 'inport' ? 'var(--blue)' : status === 'pending' ? 'var(--amber)' : 'var(--text-dim)'}}>{status === 'inport' ? '⚓' : status === 'pending' ? '🔧' : ''} {status === 'pending' ? `Pending Install${s.installDate ? ' • ' + fmtDate(s.installDate) : ''}` : s.location || '—'}</span>
                                 <div style={{display:'flex',alignItems:'center'}}>
                                     <input
                                         ref={el => inputRefs.current[`${s.id}-pingAM`] = el}
@@ -4127,14 +4150,14 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
                         const status = getRowStatus(s, c);
 
                         return (
-                            <div key={s.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: `4px solid ${status === 'online' ? 'var(--green)' : status === 'offline' ? 'var(--red)' : status === 'partial' ? 'var(--amber)' : 'var(--blue)'}`}}>
+                            <div key={s.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: `4px solid ${status === 'online' ? 'var(--green)' : status === 'offline' ? 'var(--red)' : status === 'partial' ? 'var(--amber)' : status === 'pending' ? 'var(--amber)' : 'var(--blue)'}`}}>
                                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
                                     <div style={{fontWeight:700,fontSize:'16px',fontFamily:'JetBrains Mono'}}>{s.name}</div>
-                                    <span className={`badge badge-${status === 'online' ? 'ok' : status === 'offline' ? 'urgent' : status === 'partial' ? 'mild' : 'info'}`}>
-                                        {status === 'online' ? '✓ Online' : status === 'offline' ? '✕ Offline' : status === 'partial' ? '⚠ Partial' : '⚓ In Port'}
+                                    <span className={`badge badge-${status === 'online' ? 'ok' : status === 'offline' ? 'urgent' : status === 'partial' ? 'mild' : 'info'}`} style={status === 'pending' ? {background:'var(--amber)',color:'#fff'} : {}}>
+                                        {status === 'online' ? '✓ Online' : status === 'offline' ? '✕ Offline' : status === 'partial' ? '⚠ Partial' : status === 'pending' ? '🔧 Pending Install' : '⚓ In Port'}
                                     </span>
                                 </div>
-                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'12px'}}>{s.location || 'No location'}</div>
+                                <div style={{fontSize:'11px',color:'var(--text-muted)',marginBottom:'12px'}}>{status === 'pending' ? `Pending Install${s.installDate ? ' • Est. ' + fmtDate(s.installDate) : ''}` : s.location || 'No location'}</div>
 
                                 <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:'8px',marginBottom:'12px'}}>
                                     <div>
@@ -4200,11 +4223,11 @@ function DailyChecks({ ships, checks, setChecks, toast, logActivity }) {
 }
 
 function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActivity }) {
-    const [form, setForm] = useState({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [] });
+    const [form, setForm] = useState({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '' });
     const [tagInput, setTagInput] = useState('');
     const locations = ['San Diego, CA', 'Norfolk, VA', 'Mayport, FL', 'Pearl Harbor, HI', 'Yokosuka, Japan', 'Rota, Spain', 'Everett, WA', 'Point Mugu, CA', 'Deployed', 'In Port', 'Other'];
     
-    useEffect(() => { if (editing) setForm({ name: editing.name, type: editing.type, location: editing.location || 'San Diego, CA', poc: editing.poc, email: editing.email, reminder: '7', lastSaid: editing.lastSaid, ciscoRouter: editing.ciscoRouter, hddStar: editing.hddStar || editing.hdd || '', hddData: editing.hddData || '', crna1: editing.crna1, crna2: editing.crna2, notes: editing.notes, tags: editing.tags || [] }); }, [editing]);
+    useEffect(() => { if (editing) setForm({ name: editing.name, type: editing.type, location: editing.location || 'San Diego, CA', poc: editing.poc, email: editing.email, reminder: '7', lastSaid: editing.lastSaid, ciscoRouter: editing.ciscoRouter, hddStar: editing.hddStar || editing.hdd || '', hddData: editing.hddData || '', crna1: editing.crna1, crna2: editing.crna2, notes: editing.notes, tags: editing.tags || [], pendingInstall: editing.pendingInstall || false, installDate: editing.installDate || '' }); }, [editing]);
     
     const addTag = () => { if (tagInput.trim() && !form.tags.includes(tagInput.trim())) { setForm({...form, tags: [...form.tags, tagInput.trim()]}); setTagInput(''); } };
     const removeTag = (t) => setForm({...form, tags: form.tags.filter(x => x !== t)});
@@ -4218,20 +4241,38 @@ function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActi
             toast('Ship updated!', 'success'); 
             setEditing(null); 
         } else { 
-            setShips(p => [...p, { id: genId('S'), ...form, threat: 'NoIssue', lastContact: new Date().toISOString(), nextCheck: next.toISOString(), contactedBy: '' }]); 
-            logActivity(`Added new ship ${form.name}`);
+            setShips(p => [...p, { id: genId('S'), ...form, threat: 'NoIssue', lastContact: form.pendingInstall ? null : new Date().toISOString(), nextCheck: form.pendingInstall ? null : next.toISOString(), contactedBy: '' }]); 
+            logActivity(`Added new ship ${form.name}${form.pendingInstall ? ' (Pending Install)' : ''}`);
             toast('Ship added!', 'success'); 
         } 
-        setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [] }); 
+        setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '' }); 
         setPage(0); 
     };
-    const clear = () => { setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [] }); setEditing(null); };
+    const clear = () => { setForm({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '' }); setEditing(null); };
 
     return (
         <div className="page active">
             <div className="page-header"><div className="page-header-left"><h1 className="page-title">{editing ? 'Edit Ship' : 'Add Ship'}</h1><p className="page-sub">Enter ship details and asset identifiers</p></div></div>
             {editing && <div className="card" style={{background:'var(--primary-glow)',borderColor:'var(--primary)'}}><span style={{color:'var(--primary)',fontWeight:600}}>Editing: {editing.name}</span></div>}
             <div className="card"><span className="card-title">Ship Information</span><div className="form-row mt-md"><div className="form-group"><label className="form-label">Ship Name *</label><input className="form-input" placeholder="e.g., DDG54" value={form.name} onChange={e => setForm({...form, name: e.target.value})}/></div><div className="form-group"><label className="form-label">Email</label><input className="form-input" placeholder="STO@ship.navy.mil" value={form.email} onChange={e => setForm({...form, email: e.target.value})}/></div><div className="form-group"><label className="form-label">Ship Type</label><select className="form-select" value={form.type} onChange={e => setForm({...form, type: e.target.value})}><option>Full REAP</option><option>Mini REAP</option></select></div></div><div className="form-row"><div className="form-group"><label className="form-label">Homeport</label><select className="form-select" value={form.location} onChange={e => setForm({...form, location: e.target.value})}>{locations.map(l => <option key={l}>{l}</option>)}</select></div><div className="form-group"><label className="form-label">Next Check-in</label><select className="form-select" value={form.reminder} onChange={e => setForm({...form, reminder: e.target.value})}><option value="7">7 Days</option><option value="14">14 Days</option><option value="30">30 Days</option></select></div><div className="form-group"><label className="form-label">Notes</label><input className="form-input" placeholder="Additional info..." value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/></div></div>
+            {/* Pending Install Toggle */}
+            <div style={{marginTop:'16px',padding:'14px',borderRadius:'10px',border: form.pendingInstall ? '2px solid var(--amber)' : '1px solid var(--border)',background: form.pendingInstall ? 'var(--amber-glow)' : 'var(--bg-input)',transition:'all 0.2s'}}>
+                <div style={{display:'flex',alignItems:'center',gap:'12px'}}>
+                    <label style={{display:'flex',alignItems:'center',gap:'8px',cursor:'pointer',flex:1}}>
+                        <input type="checkbox" checked={form.pendingInstall} onChange={e => setForm({...form, pendingInstall: e.target.checked, installDate: e.target.checked ? form.installDate : ''})} style={{width:'18px',height:'18px',accentColor:'var(--amber)',cursor:'pointer'}}/>
+                        <div>
+                            <div style={{fontSize:'13px',fontWeight:700,color: form.pendingInstall ? 'var(--amber)' : 'var(--text)'}}>🔧 Pending Install</div>
+                            <div style={{fontSize:'11px',color:'var(--text-muted)',marginTop:'2px'}}>Ship is in fleet but REAP not yet installed — won't show as offline in daily checks</div>
+                        </div>
+                    </label>
+                    {form.pendingInstall && (
+                        <div style={{flexShrink:0}}>
+                            <label style={{fontSize:'10px',color:'var(--text-muted)',display:'block',marginBottom:'4px'}}>Est. Install Date</label>
+                            <input type="date" className="form-input" style={{width:'160px',padding:'8px 10px'}} value={form.installDate} onChange={e => setForm({...form, installDate: e.target.value})}/>
+                        </div>
+                    )}
+                </div>
+            </div></div>
             <div className="form-group"><label className="form-label">Tags / Groups</label><div className="flex gap-sm mb-md">{form.tags.map(t => <span key={t} className="tag">{t}<span className="tag-remove" onClick={() => removeTag(t)}>×</span></span>)}</div><div className="flex gap-sm"><input className="form-input" style={{flex:1}} placeholder="Add tag..." value={tagInput} onChange={e => setTagInput(e.target.value)} onKeyPress={e => e.key === 'Enter' && addTag()}/><button className="btn btn-secondary" onClick={addTag}>Add</button></div></div>
             <div className="form-group"><label className="form-label">Notes</label><textarea className="form-textarea" value={form.notes} onChange={e => setForm({...form, notes: e.target.value})}/></div></div>
             <div className="card"><span className="card-title">Asset Identifiers</span><div className="form-row mt-md"><div className="form-group"><label className="form-label">Cisco Router</label><input className="form-input" value={form.ciscoRouter} onChange={e => setForm({...form, ciscoRouter: e.target.value})}/></div><div className="form-group"><label className="form-label">HDD Star</label><input className="form-input" value={form.hddStar} onChange={e => setForm({...form, hddStar: e.target.value})}/></div><div className="form-group"><label className="form-label">HDD Data</label><input className="form-input" value={form.hddData} onChange={e => setForm({...form, hddData: e.target.value})}/></div></div><div className="form-row"><div className="form-group"><label className="form-label">Star CRNA</label><input className="form-input" value={form.crna1} onChange={e => setForm({...form, crna1: e.target.value})}/></div><div className="form-group"><label className="form-label">Data CRNA</label><input className="form-input" value={form.crna2} onChange={e => setForm({...form, crna2: e.target.value})}/></div></div></div>
