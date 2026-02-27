@@ -291,6 +291,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.5/babel.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.1/package/dist/xlsx.full.min.js"></script>
 
 <!-- Firebase SDK -->
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
@@ -696,7 +697,7 @@ function AuthWrapper() {
 
     if (currentUser) return (
         <>
-            <App currentUser={currentUser} onLogout={() => logout('User logout')} isAdmin={currentUser.isAdmin} pendingCount={pending} onOpenAdminPanel={() => setShowAdmin(true)}/>
+            <App currentUser={currentUser} onLogout={() => logout('User logout')} isAdmin={currentUser.isAdmin} pendingCount={pending} onOpenAdminPanel={() => setShowAdmin(true)} allUsers={users}/>
             {showAdmin && currentUser.isAdmin && <AdminPanel users={users} onClose={() => setShowAdmin(false)}/>}
             {sessionWarning && (
                 <div style={{position:'fixed',bottom:'20px',right:'20px',padding:'16px 20px',background:'var(--amber-glow)',border:'2px solid var(--amber)',borderRadius:'12px',zIndex:10000,boxShadow:'0 4px 20px rgba(0,0,0,0.3)'}}>
@@ -966,7 +967,7 @@ const Modal = ({ title, onClose, children, wide, open }) => {
     );
 };
 
-function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel }) {
+function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel, allUsers }) {
     const [page, setPage] = useState(() => {
         const saved = localStorage.getItem('currentPage');
         return saved ? parseInt(saved) : 0;
@@ -1192,7 +1193,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel })
                 {page === 4 && <Inventory ships={ships} setShips={setShips} toast={toast} logActivity={logActivity}/>}
                 {page === 5 && <Installs ships={ships} installs={installs} setInstalls={setInstalls} toast={toast} logActivity={logActivity}/>}
                 {page === 6 && <Parts parts={parts} setParts={setParts} toast={toast} logActivity={logActivity}/>}
-                {page === 7 && <EmailStatus ships={ships} setShips={setShips} issues={issues} toast={toast} logActivity={logActivity}/>}
+                {page === 7 && <EmailStatus ships={ships} setShips={setShips} issues={issues} toast={toast} logActivity={logActivity} currentUser={currentUser} allUsers={allUsers}/>}
                 {page === 8 && <DataSettings ships={ships} setShips={setShips} issues={issues} setIssues={setIssues} dailyChecks={dailyChecks} setDailyChecks={setDailyChecks} installs={installs} setInstalls={setInstalls} parts={parts} setParts={setParts} activityLog={activityLog} setActivityLog={setActivityLog} toast={toast} backupSettings={backupSettings} setBackupSettings={setBackupSettings} downloadBackup={downloadBackup}/>}
                 {page === 10 && isAdmin && <Suggestions suggestions={suggestions} setSuggestions={setSuggestions} toast={toast}/>}
             </main>
@@ -1734,7 +1735,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     
     const openContactModal = () => {
         if (!sel) return;
-        setContactForm({ name: '', date: toDateString(new Date()), notes: '', waitingReply: sel.waitingReply || false });
+        setContactForm({ name: currentUser.username, date: toDateString(new Date()), notes: '', waitingReply: sel.waitingReply || false });
         setContactModal(true);
     };
     
@@ -2601,7 +2602,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                                 
                                                                 {/* Action Buttons */}
                                                                 <div style={{display:'flex',gap:'6px',marginTop:'12px',paddingTop:'10px',borderTop:'1px solid var(--border)',flexWrap:'wrap'}}>
-                                                                    <button style={{padding:'6px 14px',fontSize:'11px',background:'var(--primary)',color:'#000',borderRadius:'6px',border:'none',cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:'4px'}} onClick={(e) => { e.stopPropagation(); setClearEmailWaitingModal(h); setClearEmailWaitingForm({ resolution: 'received', notes: '', name: '', followupEmail: '', date: '' }); }}>📧 Add Update</button>
+                                                                    <button style={{padding:'6px 14px',fontSize:'11px',background:'var(--primary)',color:'#000',borderRadius:'6px',border:'none',cursor:'pointer',fontWeight:600,display:'flex',alignItems:'center',gap:'4px'}} onClick={(e) => { e.stopPropagation(); setClearEmailWaitingModal(h); setClearEmailWaitingForm({ resolution: 'received', notes: '', name: currentUser.username, followupEmail: '', date: '' }); }}>📧 Add Update</button>
                                                                     <button style={{padding:'6px 10px',fontSize:'11px',background:'var(--bg-input)',color:'var(--text-muted)',borderRadius:'6px',border:'1px solid var(--border)',cursor:'pointer',display:'flex',alignItems:'center',gap:'4px'}} onClick={(e) => { e.stopPropagation();
                                                                         const d = new Date(h.timestamp); 
                                                                         setEditEmailForm({ 
@@ -2775,8 +2776,12 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 {sel && <>
                     <p style={{color:'var(--text-dim)',fontSize:'13px',marginBottom:'16px'}}>Record email contact for <strong style={{color:'var(--primary)'}}>{sel.name}</strong></p>
                     <div className="form-group">
-                        <label className="form-label">Your Name *</label>
-                        <input className="form-input" placeholder="Enter your name" value={contactForm.name} onChange={e => setContactForm({...contactForm, name: e.target.value})}/>
+                        <label className="form-label">Logged By *</label>
+                        <select className="form-select" value={contactForm.name} onChange={e => setContactForm({...contactForm, name: e.target.value})}>
+                            {(allUsers || []).filter(u => u.status === 'approved').map(u => (
+                                <option key={u.username} value={u.username}>{u.username}{u.username === currentUser.username ? ' (you)' : ''}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="form-group">
                         <label className="form-label">Date of Contact</label>
@@ -3129,8 +3134,12 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                             </div>
                             {f.resolution !== 'second_email' && (
                                 <div className="form-group" style={{margin:0}}>
-                                    <label className="form-label" style={{fontSize:'11px'}}>Your Name</label>
-                                    <input className="form-input" placeholder="Who updated this" value={f.name} onChange={e => setF({ name: e.target.value })}/>
+                                    <label className="form-label" style={{fontSize:'11px'}}>Logged By</label>
+                                    <select className="form-select" value={f.name} onChange={e => setF({ name: e.target.value })}>
+                                        {(allUsers || []).filter(u => u.status === 'approved').map(u => (
+                                            <option key={u.username} value={u.username}>{u.username}{u.username === currentUser.username ? ' (you)' : ''}</option>
+                                        ))}
+                                    </select>
                                 </div>
                             )}
                         </div>
@@ -3139,8 +3148,12 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                         {f.resolution === 'second_email' && (
                             <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:'12px',marginBottom:'12px'}}>
                                 <div className="form-group" style={{margin:0}}>
-                                    <label className="form-label" style={{fontSize:'11px'}}>Your Name *</label>
-                                    <input className="form-input" placeholder="Enter your name" value={f.name} onChange={e => setF({ name: e.target.value })}/>
+                                    <label className="form-label" style={{fontSize:'11px'}}>Logged By *</label>
+                                    <select className="form-select" value={f.name} onChange={e => setF({ name: e.target.value })}>
+                                        {(allUsers || []).filter(u => u.status === 'approved').map(u => (
+                                            <option key={u.username} value={u.username}>{u.username}{u.username === currentUser.username ? ' (you)' : ''}</option>
+                                        ))}
+                                    </select>
                                 </div>
                                 <div className="form-group" style={{margin:0}}>
                                     <label className="form-label" style={{fontSize:'11px'}}>&nbsp;</label>
@@ -3215,7 +3228,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                 logActivity(`Updated ${item.shipName}: ${resText}`, { ship: item.shipName, resolution: resText, notes: f.notes, contactedBy: f.name || null });
                                 toast('Status updated', 'success');
                                 setClearEmailWaitingModal(null);
-                                setClearEmailWaitingForm({ resolution: 'received', notes: '', name: '', followupEmail: '', date: '' });
+                                setClearEmailWaitingForm({ resolution: 'received', notes: '', name: currentUser.username, followupEmail: '', date: '' });
                             }}>Update Status</button>
                         </div>
                     </>
@@ -4421,47 +4434,28 @@ function Inventory({ ships, setShips, toast, logActivity }) {
     };
     
     const exportExcel = () => {
-        const esc = (v) => String(v||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
-        let html = '<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">';
-        html += '<head><meta charset="utf-8"/>';
-        html += '<style>';
-        html += 'table { border-collapse: collapse; font-family: Calibri, sans-serif; font-size: 11pt; }';
-        html += 'th { background-color: #1e293b; color: #ffffff; font-weight: bold; padding: 6px 10px; border: 1px solid #334155; text-align: center; }';
-        html += 'td { padding: 4px 8px; border: 1px solid #cbd5e1; }';
-        html += '.hull { font-weight: bold; font-size: 11pt; }';
-        html += '.sn { font-family: Consolas, monospace; font-size: 10pt; }';
-        html += '.missing { color: #dc2626; font-weight: bold; }';
-        html += '.complete { color: #059669; }';
-        html += '.inport { color: #2563eb; background-color: #eff6ff; }';
-        html += '.miss-row { background-color: #fef2f2; }';
-        html += '.ok-row { background-color: #f0fdf4; }';
-        html += '.port-row { background-color: #eff6ff; }';
-        html += '</style></head><body>';
-        html += '<table>';
-        html += '<tr><th>Hull</th><th>Type</th><th>Location</th><th>POC</th><th>Status</th><th>Cisco Router</th><th>HDD Star</th><th>HDD Data</th><th>CRNA1</th><th>CRNA2</th><th>Docs</th><th>Missing Items</th></tr>';
+        const headers = ['Hull','Type','Location','POC','Status','Cisco Router','HDD Star','HDD Data','CRNA1','CRNA2','Docs','Missing Items'];
+        const rows = [headers];
         ships.sort(sortHull).forEach(s => {
             const inPort = isShipInPort(s);
             const st = getStatus(s);
             const miss = getMissing(s).join(', ');
-            const rc = inPort ? 'port-row' : st !== 'Complete' ? 'miss-row' : 'ok-row';
-            html += `<tr class="${rc}">`;
-            html += `<td class="hull">${esc(s.name)}</td>`;
-            html += `<td>${esc(s.type)}</td>`;
-            html += `<td>${esc(s.location)}</td>`;
-            html += `<td>${esc(s.poc)}</td>`;
-            html += `<td class="${inPort ? 'inport' : ''}">${inPort ? 'In Port' : 'Online'}</td>`;
-            html += `<td class="sn ${s.ciscoRouter ? '' : 'missing'}">${esc(s.ciscoRouter) || '---'}</td>`;
-            html += `<td class="sn ${(s.hddStar||s.hdd) ? '' : 'missing'}">${esc(s.hddStar||s.hdd) || '---'}</td>`;
-            html += `<td class="sn ${s.hddData ? '' : 'missing'}">${esc(s.hddData) || '---'}</td>`;
-            html += `<td class="sn">${esc(s.crna1) || '---'}</td>`;
-            html += `<td class="sn">${esc(s.crna2) || '---'}</td>`;
-            html += `<td class="${st === 'Complete' ? 'complete' : 'missing'}">${st}</td>`;
-            html += `<td>${esc(miss)}</td>`;
-            html += '</tr>';
+            rows.push([
+                s.name, s.type, s.location||'', s.poc||'',
+                inPort ? 'In Port' : 'Online',
+                s.ciscoRouter||'---', s.hddStar||s.hdd||'---', s.hddData||'---',
+                s.crna1||'---', s.crna2||'---', st, miss
+            ]);
         });
-        html += '</table></body></html>';
-        const blob = new Blob([html], { type: 'application/vnd.ms-excel' }), url = URL.createObjectURL(blob), a = document.createElement('a');
-        a.href = url; a.download = `REAP_Inventory_${toDateString(new Date())}.xls`; a.click();
+        const ws = XLSX.utils.aoa_to_sheet(rows);
+        ws['!cols'] = [
+            {wch:12},{wch:10},{wch:16},{wch:18},{wch:9},
+            {wch:18},{wch:18},{wch:18},{wch:14},{wch:14},
+            {wch:12},{wch:24}
+        ];
+        const wb = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
+        XLSX.writeFile(wb, `REAP_Inventory_${toDateString(new Date())}.xlsx`);
         logActivity('Exported inventory to Excel');
         toast('Excel exported!', 'success');
     };
@@ -6016,7 +6010,7 @@ function Parts({ parts, setParts, toast, logActivity }) {
     );
 }
 
-function EmailStatus({ ships, setShips, issues, toast, logActivity }) {
+function EmailStatus({ ships, setShips, issues, toast, logActivity, currentUser, allUsers }) {
     const [contactModal, setContactModal] = useState(false);
     const [selectedShip, setSelectedShip] = useState(null);
     const [contactForm, setContactForm] = useState({ name: '', date: toDateString(new Date()), notes: '', waitingReply: false });
@@ -6051,7 +6045,7 @@ function EmailStatus({ ships, setShips, issues, toast, logActivity }) {
     
     const openContactModal = (s) => {
         setSelectedShip(s);
-        setContactForm({ name: '', date: toDateString(new Date()), notes: '', waitingReply: s.waitingReply || false });
+        setContactForm({ name: currentUser.username, date: toDateString(new Date()), notes: '', waitingReply: s.waitingReply || false });
         setContactModal(true);
     };
     
@@ -6115,8 +6109,12 @@ function EmailStatus({ ships, setShips, issues, toast, logActivity }) {
                 {selectedShip && <>
                     <p style={{color:'var(--text-dim)',fontSize:'13px',marginBottom:'16px'}}>Record email contact for <strong style={{color:'var(--primary)'}}>{selectedShip.name}</strong></p>
                     <div className="form-group">
-                        <label className="form-label">Your Name *</label>
-                        <input className="form-input" placeholder="Enter your name" value={contactForm.name} onChange={e => setContactForm({...contactForm, name: e.target.value})}/>
+                        <label className="form-label">Logged By *</label>
+                        <select className="form-select" value={contactForm.name} onChange={e => setContactForm({...contactForm, name: e.target.value})}>
+                            {(allUsers || []).filter(u => u.status === 'approved').map(u => (
+                                <option key={u.username} value={u.username}>{u.username}{u.username === currentUser.username ? ' (you)' : ''}</option>
+                            ))}
+                        </select>
                     </div>
                     <div className="form-group">
                         <label className="form-label">Date of Contact</label>
