@@ -3,6 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
     <title>Ship Tracker Pro</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310b981'/%3E%3Cpath d='M4 20l4-3h16l4 3H4z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M8 17h16l2-5H6l2 5z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M10 12V9h12v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M14 9V6h4v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M9 20v3h14v-3' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E"/>
     <link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2310b981'/%3E%3Cpath d='M4 20l4-3h16l4 3H4z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M8 17h16l2-5H6l2 5z' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M10 12V9h12v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M14 9V6h4v3' fill='none' stroke='white' stroke-width='1.5'/%3E%3Cpath d='M9 20v3h14v-3' fill='none' stroke='white' stroke-width='1.5'/%3E%3C/svg%3E"/>
@@ -315,6 +318,51 @@ const hashPassword = (password) => {
     }
     return 'h' + Math.abs(hash).toString(16);
 };
+</script>
+
+<!-- Auto-Update Checker -->
+<script>
+(function() {
+    var APP_BUILD = "2026-02-27T001";
+    window.__APP_BUILD = APP_BUILD;
+    
+    function checkForUpdate() {
+        fetch(window.location.href.split('?')[0] + '?_nocache=' + Date.now(), { cache: 'no-store' })
+            .then(function(r) { return r.text(); })
+            .then(function(html) {
+                var match = html.match(/APP_BUILD\s*=\s*"([^"]+)"/);
+                if (match && match[1] && match[1] !== APP_BUILD) {
+                    console.log('New version detected:', match[1], '(current:', APP_BUILD + ')');
+                    // Show update banner
+                    var banner = document.getElementById('update-banner');
+                    if (!banner) {
+                        banner = document.createElement('div');
+                        banner.id = 'update-banner';
+                        banner.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:99999;background:linear-gradient(135deg,#f59e0b,#d97706);color:#000;padding:10px 20px;text-align:center;font-family:Inter,sans-serif;font-size:13px;font-weight:600;display:flex;align-items:center;justify-content:center;gap:12px;box-shadow:0 2px 12px rgba(0,0,0,0.3);';
+                        banner.innerHTML = '🔄 A new version is available! <button onclick="location.reload(true)" style="background:#000;color:#f59e0b;border:none;padding:6px 16px;border-radius:6px;font-weight:700;cursor:pointer;font-size:12px;">Update Now</button> <span style="font-size:11px;opacity:0.7;margin-left:8px;">(auto-updating in <span id="update-countdown">10</span>s)</span>';
+                        document.body.appendChild(banner);
+                        // Auto-reload countdown
+                        var seconds = 10;
+                        var countdown = setInterval(function() {
+                            seconds--;
+                            var el = document.getElementById('update-countdown');
+                            if (el) el.textContent = seconds;
+                            if (seconds <= 0) {
+                                clearInterval(countdown);
+                                location.reload(true);
+                            }
+                        }, 1000);
+                    }
+                }
+            })
+            .catch(function() { /* network error, skip */ });
+    }
+    
+    // Check every 60 seconds
+    setInterval(checkForUpdate, 60000);
+    // Also check 5 seconds after load
+    setTimeout(checkForUpdate, 5000);
+})();
 </script>
 
 <script type="text/babel">
