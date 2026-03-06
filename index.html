@@ -424,7 +424,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T004";
+    var APP_BUILD = "2026-02-27T005";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -1563,27 +1563,6 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             weekDates.push(toDateString(d));
         }
         
-        // Categorize ships
-        let onlineCount = 0, partialCount = 0, offlineCount = 0, inPortCount = 0, pendingCount = 0;
-        const waitingShips = ships.filter(s => s.waitingReply);
-        
-        ships.forEach(ship => {
-            const latestCheck = dailyChecks.filter(c => c.shipId === ship.id).sort((a,b) => b.date.localeCompare(a.date))[0];
-            const isInPort = ship.inPort && ship.inPortUntil && parseLocalDate(ship.inPortUntil) >= new Date(new Date().setHours(0,0,0,0));
-            
-            if (ship.pendingInstall) {
-                pendingCount++;
-            } else if (isInPort) {
-                inPortCount++;
-            } else if (!latestCheck || (!latestCheck.statusAM && !latestCheck.statusPM)) {
-                offlineCount++;
-            } else if (!latestCheck.statusAM || !latestCheck.statusPM) {
-                partialCount++;
-            } else {
-                onlineCount++;
-            }
-        });
-        
         // Calculate weekly uptime
         let totalChecks = 0, onlineChecks = 0;
         weekDates.forEach(date => {
@@ -1599,10 +1578,11 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         // Issues
         const openIssues = issues.filter(i => !i.resolved);
         const urgentCount = openIssues.filter(i => i.threat === 'Urgent').length;
+        const waitingShips = ships.filter(s => s.waitingReply);
+        const pendingInstallCount = ships.filter(s => s.pendingInstall).length;
         
-        // Parts/Build status - use real parts data
+        // Parts/Build status
         const criticalParts = parts.filter(p => p.perBuild > 0);
-        let canBuild = 0;
         let bottleneckPart = null;
         if (criticalParts.length > 0) {
             let minBuilds = Infinity;
@@ -1613,18 +1593,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                     bottleneckPart = p;
                 }
             });
-            canBuild = minBuilds === Infinity ? 0 : minBuilds;
         }
         
-        const totalInstalls = installs.length;
-        const completedInstalls = installs.filter(i => i.status === 'Installed' || i.status === 'Complete').length;
-        const buildProgress = totalInstalls > 0 ? Math.round((completedInstalls / totalInstalls) * 100) : 0;
-        
-        // Parts stats
         const outOfStock = parts.filter(p => (p.inStock || 0) === 0 && (p.need || 0) > 0);
         const lowStock = parts.filter(p => (p.inStock || 0) > 0 && (p.inStock || 0) < (p.need || 0) && (p.need || 0) > 0);
-        const totalItems = parts.reduce((sum, p) => sum + (p.inStock || 0), 0);
-        const totalNeeded = parts.reduce((sum, p) => sum + Math.max(0, (p.need || 0) - (p.inStock || 0)), 0);
         
         // Weekly performance by day
         const dailyStats = weekDates.map((date, idx) => {
@@ -1667,38 +1639,30 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         r += `  Weekly Uptime:       ${String(weeklyUptime).padStart(3)}%\n`;
         r += `  Open Issues:         ${String(openIssues.length).padStart(3)} (${urgentCount} urgent)\n`;
         r += `  Awaiting Reply:      ${String(waitingShips.length).padStart(3)} ships\n`;
-        r += `  Build Progress:      ${completedInstalls}/${totalInstalls} complete\n\n`;
+        r += `  Pending Installs:    ${String(pendingInstallCount).padStart(3)}\n\n`;
         
         // Parts / Build Status
-        const barLen = 20;
-        const filled = Math.round((buildProgress / 100) * barLen);
-        const bar = '█'.repeat(filled) + '░'.repeat(barLen - filled);
         r += '  📦 PARTS / BUILD STATUS\n';
         r += '  ' + '─'.repeat(32) + '\n';
-        r += `  [${bar}] ${buildProgress}%\n`;
-        r += `  Built: ${completedInstalls}/${totalInstalls}  Can Build: ${canBuild}\n`;
         if (bottleneckPart) {
-            r += `  Bottleneck: ${bottleneckPart.name.substring(0, 25)}\n`;
+            r += `  Bottleneck: ${bottleneckPart.name.substring(0, 30)}\n`;
         }
         
         if (outOfStock.length > 0) {
             r += '\n  Out of Stock:\n';
-            outOfStock.slice(0, 3).forEach(p => {
-                r += `  • ${(p.name || 'Unknown').substring(0, 26)} (need ${p.need || 0})\n`;
+            outOfStock.forEach(p => {
+                r += `  • ${(p.name || 'Unknown').substring(0, 30)} (need ${p.need || 0})\n`;
             });
-            if (outOfStock.length > 3) r += `  • ...and ${outOfStock.length - 3} more\n`;
         }
         
         if (lowStock.length > 0) {
             r += '\n  Low Stock:\n';
-            lowStock.slice(0, 3).forEach(p => {
-                r += `  • ${(p.name || 'Unknown').substring(0, 22)} (${p.inStock}/${p.need})\n`;
+            lowStock.forEach(p => {
+                r += `  • ${(p.name || 'Unknown').substring(0, 22)}  (${p.inStock}/${p.need})\n`;
             });
-            if (lowStock.length > 3) r += `  • ...and ${lowStock.length - 3} more\n`;
         }
         
-        r += `\n  Total Inventory: ${totalItems} items\n`;
-        r += `  Still Needed: ${totalNeeded} items\n\n`;
+        r += '\n';
         
         // Weekly Performance Table
         r += '  WEEKLY PERFORMANCE\n';
@@ -1706,7 +1670,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         r += '  DAY          ONLINE   PARTIAL   OFFLINE\n';
         r += '  ' + '─'.repeat(42) + '\n';
         dailyStats.forEach(({ day, online, partial, offline }) => {
-            r += `  ${day.padEnd(12)} ${String(online).padStart(5)}   ${String(partial).padStart(5)}    ${String(offline).padStart(5)}\n`;
+            r += `  ${day.padEnd(14)} ${String(online).padStart(4)}   ${String(partial).padStart(5)}    ${String(offline).padStart(5)}\n`;
         });
         r += '  ' + '─'.repeat(42) + '\n\n';
         
@@ -1720,8 +1684,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 r += `  ${ship.name}\n`;
                 si.forEach(issue => {
                     const tag = issue.threat === 'Urgent' ? '[URGENT]' : '[Issue]';
-                    r += `    ${tag} ${(issue.title || issue.details).substring(0, 30)}\n`;
-                    r += `           Owner: ${issue.responsibility === 'REAP' ? 'REAP' : 'Ship'}\n`;
+                    r += `    ${tag} ${(issue.title || issue.details).substring(0, 45)}\n`;
+                    r += `          \n`;
                 });
             });
             r += '\n';
@@ -1733,7 +1697,29 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             r += '  ⚓ IN PORT\n';
             r += '  ' + '─'.repeat(32) + '\n';
             inPortShips.forEach(s => {
-                r += `  ${s.name.padEnd(8)} Returns: ${fmtDate(s.inPortUntil)}\n`;
+                r += `  ${s.name.padEnd(9)}Returns: ${fmtDate(s.inPortUntil)}\n`;
+            });
+            r += '\n';
+        }
+        
+        // Pending Installs
+        const pendingShips = ships.filter(s => s.pendingInstall);
+        if (pendingShips.length > 0) {
+            r += '  🔧 PENDING INSTALLS\n';
+            r += '  ' + '─'.repeat(32) + '\n';
+            pendingShips.forEach(s => {
+                r += `  ${s.name.padEnd(9)}Est: ${s.installDate ? fmtDate(s.installDate) : 'TBD'}\n`;
+            });
+            r += '\n';
+        }
+        
+        // Pending Deinstalls
+        const deinstallShips = ships.filter(s => s.pendingDeinstall);
+        if (deinstallShips.length > 0) {
+            r += '  🔻 PENDING DEINSTALLS\n';
+            r += '  ' + '─'.repeat(32) + '\n';
+            deinstallShips.forEach(s => {
+                r += `  ${s.name.padEnd(9)}Est: ${s.deinstallDate ? fmtDate(s.deinstallDate) : 'TBD'}\n`;
             });
             r += '\n';
         }
