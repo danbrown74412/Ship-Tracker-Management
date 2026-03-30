@@ -424,7 +424,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T007";
+    var APP_BUILD = "2026-02-27T008";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -1427,7 +1427,7 @@ function App({ currentUser, onLogout, isAdmin, pendingCount, onOpenAdminPanel, a
                 {page === 0 && <Dashboard ships={ships} setShips={setShips} issues={issues} setIssues={setIssues} dailyChecks={dailyChecks} parts={parts} installs={installs} toast={toast} setPage={setPage} setEditingShip={setEditingShip} globalSearch={globalSearch} setGlobalSearch={setGlobalSearch} searchRef={searchRef} logActivity={logActivity} activityLog={activityLog} currentUser={currentUser} allUsers={allUsers}/>}
                 {page === 1 && <DailyChecks ships={ships} setShips={setShips} checks={dailyChecks} setChecks={setDailyChecks} toast={toast} logActivity={logActivity}/>}
                 {page === 2 && <AddShip ships={ships} setShips={setShips} toast={toast} editing={editingShip} setEditing={setEditingShip} setPage={setPage} logActivity={logActivity}/>}
-                {page === 4 && <Inventory ships={ships} setShips={setShips} toast={toast} logActivity={logActivity}/>}
+                {page === 4 && <Inventory ships={ships} setShips={setShips} dailyChecks={dailyChecks} toast={toast} logActivity={logActivity}/>}
                 {page === 5 && <Installs ships={ships} installs={installs} setInstalls={setInstalls} toast={toast} logActivity={logActivity}/>}
                 {page === 6 && <Parts parts={parts} setParts={setParts} toast={toast} logActivity={logActivity}/>}
                 {page === 7 && <EmailStatus ships={ships} setShips={setShips} issues={issues} toast={toast} logActivity={logActivity} currentUser={currentUser} allUsers={allUsers}/>}
@@ -4690,7 +4690,7 @@ function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActi
 
 // ===== PART 3 - Remaining Pages =====
 
-function Inventory({ ships, setShips, toast, logActivity }) {
+function Inventory({ ships, setShips, dailyChecks, toast, logActivity }) {
     const [filter, setFilter] = useState('all');
     const [sel, setSel] = useState(null);
     const [form, setForm] = useState({ ciscoRouter: '', hddStar: '', hddData: '' });
@@ -4725,49 +4725,110 @@ function Inventory({ ships, setShips, toast, logActivity }) {
     };
     
     const exportCSV = () => { 
-        let csv = 'Hull,Type,Location,POC,Status,Cisco Router,HDD Star,HDD Data,CRNA1,CRNA2,Docs,Missing\n'; 
-        ships.sort(sortHull).forEach(s => {
-            const inPort = isShipInPort(s);
-            const st = getStatus(s);
-            const miss = getMissing(s).join('; ');
-            csv += `"${s.name}","${s.type}","${s.location||''}","${s.poc||''}","${inPort ? 'In Port' : 'Online'}","${s.ciscoRouter||''}","${s.hddStar||s.hdd||''}","${s.hddData||''}","${s.crna1||''}","${s.crna2||''}","${st}","${miss}"\n`;
-        }); 
+        const today = toDateString(new Date());
+        const fullReap = ships.filter(s => s.type === 'Full REAP').sort(sortHull);
+        const miniReap = ships.filter(s => s.type === 'Mini REAP').sort(sortHull);
+        let csv = 'Section,Hull#,VOIP Connection,StarPC/Primary AM,StarPC/Primary PM,StarPC/Primary Y/N,DataPC/Alternate AM,DataPC/Alternate PM,DataPC/Alternate Y/N,Ping AM (ms),Ping PM (ms),HD Space (GB),Total Data (MB)\n';
+        const addRows = (list, label) => {
+            list.forEach(s => {
+                const c = dailyChecks.find(dc => dc.shipId === s.id && dc.date === today) || {};
+                const priOn = c.statusAM ? 'Yes' : 'No';
+                const altOn = c.statusPM ? 'Yes' : 'No';
+                const voip = (c.statusAM || c.statusPM) ? 'Yes' : 'No';
+                csv += `"${label}","${s.name}","${voip}","${priOn}","${priOn}","${priOn}","${altOn}","${altOn}","${altOn}","${c.pingAM||0}","${c.pingPM||0}","${c.hdSpace||0}","0.00"\n`;
+            });
+        };
+        addRows(fullReap, 'Full REAP');
+        addRows(miniReap, 'Mini REAP');
         const blob = new Blob([csv], { type: 'text/csv' }), url = URL.createObjectURL(blob), a = document.createElement('a'); 
-        a.href = url; a.download = `Inventory_${toDateString(new Date())}.csv`; a.click(); 
-        logActivity('Exported inventory to CSV');
+        a.href = url; a.download = `REAP_Daily_${today}.csv`; a.click(); 
+        logActivity('Exported daily report to CSV');
         toast('CSV exported!', 'success'); 
     };
     
     const exportExcel = () => {
-        const headers = ['Hull','Type','Location','POC','Status','Cisco Router','HDD Star','HDD Data','CRNA1','CRNA2','Docs','Missing Items'];
-        const rows = [headers];
-        ships.sort(sortHull).forEach(s => {
-            const inPort = isShipInPort(s);
-            const st = getStatus(s);
-            const miss = getMissing(s).join(', ');
-            rows.push([
-                s.name, s.type, s.location||'', s.poc||'',
-                inPort ? 'In Port' : 'Online',
-                s.ciscoRouter||'---', s.hddStar||s.hdd||'---', s.hddData||'---',
-                s.crna1||'---', s.crna2||'---', st, miss
-            ]);
-        });
-        const ws = XLSX.utils.aoa_to_sheet(rows);
-        ws['!cols'] = [
-            {wch:12},{wch:10},{wch:16},{wch:18},{wch:9},
-            {wch:18},{wch:18},{wch:18},{wch:14},{wch:14},
-            {wch:12},{wch:24}
-        ];
+        const today = toDateString(new Date());
         const wb = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(wb, ws, 'Inventory');
-        XLSX.writeFile(wb, `REAP_Inventory_${toDateString(new Date())}.xlsx`);
-        logActivity('Exported inventory to Excel');
+
+        const buildSheet = (shipList, type) => {
+            const isFullReap = type === 'Full REAP';
+            const rows = [];
+            
+            // Header row 1 - section labels
+            if (isFullReap) {
+                rows.push([
+                    'Full\nREAP', 'VOIP\nConnection\n(Yes/No)', 'StarPC Connection (Yes/No)', '', '', 'DataPC Connection (Yes/No)', '', '', 'Average Ping Times\n(ms)', '', 'Hard Drive\nAvailable\nSpace (GB)', 'Total Data\nRecorded\non Ship', 'SPY Data\nRecorded\n(MB)', 'CND Data\nRecorded\n(MB)', 'WCS Data\nRecorded\n(MB)', 'Other Data\nElements\n(MB)', 'Number of\nFiles to\nProcess', 'Number of\nFiles Still in\nREAPZipQ'
+                ]);
+            } else {
+                rows.push([
+                    'Mini\nREAP', 'VOIP\nConnection\n(Yes/No)', 'Primary PC  Connection (Yes/No)', '', '', 'Alternate PC Connection (Yes/No)', '', '', 'Average Ping Times\n(ms)', '', 'Total Data\nRecorded\non Ship\n(MB)', 'Data From\nMedia (MB)', 'Data From\nData Diode\n(MB)', '', '', 'Number of\nFiles to\nProcess', 'Number of\nFiles Still in\nOutbox'
+                ]);
+            }
+            
+            // Header row 2 - sub columns
+            if (isFullReap) {
+                rows.push(['Hull#', 'Y/N', 'AM', 'PM', 'Y/N', 'AM', 'PM', 'Y/N', 'AM', 'PM', '', 'Daily', 'Daily', 'Daily', 'Daily', 'Daily', 'Daily', 'Daily']);
+            } else {
+                rows.push(['Hull#', 'Y/N', 'AM', 'PM', 'Y/N', 'AM', 'PM', 'Y/N', 'AM', 'PM', 'Daily', 'Daily', 'Daily', 'Daily', 'Daily', 'Daily', 'Daily']);
+            }
+            
+            // Data rows
+            shipList.sort(sortHull).forEach(s => {
+                const c = dailyChecks.find(dc => dc.shipId === s.id && dc.date === today) || {};
+                const priOn = c.statusAM ? 'Yes' : 'No';
+                const altOn = c.statusPM ? 'Yes' : 'No';
+                const voip = (c.statusAM || c.statusPM) ? 'Yes' : 'No';
+                const pingAM = c.pingAM ? Number(c.pingAM) || 0 : 0;
+                const pingPM = c.pingPM ? Number(c.pingPM) || 0 : 0;
+                const hdSpace = c.hdSpace ? Number(c.hdSpace) || 0 : 0;
+                
+                if (isFullReap) {
+                    rows.push([s.name, voip, priOn, priOn, priOn, altOn, altOn, altOn, pingAM, pingPM, hdSpace, 0, 0.00, 0.00, 0.00, 0.00, 0, 0]);
+                } else {
+                    rows.push([s.name, voip, priOn, priOn, priOn, altOn, altOn, altOn, pingAM, pingPM, hdSpace, 0, 0.00, 0.00, 0.00, 0, 0]);
+                }
+            });
+            
+            return rows;
+        };
+
+        const fullReap = ships.filter(s => s.type === 'Full REAP');
+        const miniReap = ships.filter(s => s.type === 'Mini REAP');
+        
+        // Build combined sheet with both sections
+        const fullRows = buildSheet(fullReap, 'Full REAP');
+        const gap = [[]]; // empty row between sections
+        const miniRows = buildSheet(miniReap, 'Mini REAP');
+        const allRows = [...fullRows, ...gap, ...miniRows];
+        
+        const ws = XLSX.utils.aoa_to_sheet(allRows);
+        
+        // Merge header cells for grouped columns
+        ws['!merges'] = [
+            // Full REAP header merges
+            { s: { r: 0, c: 2 }, e: { r: 0, c: 4 } },   // StarPC Connection
+            { s: { r: 0, c: 5 }, e: { r: 0, c: 7 } },   // DataPC Connection
+            { s: { r: 0, c: 8 }, e: { r: 0, c: 9 } },   // Ping Times
+            // Mini REAP header merges (offset by fullRows + gap)
+            { s: { r: fullRows.length + 1, c: 2 }, e: { r: fullRows.length + 1, c: 4 } },   // Primary PC
+            { s: { r: fullRows.length + 1, c: 5 }, e: { r: fullRows.length + 1, c: 7 } },   // Alternate PC
+            { s: { r: fullRows.length + 1, c: 8 }, e: { r: fullRows.length + 1, c: 9 } },   // Ping Times
+        ];
+        
+        // Column widths
+        ws['!cols'] = [
+            {wch:10},{wch:12},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:10},{wch:10},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:12},{wch:14}
+        ];
+        
+        XLSX.utils.book_append_sheet(wb, ws, 'REAP Daily');
+        XLSX.writeFile(wb, `REAP_Daily_Report_${today}.xlsx`);
+        logActivity('Exported REAP daily report to Excel');
         toast('Excel exported!', 'success');
     };
 
     return (
         <div className="page active">
-            <div className="page-header"><div className="page-header-left"><h1 className="page-title">Inventory</h1><p className="page-sub">Track asset documentation status</p></div><div className="btn-group"><button className="btn btn-secondary" onClick={exportCSV}>Export CSV</button><button className="btn btn-primary" onClick={exportExcel}>Export Excel</button></div></div>
+            <div className="page-header"><div className="page-header-left"><h1 className="page-title">Inventory</h1><p className="page-sub">Track asset documentation status</p></div><div className="btn-group"><button className="btn btn-secondary" onClick={exportCSV}>Export CSV</button><button className="btn btn-primary" onClick={exportExcel}>Export Daily Report</button></div></div>
             <div className="filters"><button className={`filter-btn ${filter==='all'?'active':''}`} onClick={() => setFilter('all')}>All Ships</button><button className={`filter-btn ${filter==='missing'?'active':''}`} onClick={() => setFilter('missing')}>Missing Docs</button><button className={`filter-btn ${filter==='complete'?'active':''}`} onClick={() => setFilter('complete')}>Complete</button><button className={`filter-btn ${filter==='inport'?'active':''}`} style={{borderColor:'var(--blue)',color: filter==='inport' ? '#fff' : 'var(--blue)',background: filter==='inport' ? 'var(--blue)' : 'transparent'}} onClick={() => setFilter(filter==='inport'?'all':'inport')}>⚓ In Port ({inPortCount})</button></div>
             
             {/* Edit Form at Top */}
