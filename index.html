@@ -424,7 +424,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T006";
+    var APP_BUILD = "2026-02-27T007";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -4119,16 +4119,41 @@ function DailyChecks({ ships, setShips, checks, setChecks, toast, logActivity })
     const [saveStatus, setSaveStatus] = useState('');
     const saveTimer = useRef(null);
     const inputRefs = useRef({});
+    const [reorderMode, setReorderMode] = useState(false);
 
-    const customOrder = [67, 70, 54, 56, 62, 63, 55, 57, 72, 77, 96, 98, 101, 103, 109, 111];
-    const sorted = useMemo(() => [...ships].sort((a, b) => {
-        const aNum = hullNum(a.name), bNum = hullNum(b.name);
-        const aIdx = customOrder.indexOf(aNum), bIdx = customOrder.indexOf(bNum);
-        if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
-        if (aIdx !== -1) return -1;
-        if (bIdx !== -1) return 1;
-        return aNum - bNum;
-    }), [ships]);
+    const defaultOrder = [67, 70, 54, 56, 62, 63, 55, 57, 72, 77, 96, 98, 101, 103, 109, 111];
+    const [shipOrder, setShipOrder] = useState(() => {
+        try { const s = localStorage.getItem('dailyChecksOrder'); if (s) return JSON.parse(s); } catch {}
+        return defaultOrder;
+    });
+    const saveOrder = (order) => { setShipOrder(order); localStorage.setItem('dailyChecksOrder', JSON.stringify(order)); };
+
+    const sorted = useMemo(() => {
+        const order = shipOrder;
+        return [...ships].sort((a, b) => {
+            const aNum = hullNum(a.name), bNum = hullNum(b.name);
+            const aIdx = order.indexOf(aNum), bIdx = order.indexOf(bNum);
+            if (aIdx !== -1 && bIdx !== -1) return aIdx - bIdx;
+            if (aIdx !== -1) return -1;
+            if (bIdx !== -1) return 1;
+            return aNum - bNum;
+        });
+    }, [ships, shipOrder]);
+
+    const moveShip = (shipName, dir) => {
+        const num = hullNum(shipName);
+        // Build full current order from sorted
+        const currentNums = sorted.map(s => hullNum(s.name));
+        const idx = currentNums.indexOf(num);
+        if (idx === -1) return;
+        const newIdx = idx + dir;
+        if (newIdx < 0 || newIdx >= currentNums.length) return;
+        const newOrder = [...currentNums];
+        [newOrder[idx], newOrder[newIdx]] = [newOrder[newIdx], newOrder[idx]];
+        saveOrder(newOrder);
+    };
+
+    const resetOrder = () => { saveOrder(defaultOrder); toast('Ship order reset to default', 'info'); };
 
     const getCheck = (id, d = date) => checks.find(c => c.shipId === id && c.date === d) || { id: genId('DC'), shipId: id, date: d, pingAM: '', pingPM: '', hdSpace: '', statusAM: true, statusPM: true, notes: '' };
 
@@ -4348,6 +4373,8 @@ function DailyChecks({ ships, setShips, checks, setChecks, toast, logActivity })
                     <p className="page-sub">Fleet status monitoring • {parseLocalDate(date).toLocaleDateString('en-US', {weekday:'long', month:'short', day:'numeric'})}</p>
                 </div>
                 <div className="btn-group">
+                    <button className={`btn btn-sm ${reorderMode ? 'btn-warning' : 'btn-secondary'}`} onClick={() => setReorderMode(!reorderMode)} title="Reorder ships">{reorderMode ? '✓ Done Reordering' : '↕ Reorder'}</button>
+                    {reorderMode && <button className="btn btn-sm btn-secondary" onClick={resetOrder}>↩ Reset Order</button>}
                     <button className={`btn btn-sm ${viewMode === 'table' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('table')}>Table</button>
                     <button className={`btn btn-sm ${viewMode === 'cards' ? 'btn-primary' : 'btn-secondary'}`} onClick={() => setViewMode('cards')}>Cards</button>
                     <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print"/></button>
@@ -4450,7 +4477,13 @@ function DailyChecks({ ships, setShips, checks, setChecks, toast, logActivity })
 
                         return (
                             <div key={s.id} className="check-row" style={{background: rowBg, borderLeft: status === 'pending' ? '3px solid var(--amber)' : status === 'deinstall' ? '3px solid var(--red)' : status === 'offline' ? '3px solid var(--red)' : status === 'partial' ? '3px solid var(--amber)' : status === 'inport' ? '3px solid var(--blue)' : '3px solid transparent'}}>
-                                <span style={{fontWeight:600,fontFamily:'JetBrains Mono',fontSize:'12px'}}>{s.name}</span>
+                                <span style={{fontWeight:600,fontFamily:'JetBrains Mono',fontSize:'12px',display:'flex',alignItems:'center',gap:'4px'}}>
+                                    {reorderMode && <span style={{display:'flex',flexDirection:'column',gap:'1px'}}>
+                                        <button style={{background:'none',border:'none',cursor:'pointer',padding:'0 2px',fontSize:'10px',color: idx === 0 ? 'var(--border)' : 'var(--text-muted)',lineHeight:1}} disabled={idx === 0} onClick={() => moveShip(s.name, -1)}>▲</button>
+                                        <button style={{background:'none',border:'none',cursor:'pointer',padding:'0 2px',fontSize:'10px',color: idx === sorted.length - 1 ? 'var(--border)' : 'var(--text-muted)',lineHeight:1}} disabled={idx === sorted.length - 1} onClick={() => moveShip(s.name, 1)}>▼</button>
+                                    </span>}
+                                    {s.name}
+                                </span>
                                 {(status === 'pending' || status === 'deinstall') ? (
                                     <span style={{gridColumn:'2 / -1',display:'flex',alignItems:'center',justifyContent:'center',gap:'12px',padding:'8px 0'}}>
                                         <span style={{fontSize:'13px',fontWeight:600,color: status === 'pending' ? 'var(--amber)' : 'var(--red)'}}>
@@ -4505,14 +4538,20 @@ function DailyChecks({ ships, setShips, checks, setChecks, toast, logActivity })
             {/* Cards View */}
             {viewMode === 'cards' && (
                 <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fill, minmax(280px, 1fr))',gap:'12px',marginTop:'16px'}}>
-                    {sorted.map(s => {
+                    {sorted.map((s, cIdx) => {
                         const c = getCheck(s.id);
                         const status = getRowStatus(s, c);
 
                         return (
                             <div key={s.id} style={{padding:'16px',background:'var(--bg-card)',borderRadius:'8px',border:'1px solid var(--border)',borderLeft: `4px solid ${status === 'online' ? 'var(--green)' : status === 'offline' ? 'var(--red)' : status === 'partial' ? 'var(--amber)' : status === 'pending' ? 'var(--amber)' : status === 'deinstall' ? 'var(--red)' : 'var(--blue)'}`}}>
                                 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
-                                    <div style={{fontWeight:700,fontSize:'16px',fontFamily:'JetBrains Mono'}}>{s.name}</div>
+                                    <div style={{display:'flex',alignItems:'center',gap:'8px'}}>
+                                        {reorderMode && <span style={{display:'flex',flexDirection:'column',gap:'1px'}}>
+                                            <button style={{background:'none',border:'none',cursor:'pointer',padding:'0 3px',fontSize:'12px',color: cIdx === 0 ? 'var(--border)' : 'var(--text-muted)',lineHeight:1}} disabled={cIdx === 0} onClick={() => moveShip(s.name, -1)}>▲</button>
+                                            <button style={{background:'none',border:'none',cursor:'pointer',padding:'0 3px',fontSize:'12px',color: cIdx === sorted.length - 1 ? 'var(--border)' : 'var(--text-muted)',lineHeight:1}} disabled={cIdx === sorted.length - 1} onClick={() => moveShip(s.name, 1)}>▼</button>
+                                        </span>}
+                                        <div style={{fontWeight:700,fontSize:'16px',fontFamily:'JetBrains Mono'}}>{s.name}</div>
+                                    </div>
                                     <span className={`badge badge-${status === 'online' ? 'ok' : status === 'offline' ? 'urgent' : status === 'partial' ? 'mild' : 'info'}`} style={status === 'pending' ? {background:'var(--amber)',color:'#fff'} : status === 'deinstall' ? {background:'var(--red)',color:'#fff'} : {}}>
                                         {status === 'online' ? '✓ Online' : status === 'offline' ? '✕ Offline' : status === 'partial' ? '⚠ Partial' : status === 'pending' ? '🔧 Pending Install' : status === 'deinstall' ? '🔻 Pending Deinstall' : '⚓ In Port'}
                                     </span>
