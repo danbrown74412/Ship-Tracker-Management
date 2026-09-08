@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T084";
+    var APP_BUILD = "2026-02-27T085";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -2096,6 +2096,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             }
         };
         
+        // Save to localStorage
         var existing = [];
         try { existing = JSON.parse(localStorage.getItem('emailParseHistory') || '[]'); } catch(e) {}
         if (!existing.some(function(e) { return e.id === newEntry.id; })) {
@@ -2103,6 +2104,9 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             localStorage.setItem('emailParseHistory', JSON.stringify(updated));
             setEmailHistory(updated);
         }
+        
+        // Save to Firebase so ALL users see it
+        db.collection('acceptedEmails').doc(newEntry.id).set(newEntry);
         
         // Update ship
         setShips(function(p) { return p.map(function(sh) {
@@ -2127,6 +2131,33 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         logActivity('Rejected incoming email: ' + (item._cleanSubject || '').substring(0, 50));
         toast('Email dismissed', 'info');
     };
+    
+    // Sync accepted emails from Firebase — keeps all users in sync
+    useEffect(function() {
+        var unsub = db.collection('acceptedEmails').onSnapshot(function(snapshot) {
+            var firebaseEmails = [];
+            snapshot.forEach(function(doc) { firebaseEmails.push(doc.data()); });
+            if (firebaseEmails.length === 0) return;
+            
+            // Merge with localStorage
+            var local = [];
+            try { local = JSON.parse(localStorage.getItem('emailParseHistory') || '[]'); } catch(e2) {}
+            var merged = local.slice();
+            var changed = false;
+            firebaseEmails.forEach(function(fe) {
+                if (!merged.some(function(m) { return m.id === fe.id; })) {
+                    merged.push(fe);
+                    changed = true;
+                }
+            });
+            if (changed) {
+                merged.sort(function(a, b) { return new Date(b.timestamp) - new Date(a.timestamp); });
+                localStorage.setItem('emailParseHistory', JSON.stringify(merged));
+                setEmailHistory(merged);
+            }
+        });
+        return function() { unsub(); };
+    }, []);
     
     const [emailHistoryImported, setEmailHistoryImported] = useState(false);
     const [emailHistoryModal, setEmailHistoryModal] = useState(false);
