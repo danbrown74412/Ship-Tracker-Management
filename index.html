@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T080";
+    var APP_BUILD = "2026-02-27T082";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -3447,7 +3447,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         <button className="btn btn-secondary" style={{borderRadius:'12px',fontWeight:600,padding:'14px 16px',fontSize:'12px',whiteSpace:'nowrap',alignSelf:'stretch'}} onClick={() => scanEmailHistory(sel.id, sel.name)}>🔍 Scan History</button>
                                         <div style={{flex:'1 1 0',padding:'14px 18px',background:'var(--bg-input)',borderRadius:'12px',display:'flex',flexDirection:'column',justifyContent:'center',minWidth:'120px'}}>
                                             <div style={{fontSize:'9px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'4px'}}>LAST CONTACT</div>
-                                            <div className="rel-time tip" data-tip={sel.lastContact ? fmtDate(sel.lastContact) : 'Never'} style={{fontSize:'16px',fontWeight:700,color: sel.lastContact ? 'var(--text)' : 'var(--red)'}}>{sel.lastContact ? relTime(sel.lastContact) : 'Never'}</div>
+                                            {(() => { var shipEmails = emailHistory.filter(function(h) { return h.shipId === sel.id; }).sort(function(a,b) { return new Date(b.timestamp) - new Date(a.timestamp); }); var lastDate = shipEmails.length > 0 ? shipEmails[0].timestamp : sel.lastContact; return React.createElement('div', {className:'rel-time tip', 'data-tip': lastDate ? fmtDate(lastDate) : 'Never', style:{fontSize:'16px',fontWeight:700,color: lastDate ? 'var(--text)' : 'var(--red)'}}, lastDate ? relTime(lastDate) : 'Never'); })()}
                                         </div>
                                         <div style={{flex:'1 1 0',padding:'14px 18px',background:'var(--bg-input)',borderRadius:'12px',display:'flex',flexDirection:'column',justifyContent:'center',minWidth:'120px'}}>
                                             <div style={{fontSize:'9px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1px',marginBottom:'4px'}}>SHIP POC</div>
@@ -3598,7 +3598,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                 var bubbleBorder = isTeamSent ? 'rgba(25,169,116,0.3)' : 'rgba(59,130,246,0.3)';
                                                 var isWaiting = h.result ? h.result.waitingReply : false;
                                                 
-                                                return React.createElement('div', {key: h.id, style: {display:'flex',flexDirection:'column',alignItems: isTeamSent ? 'flex-end' : 'flex-start',maxWidth:'100%'}},
+                                                return React.createElement('div', {key: h.id, style: {display:'flex',flexDirection:'column',alignItems:'flex-start',maxWidth:'100%'}},
                                                     
                                                     // Sender name + timestamp header — always top left
                                                     React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',fontSize:'10px',color:'var(--text-muted)'}},
@@ -3608,11 +3608,15 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                         isWaiting ? React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'var(--blue-glow)',color:'var(--blue)'}}, '\u23F3 Waiting') : null
                                                     ),
                                                     
+                                                    // Bubble wrapper — aligned right for team, left for ship
+                                                    React.createElement('div', {style: {display:'flex',width:'100%',justifyContent: isTeamSent ? 'flex-end' : 'flex-start'}},
+                                                    
                                                     // Chat bubble
                                                     React.createElement('div', {style: {maxWidth:'80%',padding:'12px 16px',borderRadius: isTeamSent ? '16px 16px 4px 16px' : '16px 16px 16px 4px',background: bubbleBg,border: '1px solid ' + bubbleBorder,position:'relative'}},
                                                         // Body text only — no subject in bubble
                                                         (displayText || summary) ? React.createElement('div', {style: {fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6',whiteSpace:'pre-wrap',maxHeight:'200px',overflow:'auto'}}, displayText || summary) : null
-                                                    ),
+                                                    )
+                                                    ), // close bubble wrapper
                                                     
                                                     // Actions row
                                                     React.createElement('div', {style: {display:'flex',gap:'6px',marginTop:'4px',fontSize:'10px'}},
