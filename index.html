@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T086";
+    var APP_BUILD = "2026-02-27T087";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -2050,7 +2050,23 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 })) return false;
                 return true;
             });
-            setPendingEmails(deduped);
+            // Group by threadGroup — threads show as one card
+            var grouped = [];
+            var threadGroups = {};
+            deduped.forEach(function(item) {
+                var tg = item.threadGroup || '';
+                if (tg && tg.length > 0) {
+                    if (!threadGroups[tg]) {
+                        threadGroups[tg] = { items: [], matchedShip: item.matchedShip, _isOutgoing: item._isOutgoing, _cleanSubject: item._cleanSubject, senderName: item.senderName, senderEmail: item.senderEmail, toName: item.toName, toEmail: item.toEmail, receivedAt: item.receivedAt, importedBy: item.importedBy, threadGroup: tg, body: item.body, subject: item.subject, _docId: item._docId };
+                        grouped.push(threadGroups[tg]);
+                    }
+                    threadGroups[tg].items.push(item);
+                } else {
+                    item.items = [item];
+                    grouped.push(item);
+                }
+            });
+            setPendingEmails(grouped);
         });
         return function() { unsub(); };
     }, [ships]);
@@ -2071,6 +2087,19 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     };
     
     var acceptIncomingEmail = function(item) {
+        // If this is a thread group, accept all items in it
+        var itemsToAccept = item.items || [item];
+        itemsToAccept.forEach(function(singleItem) {
+            acceptSingleEmail(singleItem);
+        });
+        var shipLabel = item.matchedShip || 'Unknown';
+        var count = itemsToAccept.length;
+        toast('\u2705 ' + count + ' email' + (count > 1 ? 's' : '') + ' added to ' + shipLabel, 'success');
+        var arrow = item._isOutgoing ? '\u2192 Sent' : '\u2190 Reply';
+        logActivity('Accepted ' + count + ' email(s): ' + shipLabel + ' ' + arrow + ' | ' + (item._cleanSubject || '').substring(0, 50), { ship: shipLabel });
+    };
+    
+    var acceptSingleEmail = function(item) {
         var ship = ships.find(function(s) { return s.name === item.matchedShip; });
         if (!ship) { toast('Ship not found: ' + item.matchedShip, 'error'); return; }
         
@@ -2138,15 +2167,16 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         
         // Mark processed in Firebase
         db.collection('incomingEmails').doc(item._docId).update({ processed: true, accepted: true, processedAt: new Date().toISOString() });
-        
-        var arrow = item._isOutgoing ? '\u2192 Sent' : '\u2190 Reply';
-        logActivity('Accepted email: ' + ship.name + ' ' + arrow + ' | ' + (item._cleanSubject || '').substring(0, 50), { ship: ship.name });
-        toast('\u2705 Email added to ' + ship.name, 'success');
     };
     
     // Reject/delete an incoming email
     var rejectIncomingEmail = function(item) {
-        db.collection('incomingEmails').doc(item._docId).update({ processed: true, accepted: false, processedAt: new Date().toISOString() });
+        var itemsToReject = item.items || [item];
+        itemsToReject.forEach(function(singleItem) {
+            db.collection('incomingEmails').doc(singleItem._docId).update({ processed: true, accepted: false, processedAt: new Date().toISOString() });
+        });
+        logActivity('Rejected ' + itemsToReject.length + ' incoming email(s): ' + (item._cleanSubject || '').substring(0, 50));
+        toast('Email dismissed', 'info');
         logActivity('Rejected incoming email: ' + (item._cleanSubject || '').substring(0, 50));
         toast('Email dismissed', 'info');
     };
@@ -3244,7 +3274,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                     React.createElement('span', {style: {padding:'2px 8px',borderRadius:'4px',fontSize:'10px',fontWeight:700,background: item._isOutgoing ? 'var(--blue-glow)' : 'var(--amber-glow)',color: dirColor}}, dirLabel),
                                                     item.importedBy ? React.createElement('span', {style: {fontSize:'10px',color:'var(--text-muted)'}}, 'via ' + item.importedBy) : null
                                                 ),
-                                                React.createElement('div', {style: {fontSize:'13px',fontWeight:600,marginBottom:'4px'}}, item._cleanSubject || item.subject || 'No subject'),
+                                                React.createElement('div', {style: {fontSize:'13px',fontWeight:600,marginBottom:'4px'}}, 
+                                                    item._cleanSubject || item.subject || 'No subject',
+                                                    item.items && item.items.length > 1 ? React.createElement('span', {style: {marginLeft:'8px',fontSize:'10px',padding:'2px 8px',borderRadius:'10px',background:'var(--primary-glow)',color:'var(--primary)',fontWeight:700}}, item.items.length + ' messages') : null
+                                                ),
                                                 (item.body && item.body.length > 0) ? React.createElement('div', {style: {fontSize:'11px',color:'var(--text-dim)',lineHeight:'1.5',marginBottom:'6px',padding:'8px 10px',background:'var(--bg-card)',borderRadius:'6px',borderLeft:'2px solid var(--border)',maxHeight:'60px',overflow:'hidden',whiteSpace:'pre-wrap'}}, 
                                                     item.body.replace(/From:.*?(?=\n|$)/gi, '').replace(/Sent:.*?(?=\n|$)/gi, '').replace(/To:.*?(?=\n|$)/gi, '').replace(/Cc:.*?(?=\n|$)/gi, '').replace(/<[^>]*@[^>]*>/g, '').replace(/_{5,}/g, '').replace(/-{5,}/g, '').replace(/\n{2,}/g, ' ').trim().substring(0, 200)
                                                 ) : null,
