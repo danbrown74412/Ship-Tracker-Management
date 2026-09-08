@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T083";
+    var APP_BUILD = "2026-02-27T084";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -3598,10 +3598,11 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                 var bubbleBorder = isTeamSent ? 'rgba(25,169,116,0.3)' : 'rgba(59,130,246,0.3)';
                                                 var isWaiting = h.result ? h.result.waitingReply : false;
                                                 
-                                                return React.createElement('div', {key: h.id, style: {display:'flex',flexDirection:'column',alignItems: isTeamSent ? 'flex-end' : 'flex-start',maxWidth:'100%'}},
+                                                return React.createElement('div', {key: h.id, style: {display:'flex',justifyContent: isTeamSent ? 'flex-end' : 'flex-start',maxWidth:'100%'}},
+                                                    React.createElement('div', {style: {display:'flex',flexDirection:'column',alignItems:'flex-start',maxWidth:'80%'}},
                                                     
-                                                    // Sender name + timestamp — left-aligned above its own bubble
-                                                    React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',fontSize:'10px',color:'var(--text-muted)',maxWidth:'80%'}},
+                                                    // Sender name + timestamp — always left edge of bubble
+                                                    React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',fontSize:'10px',color:'var(--text-muted)'}},
                                                         React.createElement('span', {style: {fontWeight:700,color: bubbleColor}}, isFromShip ? '\uD83D\uDEA2 ' + senderName.replace('Ship (', '').replace(')', '') : senderName),
                                                         React.createElement('span', null, fmtDate(h.timestamp)),
                                                         isTeamSent ? React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'rgba(25,169,116,0.15)',color:'var(--primary)',fontWeight:600}}, '\u2192 Sent') : React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'rgba(59,130,246,0.15)',color:'var(--blue)',fontWeight:600}}, '\u2190 Reply'),
@@ -3609,7 +3610,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                     ),
                                                     
                                                     // Chat bubble
-                                                    React.createElement('div', {style: {maxWidth:'80%',padding:'12px 16px',borderRadius: isTeamSent ? '16px 16px 4px 16px' : '16px 16px 16px 4px',background: bubbleBg,border: '1px solid ' + bubbleBorder,position:'relative'}},
+                                                    React.createElement('div', {style: {padding:'12px 16px',borderRadius: isTeamSent ? '16px 16px 4px 16px' : '16px 16px 16px 4px',background: bubbleBg,border: '1px solid ' + bubbleBorder}},
                                                         // Body text only — no subject in bubble
                                                         (displayText || summary) ? React.createElement('div', {style: {fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6',whiteSpace:'pre-wrap',maxHeight:'200px',overflow:'auto'}}, displayText || summary) : null
                                                     ),
@@ -3619,6 +3620,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                         React.createElement('button', {className:'btn btn-sm btn-secondary', style:{padding:'2px 8px',fontSize:'9px'}, onClick: function(e) { e.stopPropagation(); setEditEmailEntry(h); setEditEmailForm({date: h.timestamp ? h.timestamp.substring(0,10) : '', time: h.timestamp ? h.timestamp.substring(11,16) : '', summary: summary, emailText: h.emailText || '', contactedBy: rawName || ''}); }}, '\u270F\uFE0F Edit'),
                                                         React.createElement('button', {className:'btn btn-sm', style:{padding:'2px 8px',fontSize:'9px',color:'var(--red)'}, onClick: function(e) { e.stopPropagation(); if (confirm('Delete this email entry?')) { var updated = emailHistory.filter(function(x) { return x.id !== h.id; }); setEmailHistory(updated); localStorage.setItem('emailParseHistory', JSON.stringify(updated)); logActivity('Deleted email entry from ' + sel.name); toast('Email entry deleted', 'info'); } }}, '\uD83D\uDDD1\uFE0F')
                                                     )
+                                                    ) // close inner wrapper
                                                 );
                                             })}
                                         </div>
