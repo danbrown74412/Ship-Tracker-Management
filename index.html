@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T077";
+    var APP_BUILD = "2026-02-27T078";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -3576,146 +3576,51 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                             <button className="btn btn-primary" onClick={openContactModal}>✉️ Log First Email</button>
                                         </div>
                                     ) : (
-                                        <div style={{position:'relative',paddingLeft:'28px'}}>
-                                            {/* Vertical timeline line */}
-                                            <div style={{position:'absolute',left:'10px',top:'6px',bottom:'6px',width:'2px',background:'var(--border)',borderRadius:'1px'}}></div>
+                                        <div style={{display:'flex',flexDirection:'column',gap:'8px',maxHeight:'600px',overflow:'auto',padding:'8px 0'}}>
                                             
-                                            {emailHistory.filter(h => h.shipId === sel.id).sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp)).map((h, idx, arr) => {
-                                                const isLatest = idx === 0;
-                                                const isIssue = h.result?.issue?.hasIssue;
-                                                const rawName = h.result?.sender?.name 
-                                                    || h.result?.contactedBy 
-                                                    || (h.changes?.find(c => c.startsWith('By: '))?.replace('By: ', ''))
-                                                    || null;
-                                                const isFromShip = rawName === '__SHIP__' || rawName === 'Ship' || rawName === '🚢 Ship';
-                                                const senderName = isFromShip ? null : rawName;
-                                                const summary = h.result?.emailSummary || '';
-                                                const age = Math.floor((Date.now() - new Date(h.timestamp).getTime()) / 86400000);
-                                                const isWaiting = h.result?.waitingReply;
-                                                const isExpanded = isLatest || expandedEmails[h.id];
-                                                const dotColor = isIssue ? (h.result.issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)') 
-                                                    : isWaiting ? 'var(--blue)' : 'var(--green)';
+                                            {emailHistory.filter(h => h.shipId === sel.id).sort((a, b) => new Date(a.timestamp) - new Date(b.timestamp)).map((h, idx, arr) => {
+                                                var rawName = h.result ? (h.result.sender ? h.result.sender.name : h.result.contactedBy) : null;
+                                                var isFromShip = rawName === '__SHIP__' || rawName === 'Ship' || (rawName && rawName.indexOf('Ship') === 0);
+                                                var isTeamSent = !isFromShip;
+                                                var senderName = isFromShip ? (h.result.contactedBy || 'Ship') : (rawName || 'Team');
+                                                senderName = mapTeamName ? mapTeamName(senderName, h.fromEmail || '') : senderName;
+                                                if (senderName === '__SHIP__') senderName = 'Ship';
+                                                var summary = h.result ? (h.result.emailSummary || '') : '';
+                                                var bodyText = h.emailText || '';
+                                                if (bodyText === 'Marked as contacted' || bodyText === summary) bodyText = '';
+                                                if (bodyText) {
+                                                    bodyText = bodyText.replace(/From:.*?(?=\n|$)/gi, '').replace(/Sent:.*?(?=\n|$)/gi, '').replace(/To:.*?(?=\n|$)/gi, '').replace(/Cc:.*?(?=\n|$)/gi, '').replace(/Subject:.*?(?=\n|$)/gi, '').replace(/<[^>]*@[^>]*>/g, '').replace(/_{10,}/g, '').replace(/-{10,}/g, '').replace(/\n{3,}/g, '\n\n').trim();
+                                                }
+                                                if (!bodyText && h.result && h.result.emailSummary && h.result.emailSummary !== summary) bodyText = h.result.emailSummary;
+                                                var displayText = bodyText || summary || '';
+                                                var bubbleColor = isTeamSent ? 'var(--primary)' : 'var(--blue)';
+                                                var bubbleBg = isTeamSent ? 'rgba(25,169,116,0.12)' : 'rgba(59,130,246,0.12)';
+                                                var bubbleBorder = isTeamSent ? 'rgba(25,169,116,0.3)' : 'rgba(59,130,246,0.3)';
+                                                var isWaiting = h.result ? h.result.waitingReply : false;
                                                 
-                                                return (
-                                                <div key={h.id} style={{position:'relative',marginBottom: isLatest ? '20px' : idx < arr.length - 1 ? '6px' : '0',cursor: isLatest ? 'default' : 'pointer'}} onClick={() => { if (!isLatest) setExpandedEmails(prev => ({...prev, [h.id]: !prev[h.id]})); }}>
+                                                return React.createElement('div', {key: h.id, style: {display:'flex',flexDirection:'column',alignItems: isTeamSent ? 'flex-end' : 'flex-start',maxWidth:'100%'}},
                                                     
-                                                    {/* Timeline dot */}
-                                                    <div style={{position:'absolute',left:'-24px',top: isLatest ? '22px' : '16px',width: isLatest ? '16px' : '10px',height: isLatest ? '16px' : '10px',borderRadius:'50%',background: dotColor,border: isLatest ? `3px solid var(--bg-main)` : `2px solid var(--bg-main)`,boxShadow: isLatest ? `0 0 0 4px ${dotColor}44, 0 0 16px ${dotColor}55` : `0 0 0 2px ${dotColor}22`,zIndex:2,transition:'all 0.2s',marginLeft: isLatest ? '-4px' : '-1px'}}></div>
+                                                    // Sender name + timestamp header
+                                                    React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',fontSize:'10px',color:'var(--text-muted)',flexDirection: isTeamSent ? 'row-reverse' : 'row'}},
+                                                        React.createElement('span', {style: {fontWeight:700,color: bubbleColor}}, isFromShip ? '\uD83D\uDEA2 ' + senderName.replace('Ship (', '').replace(')', '') : senderName),
+                                                        React.createElement('span', null, fmtDate(h.timestamp)),
+                                                        isTeamSent ? React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'rgba(25,169,116,0.15)',color:'var(--primary)',fontWeight:600}}, '\u2192 Sent') : React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'rgba(59,130,246,0.15)',color:'var(--blue)',fontWeight:600}}, '\u2190 Reply'),
+                                                        isWaiting ? React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'var(--blue-glow)',color:'var(--blue)'}}, '\u23F3 Waiting') : null
+                                                    ),
                                                     
-                                                    {/* Separator label between latest and history */}
-                                                    {idx === 1 && arr.length > 1 && (
-                                                        <div style={{fontSize:'9px',fontWeight:700,color:'var(--text-muted)',letterSpacing:'1.5px',padding:'4px 0 8px',marginLeft:'-4px',borderTop:'1px solid var(--border)',marginTop:'4px',paddingTop:'10px'}}>▾ PREVIOUS ({arr.length - 1})</div>
-                                                    )}
+                                                    // Chat bubble
+                                                    React.createElement('div', {style: {maxWidth:'80%',padding:'12px 16px',borderRadius: isTeamSent ? '16px 16px 4px 16px' : '16px 16px 16px 4px',background: bubbleBg,border: '1px solid ' + bubbleBorder,position:'relative'}},
+                                                        // Subject line
+                                                        summary ? React.createElement('div', {style: {fontSize:'12px',fontWeight:700,color:'var(--text)',marginBottom: displayText ? '6px' : '0'}}, summary) : null,
+                                                        // Body text
+                                                        displayText && displayText !== summary ? React.createElement('div', {style: {fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6',whiteSpace:'pre-wrap',maxHeight:'200px',overflow:'auto'}}, displayText) : null
+                                                    ),
                                                     
-                                                    {/* Entry card */}
-                                                    <div style={{padding: isLatest ? '20px 22px' : isExpanded ? '16px 18px' : '12px 16px',borderRadius: isLatest ? '16px' : '10px',background: isLatest ? `linear-gradient(135deg, var(--bg-card), ${dotColor}08)` : isExpanded ? 'var(--bg-card)' : 'var(--bg-card)',border: isLatest ? `2px solid ${dotColor}55` : isExpanded ? `1px solid ${dotColor}33` : '1px solid var(--border)',transition:'all 0.15s',boxShadow: isLatest ? `0 4px 24px ${dotColor}18, 0 0 0 1px ${dotColor}15, inset 0 1px 0 rgba(255,255,255,0.03)` : 'none'}}>
-                                                        
-                                                        {/* Header row */}
-                                                        <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
-                                                            {/* Avatar for latest only */}
-                                                            {isLatest && <div style={{width:'42px',height:'42px',borderRadius:'12px',background: isFromShip ? 'linear-gradient(135deg, rgba(59,130,246,0.25), rgba(59,130,246,0.10))' : `linear-gradient(135deg, ${dotColor}25, ${dotColor}10)`,border: isFromShip ? '2px solid var(--blue)' : `2px solid ${dotColor}`,display:'flex',alignItems:'center',justifyContent:'center',fontSize: isFromShip ? '20px' : '14px',fontWeight:800,color: isFromShip ? 'var(--blue)' : dotColor,flexShrink:0}}>{isFromShip ? '🚢' : (senderName ? senderName.split(' ').map(w => w[0]).join('').substring(0,2).toUpperCase() : '—')}</div>}
-                                                            
-                                                            <div style={{flex:1,minWidth:0}}>
-                                                                <div style={{display:'flex',alignItems:'center',gap:'8px',flexWrap:'wrap'}}>
-                                                                    <span style={{fontSize: isLatest ? '16px' : '13px',fontWeight: isLatest ? 800 : 700,color: isFromShip ? 'var(--blue)' : 'var(--text)'}}>
-                                                                        {isFromShip ? '🚢 Reply from Ship' : (senderName || <span style={{color:'var(--text-muted)',fontWeight:400,fontStyle:'italic'}}>Unknown</span>)}
-                                                                    </span>
-                                                                    {!isFromShip && !isLatest && senderName && <span style={{fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'var(--primary-glow)',color:'var(--primary)',border:'1px solid var(--primary)',fontWeight:600,marginLeft:'2px'}}>→ Sent</span>}
-                                                                    {isFromShip && !isLatest && <span style={{fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'var(--blue-glow)',color:'var(--blue)',border:'1px solid var(--blue)',fontWeight:600,marginLeft:'2px'}}>← Reply</span>}
-                                                                    
-                                                                    {isLatest && <span style={{fontSize:'9px',fontWeight:700,padding:'3px 10px',borderRadius:'10px',background: isFromShip ? 'linear-gradient(135deg, var(--blue), rgba(59,130,246,0.8))' : `linear-gradient(135deg, ${dotColor}, ${dotColor}cc)`,color:'#fff',letterSpacing:'0.5px',boxShadow: isFromShip ? '0 2px 8px rgba(59,130,246,0.33)' : `0 2px 8px ${dotColor}33`}}>{isFromShip ? '← LATEST REPLY' : '→ LATEST SENT'}</span>}
-                                                                    {isWaiting && <span style={{fontSize:'9px',fontWeight:600,padding:'2px 8px',borderRadius:'10px',background:'var(--blue-glow)',color:'var(--blue)',border:'1px solid var(--blue)'}}>⏳ Waiting</span>}
-                                                                    {isIssue && <span style={{fontSize:'9px',fontWeight:600,padding:'2px 8px',borderRadius:'10px',background: h.result.issue.threat === 'Urgent' ? 'var(--red-glow)' : 'var(--amber-glow)',color: h.result.issue.threat === 'Urgent' ? 'var(--red)' : 'var(--amber)'}}>{h.result.issue.threat === 'Urgent' ? '🚨 Urgent' : '⚠️ Issue'}</span>}
-                                                                </div>
-                                                                {isLatest && summary && (
-                                                                    <div style={{fontSize:'13px',color:'var(--text-dim)',marginTop:'6px',lineHeight:'1.6'}}>{summary}</div>
-                                                                )}
-                                                            </div>
-                                                            
-                                                            <div style={{display:'flex',flexDirection:'column',alignItems:'flex-end',gap:'2px',flexShrink:0}}>
-                                                                <span style={{fontSize: isLatest ? '11px' : '11px',color:'var(--text-dim)',whiteSpace:'nowrap',fontWeight:500}}>{fmtDate(h.timestamp)}</span>
-                                                                {age > 0 && <span style={{fontSize:'10px',fontWeight:600,color: age > 14 ? 'var(--red)' : age > 7 ? 'var(--amber)' : 'var(--text-muted)'}}>{age}d ago</span>}
-                                                            </div>
-                                                            
-                                                            {!isLatest && <span style={{fontSize:'10px',color:'var(--text-muted)',transition:'transform 0.15s',transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)',flexShrink:0}}>▾</span>}
-                                                        </div>
-                                                        
-                                                        {/* Summary preview (collapsed non-latest only) */}
-                                                        {!isLatest && !isExpanded && summary && (
-                                                            <div style={{fontSize:'12px',color:'var(--text-dim)',marginTop:'5px',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap',lineHeight:'1.4'}}>{summary}</div>
-                                                        )}
-                                                        
-                                                        {/* Expanded content */}
-                                                        {isExpanded && (
-                                                            <div style={{marginTop: isLatest ? '14px' : '12px'}}>
-                                                                
-                                                                {/* Issue callout */}
-                                                                {isIssue && h.result.issue.details && (
-                                                                    <div style={{padding:'10px 14px',marginBottom:'12px',borderRadius:'10px',background: h.result.issue.threat === 'Urgent' ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',border:`1px solid ${h.result.issue.threat === 'Urgent' ? 'rgba(239,68,68,0.25)' : 'rgba(245,158,11,0.25)'}`,fontSize:'12px',lineHeight:'1.6',display:'flex',gap:'10px',alignItems:'flex-start'}}>
-                                                                        <span style={{flexShrink:0,fontSize:'16px'}}>{h.result.issue.threat === 'Urgent' ? '🚨' : '⚠️'}</span>
-                                                                        <span style={{fontWeight:500}}>{h.result.issue.details}</span>
-                                                                    </div>
-                                                                )}
-                                                                
-                                                                {/* Summary for non-latest expanded */}
-                                                                {!isLatest && summary && (
-                                                                    <div style={{fontSize:'13px',color:'var(--text)',lineHeight:'1.7',padding:'12px 14px',background:'var(--bg-input)',borderRadius:'10px',borderLeft:'3px solid ' + dotColor,marginBottom:'10px'}}>
-                                                                        {summary}
-                                                                    </div>
-                                                                )}
-                                                                
-                                                                {/* Email body — show directly for ALL emails */}
-                                                                {(() => {
-                                                                    var bodyText = h.emailText || '';
-                                                                    if (bodyText === 'Marked as contacted' || bodyText === summary) bodyText = '';
-                                                                    if (bodyText) {
-                                                                        bodyText = bodyText.replace(/From:.*?(?=\n|$)/gi, '').replace(/Sent:.*?(?=\n|$)/gi, '').replace(/To:.*?(?=\n|$)/gi, '').replace(/Cc:.*?(?=\n|$)/gi, '').replace(/Subject:.*?(?=\n|$)/gi, '').replace(/<[^>]*@[^>]*>/g, '').replace(/_{10,}/g, '').replace(/-{10,}/g, '').replace(/\n{3,}/g, '\n\n').trim();
-                                                                    }
-                                                                    // Fallback: if no body text, show notes from the entry
-                                                                    if (!bodyText && h.result && h.result.emailSummary && h.result.emailSummary !== summary) {
-                                                                        bodyText = h.result.emailSummary;
-                                                                    }
-                                                                    if (!bodyText) return null;
-                                                                    return React.createElement('div', {style: {padding:'12px 14px',marginTop:'6px',background:'var(--bg-input)',borderRadius:'10px',fontSize:'12px',whiteSpace:'pre-wrap',maxHeight:'250px',overflow:'auto',lineHeight:'1.6',color:'var(--text-dim)'}}, bodyText);
-                                                                })()}
-                                                                
-                                                                {/* Changes */}
-                                                                {h.changes?.length > 0 && (
-                                                                    <div style={{marginTop:'8px',fontSize:'11px',color:'var(--green)',fontWeight:500}}>
-                                                                        ✓ {h.changes.filter(c => !c.startsWith('By:')).join(' · ')}
-                                                                    </div>
-                                                                )}
-                                                                
-                                                                {/* Actions */}
-                                                                <div style={{display:'flex',gap:'8px',marginTop:'14px',paddingTop:'12px',borderTop:'1px solid var(--border)',alignItems:'center',flexWrap:'wrap'}}>
-                                                                    <button style={{padding:'7px 16px',fontSize:'11px',background:'var(--primary)',color:'#000',borderRadius:'8px',border:'none',cursor:'pointer',fontWeight:700}} onClick={(e) => { e.stopPropagation(); 
-                                                                        // Determine who sent this email to auto-populate the next expected action
-                                                                        const thisWasFromShip = isFromShip;
-                                                                        // If this was from ship → next should be us replying (current user)
-                                                                        // If this was from us → next should be ship replying
-                                                                        const nextName = thisWasFromShip ? currentUser.username : '__SHIP__';
-                                                                        const nextResolution = thisWasFromShip ? 'waiting_ours' : 'received';
-                                                                        setClearEmailWaitingModal(h); 
-                                                                        setClearEmailWaitingForm({ resolution: nextResolution, notes: '', name: nextName, followupEmail: '', date: '' }); 
-                                                                    }}>📧 Add Update</button>
-                                                                    <button style={{padding:'7px 12px',fontSize:'11px',background:'var(--bg-input)',color:'var(--text-dim)',borderRadius:'8px',border:'1px solid var(--border)',cursor:'pointer',fontWeight:500}} onClick={(e) => { e.stopPropagation();
-                                                                        const d = new Date(h.timestamp); 
-                                                                        setEditEmailForm({ 
-                                                                            date: toDateString(d), 
-                                                                            time: d.toTimeString().slice(0,5), 
-                                                                            summary: h.result?.emailSummary || '', 
-                                                                            emailText: h.emailText || '', 
-                                                                            contactedBy: h.result?.sender?.name || senderName || '' 
-                                                                        }); 
-                                                                        setEditEmailEntry(h); 
-                                                                    }}>✏️ Edit</button>
-                                                                    <div style={{flex:1}}/>
-                                                                    <button style={{padding:'7px 12px',fontSize:'11px',background:'transparent',color:'var(--red)',borderRadius:'8px',border:'1px solid rgba(239,68,68,0.15)',cursor:'pointer',fontWeight:500,opacity:0.7}} onClick={(e) => { e.stopPropagation(); if(confirm('Delete this email entry?')) { const filtered = emailHistory.filter(x => x.id !== h.id); setEmailHistory(filtered); localStorage.setItem('emailParseHistory', JSON.stringify(filtered)); logActivity(`Deleted email log entry for ${sel?.name || 'Unknown'} from ${fmtDate(h.timestamp)}`); toast('Entry deleted', 'info'); } }}>🗑 Delete</button>
-                                                                </div>
-                                                            </div>
-                                                        )}
-                                                    </div>
-                                                </div>
+                                                    // Actions row
+                                                    React.createElement('div', {style: {display:'flex',gap:'6px',marginTop:'4px',fontSize:'10px'}},
+                                                        React.createElement('button', {className:'btn btn-sm btn-secondary', style:{padding:'2px 8px',fontSize:'9px'}, onClick: function(e) { e.stopPropagation(); setEditEmailEntry(h); setEditEmailForm({date: h.timestamp ? h.timestamp.substring(0,10) : '', time: h.timestamp ? h.timestamp.substring(11,16) : '', summary: summary, emailText: h.emailText || '', contactedBy: rawName || ''}); }}, '\u270F\uFE0F Edit'),
+                                                        React.createElement('button', {className:'btn btn-sm', style:{padding:'2px 8px',fontSize:'9px',color:'var(--red)'}, onClick: function(e) { e.stopPropagation(); if (confirm('Delete this email entry?')) { var updated = emailHistory.filter(function(x) { return x.id !== h.id; }); setEmailHistory(updated); localStorage.setItem('emailParseHistory', JSON.stringify(updated)); logActivity('Deleted email entry from ' + sel.name); toast('Email entry deleted', 'info'); } }}, '\uD83D\uDDD1\uFE0F')
+                                                    )
                                                 );
                                             })}
                                         </div>
