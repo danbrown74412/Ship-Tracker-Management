@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T062";
+    var APP_BUILD = "2026-02-27T068";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -1979,6 +1979,102 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
     const [emailHistory, setEmailHistory] = useState(() => {
         try { return JSON.parse(localStorage.getItem('emailParseHistory') || '[]'); } catch { return []; }
     });
+    
+    // ===== INCOMING EMAIL QUEUE =====
+    const [pendingEmails, setPendingEmails] = useState([]);
+    const [showInbox, setShowInbox] = useState(false);
+    
+    // Listen for new emails from VBA/Power Automate
+    useEffect(function() {
+        var unsub = db.collection('incomingEmails').where('processed', '==', false).onSnapshot(function(snapshot) {
+            var pending = [];
+            snapshot.forEach(function(doc) {
+                var data = doc.data();
+                data._docId = doc.id;
+                // Auto-detect ship if not already matched
+                if (!data.matchedShip) {
+                    var text = ((data.subject || '') + ' ' + (data.body || '')).toLowerCase();
+                    ships.forEach(function(s) {
+                        if (text.indexOf(s.name.toLowerCase()) !== -1) data.matchedShip = s.name;
+                    });
+                    if (!data.matchedShip) {
+                        ships.forEach(function(s) {
+                            var num = s.name.replace(/[^0-9]/g, '');
+                            if (num && text.match(new RegExp('ddg[- ]?' + num + '\\b'))) data.matchedShip = s.name;
+                        });
+                    }
+                }
+                // Detect direction
+                var fromAddr = (data.senderEmail || data.from || '').toLowerCase();
+                var teamDomains = ['navy.mil', 'sonar.navy', 'niwc.navy', 'spawar.navy', 'mcas'];
+                data._isOutgoing = teamDomains.some(function(d) { return fromAddr.indexOf(d) !== -1 && fromAddr.indexOf('ddg') === -1; });
+                data._cleanSubject = (data.subject || '').replace(/^(RE|FW|FWD):\s*/gi, '').replace(/^(RE|FW|FWD):\s*/gi, '').trim();
+                pending.push(data);
+            });
+            setPendingEmails(pending);
+        });
+        return function() { unsub(); };
+    }, [ships]);
+    
+    // Accept an incoming email — add to ship timeline
+    var acceptIncomingEmail = function(item) {
+        var ship = ships.find(function(s) { return s.name === item.matchedShip; });
+        if (!ship) { toast('Ship not found: ' + item.matchedShip, 'error'); return; }
+        
+        var newEntry = {
+            id: 'AE_' + item._docId,
+            shipId: ship.id,
+            shipName: ship.name,
+            timestamp: item.receivedAt || item.timestamp || new Date().toISOString(),
+            emailText: item.body || '',
+            source: 'outlook-vba',
+            importedBy: item.importedBy || '',
+            conversationId: item.conversationId || '',
+            fromEmail: (item.senderEmail || '').toLowerCase(),
+            toEmail: (item.toEmail || '').toLowerCase(),
+            fromName: item.senderName || '',
+            toName: item.toName || '',
+            result: {
+                emailSummary: item._cleanSubject || 'Imported email',
+                sender: item._isOutgoing ? { name: item.senderName || 'Team', email: item.senderEmail || '' } : { name: '__SHIP__', email: item.senderEmail || '' },
+                contactedBy: item._isOutgoing ? (item.senderName || 'Team') : ('Ship (' + (item.senderName || 'Unknown') + ')'),
+                waitingReply: item._isOutgoing,
+                isFYI: false
+            }
+        };
+        
+        var existing = [];
+        try { existing = JSON.parse(localStorage.getItem('emailParseHistory') || '[]'); } catch(e) {}
+        if (!existing.some(function(e) { return e.id === newEntry.id; })) {
+            var updated = [newEntry].concat(existing);
+            localStorage.setItem('emailParseHistory', JSON.stringify(updated));
+            setEmailHistory(updated);
+        }
+        
+        // Update ship
+        setShips(function(p) { return p.map(function(sh) {
+            return sh.id === ship.id ? Object.assign({}, sh, {
+                lastSaid: item._cleanSubject || sh.lastSaid,
+                lastContact: newEntry.timestamp,
+                waitingReply: item._isOutgoing
+            }) : sh;
+        }); });
+        
+        // Mark processed in Firebase
+        db.collection('incomingEmails').doc(item._docId).update({ processed: true, accepted: true, processedAt: new Date().toISOString() });
+        
+        var arrow = item._isOutgoing ? '\u2192 Sent' : '\u2190 Reply';
+        logActivity('Accepted email: ' + ship.name + ' ' + arrow + ' | ' + (item._cleanSubject || '').substring(0, 50), { ship: ship.name });
+        toast('\u2705 Email added to ' + ship.name, 'success');
+    };
+    
+    // Reject/delete an incoming email
+    var rejectIncomingEmail = function(item) {
+        db.collection('incomingEmails').doc(item._docId).update({ processed: true, accepted: false, processedAt: new Date().toISOString() });
+        logActivity('Rejected incoming email: ' + (item._cleanSubject || '').substring(0, 50));
+        toast('Email dismissed', 'info');
+    };
+    
     const [emailHistoryImported, setEmailHistoryImported] = useState(false);
     const [emailHistoryModal, setEmailHistoryModal] = useState(false);
     const [viewingHistoryItem, setViewingHistoryItem] = useState(null);
@@ -3009,6 +3105,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                     <button className="btn btn-primary" onClick={copyReport}>📋 Weekly Report</button>
                     <button className="btn btn-secondary" onClick={downloadReport}>⬇️ Download</button>
                     <button className="btn btn-secondary" onClick={exportPowerBI} style={{background:'var(--primary-glow)',border:'1px solid var(--primary)',color:'var(--primary)'}}>📊 Power BI Export</button>
+                    <button className="btn btn-secondary" onClick={function(){setShowInbox(!showInbox)}} style={{background: pendingEmails.length > 0 ? 'var(--blue-glow)' : 'var(--bg-input)',border: pendingEmails.length > 0 ? '1px solid var(--blue)' : '1px solid var(--border)',color: pendingEmails.length > 0 ? 'var(--blue)' : 'var(--text-muted)',position:'relative'}}>📬 Inbox {pendingEmails.length > 0 && <span style={{position:'absolute',top:'-6px',right:'-6px',background:'var(--red)',color:'#fff',borderRadius:'10px',fontSize:'10px',fontWeight:700,padding:'1px 6px',minWidth:'18px',textAlign:'center'}}>{pendingEmails.length}</span>}</button>
                     <button className="btn btn-secondary" onClick={() => window.print()}><Icon name="print"/> Print</button>
                 </div>
             </div>
@@ -3016,6 +3113,66 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             {/* Visual Charts Row */}
             <div className="charts-row">
                 <div className="chart-card">
+                {/* INCOMING EMAIL INBOX */}
+                {showInbox && (
+                    <div className="card" style={{marginBottom:'16px',border: pendingEmails.length > 0 ? '1px solid var(--blue)' : '1px solid var(--border)'}}>
+                        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:'12px'}}>
+                            <div style={{display:'flex',alignItems:'center',gap:'10px'}}>
+                                <span style={{fontSize:'16px'}}>📬</span>
+                                <span style={{fontWeight:700,fontSize:'14px'}}>Incoming Emails</span>
+                                {pendingEmails.length > 0 && <span style={{background:'var(--blue)',color:'#fff',borderRadius:'10px',padding:'2px 10px',fontSize:'11px',fontWeight:700}}>{pendingEmails.length} new</span>}
+                            </div>
+                            <button className="btn btn-sm btn-secondary" onClick={function(){setShowInbox(false)}}>✕ Close</button>
+                        </div>
+                        {pendingEmails.length === 0 ? (
+                            <div style={{textAlign:'center',padding:'24px',color:'var(--text-muted)'}}>
+                                <div style={{fontSize:'24px',marginBottom:'8px'}}>✅</div>
+                                <div style={{fontSize:'13px'}}>No pending emails — all caught up!</div>
+                            </div>
+                        ) : (
+                            <div style={{display:'flex',flexDirection:'column',gap:'8px'}}>
+                                {pendingEmails.map(function(item, idx) {
+                                    var dirColor = item._isOutgoing ? 'var(--blue)' : 'var(--amber)';
+                                    var dirLabel = item._isOutgoing ? '→ Sent' : '← Reply';
+                                    var shipList = ships.map(function(s) { return s.name; });
+                                    return React.createElement('div', {key: idx, style: {padding:'14px 16px',background:'var(--bg-input)',borderRadius:'10px',border:'1px solid var(--border)'}},
+                                        React.createElement('div', {style: {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}},
+                                            React.createElement('div', {style: {flex:1}},
+                                                React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}},
+                                                    item.matchedShip ? React.createElement('span', {style: {fontWeight:800,fontSize:'15px',color:'var(--primary)'}}, item.matchedShip) : React.createElement('span', {style: {fontWeight:600,fontSize:'13px',color:'var(--red)'}}, '⚠ No ship detected'),
+                                                    React.createElement('span', {style: {padding:'2px 8px',borderRadius:'4px',fontSize:'10px',fontWeight:700,background: item._isOutgoing ? 'var(--blue-glow)' : 'var(--amber-glow)',color: dirColor}}, dirLabel),
+                                                    item.importedBy ? React.createElement('span', {style: {fontSize:'10px',color:'var(--text-muted)'}}, 'via ' + item.importedBy) : null
+                                                ),
+                                                React.createElement('div', {style: {fontSize:'13px',fontWeight:600,marginBottom:'4px'}}, item._cleanSubject || item.subject || 'No subject'),
+                                                React.createElement('div', {style: {fontSize:'11px',color:'var(--text-dim)',display:'flex',gap:'16px',flexWrap:'wrap'}},
+                                                    React.createElement('span', null, 'From: ' + (item.senderName || item.from || 'Unknown')),
+                                                    React.createElement('span', null, 'To: ' + (item.toName || item.to || '')),
+                                                    item.receivedAt ? React.createElement('span', {style: {color:'var(--text-muted)'}}, fmtDate(item.receivedAt)) : null
+                                                )
+                                            ),
+                                            React.createElement('div', {style: {display:'flex',gap:'6px',marginLeft:'12px'}},
+                                                !item.matchedShip ? React.createElement('select', {
+                                                    style: {padding:'4px 8px',fontSize:'11px',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'4px',color:'var(--text)'},
+                                                    onChange: function(e) { item.matchedShip = e.target.value; setPendingEmails(function(p) { return p.slice(); }); }
+                                                },
+                                                    React.createElement('option', {value:''}, '-- Ship --'),
+                                                    shipList.map(function(sn) { return React.createElement('option', {key: sn, value: sn}, sn); })
+                                                ) : null,
+                                                React.createElement('button', {className:'btn btn-sm btn-primary', style:{fontWeight:700,padding:'6px 14px'}, disabled: !item.matchedShip, onClick: function() { acceptIncomingEmail(item); }}, '✓ Accept'),
+                                                React.createElement('button', {className:'btn btn-sm', style:{color:'var(--red)',padding:'6px 10px'}, onClick: function() { rejectIncomingEmail(item); }}, '✕')
+                                            )
+                                        )
+                                    );
+                                })}
+                                {pendingEmails.length > 1 && React.createElement('div', {style: {display:'flex',gap:'8px',marginTop:'4px'}},
+                                    React.createElement('button', {className:'btn btn-sm btn-primary', style:{fontWeight:600}, onClick: function() { pendingEmails.filter(function(e){return e.matchedShip;}).forEach(function(e){acceptIncomingEmail(e);}); }}, '✓ Accept All (' + pendingEmails.filter(function(e){return e.matchedShip;}).length + ')'),
+                                    React.createElement('button', {className:'btn btn-sm', style:{color:'var(--red)'}, onClick: function() { pendingEmails.forEach(function(e){rejectIncomingEmail(e);}); }}, '✕ Dismiss All')
+                                )}
+                            </div>
+                        )}
+                    </div>
+                )}
+
                     <div className="card-title tip" data-tip="Based on today's AM/PM connectivity checks">Fleet Status (Today)</div>
                     <PieChart data={[chartData.online, chartData.offline, chartData.noData, chartData.pendingInstall, chartData.pendingDeinstall]} colors={['var(--green)', 'var(--red)', 'var(--text-muted)', 'var(--amber)', '#f87171']}/>
                     <div className="chart-legend">
@@ -4966,21 +5123,29 @@ function DailyChecks({ ships, setShips, checks, setChecks, installs, issues, toa
     const [reorderMode, setReorderMode] = useState(false);
 
     const defaultOrder = [67, 70, 54, 56, 62, 63, 55, 57, 72, 77, 96, 98, 101, 103, 109, 111];
-    const [shipOrder, setShipOrder] = useState(defaultOrder);
+    const [shipOrder, setShipOrder] = useState(() => {
+        // Load from localStorage immediately to prevent flash of default order
+        try { 
+            var saved = JSON.parse(localStorage.getItem('dailyChecksOrder'));
+            return saved && saved.length > 0 ? saved : defaultOrder;
+        } catch(e) { return defaultOrder; }
+    });
     
-    // Load order from Firebase on mount
+    // Sync with Firebase and persist to localStorage
     useEffect(() => {
         const unsub = db.collection('settings').doc('dailyChecksOrder').onSnapshot(doc => {
-            if (doc.exists && doc.data().order) {
+            if (doc.exists && doc.data().order && doc.data().order.length > 0) {
                 setShipOrder(doc.data().order);
+                localStorage.setItem('dailyChecksOrder', JSON.stringify(doc.data().order));
             }
         });
         return () => unsub();
     }, []);
     
     const saveOrder = (order) => { 
-        setShipOrder(order); 
-        db.collection('settings').doc('dailyChecksOrder').set({ order, updatedAt: new Date().toISOString() }).catch(err => console.error('Save order error:', err));
+        setShipOrder(order);
+        localStorage.setItem('dailyChecksOrder', JSON.stringify(order));
+        db.collection('settings').doc('dailyChecksOrder').set({ order: order, updatedAt: new Date().toISOString() }).catch(function(err) { console.error('Save order error:', err); });
     };
 
     const sorted = useMemo(() => {
