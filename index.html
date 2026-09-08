@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T068";
+    var APP_BUILD = "2026-02-27T070";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -1991,9 +1991,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             snapshot.forEach(function(doc) {
                 var data = doc.data();
                 data._docId = doc.id;
-                // Auto-detect ship if not already matched
-                if (!data.matchedShip) {
-                    var text = ((data.subject || '') + ' ' + (data.body || '')).toLowerCase();
+                // Auto-detect ship - check EVERYTHING: subject, body, from, to
+                if (!data.matchedShip || data.matchedShip === 'UNMATCHED') {
+                    data.matchedShip = '';
+                    var text = ((data.subject || '') + ' ' + (data.body || '') + ' ' + (data.senderEmail || '') + ' ' + (data.senderName || '') + ' ' + (data.from || '') + ' ' + (data.toEmail || '') + ' ' + (data.toName || '') + ' ' + (data.to || '')).toLowerCase();
                     ships.forEach(function(s) {
                         if (text.indexOf(s.name.toLowerCase()) !== -1) data.matchedShip = s.name;
                     });
@@ -2001,6 +2002,20 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                         ships.forEach(function(s) {
                             var num = s.name.replace(/[^0-9]/g, '');
                             if (num && text.match(new RegExp('ddg[- ]?' + num + '\\b'))) data.matchedShip = s.name;
+                        });
+                    }
+                    // Also check POC emails/names stored on ships
+                    if (!data.matchedShip) {
+                        var fromAddr = (data.senderEmail || data.from || '').toLowerCase();
+                        var fromName = (data.senderName || '').toLowerCase();
+                        var toAddr = (data.toEmail || data.to || '').toLowerCase();
+                        var toName = (data.toName || '').toLowerCase();
+                        ships.forEach(function(s) {
+                            if (s.email && (fromAddr.indexOf(s.email.toLowerCase()) !== -1 || toAddr.indexOf(s.email.toLowerCase()) !== -1)) data.matchedShip = s.name;
+                            if (!data.matchedShip && s.poc) {
+                                var pocLower = s.poc.toLowerCase();
+                                if ((fromName && fromName.indexOf(pocLower) !== -1) || (toName && toName.indexOf(pocLower) !== -1)) data.matchedShip = s.name;
+                            }
                         });
                     }
                 }
@@ -3139,7 +3154,7 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                         React.createElement('div', {style: {display:'flex',justifyContent:'space-between',alignItems:'flex-start',marginBottom:'8px'}},
                                             React.createElement('div', {style: {flex:1}},
                                                 React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px'}},
-                                                    item.matchedShip ? React.createElement('span', {style: {fontWeight:800,fontSize:'15px',color:'var(--primary)'}}, item.matchedShip) : React.createElement('span', {style: {fontWeight:600,fontSize:'13px',color:'var(--red)'}}, '⚠ No ship detected'),
+                                                    item.matchedShip && item.matchedShip !== 'UNMATCHED' ? React.createElement('span', {style: {fontWeight:800,fontSize:'15px',color:'var(--primary)'}}, item.matchedShip) : React.createElement('span', {style: {fontWeight:600,fontSize:'13px',color:'var(--red)'}}, '\u26A0 No ship detected'),
                                                     React.createElement('span', {style: {padding:'2px 8px',borderRadius:'4px',fontSize:'10px',fontWeight:700,background: item._isOutgoing ? 'var(--blue-glow)' : 'var(--amber-glow)',color: dirColor}}, dirLabel),
                                                     item.importedBy ? React.createElement('span', {style: {fontSize:'10px',color:'var(--text-muted)'}}, 'via ' + item.importedBy) : null
                                                 ),
@@ -3151,14 +3166,14 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                 )
                                             ),
                                             React.createElement('div', {style: {display:'flex',gap:'6px',marginLeft:'12px'}},
-                                                !item.matchedShip ? React.createElement('select', {
+                                                (!item.matchedShip || item.matchedShip === 'UNMATCHED') ? React.createElement('select', {
                                                     style: {padding:'4px 8px',fontSize:'11px',background:'var(--bg-card)',border:'1px solid var(--border)',borderRadius:'4px',color:'var(--text)'},
                                                     onChange: function(e) { item.matchedShip = e.target.value; setPendingEmails(function(p) { return p.slice(); }); }
                                                 },
                                                     React.createElement('option', {value:''}, '-- Ship --'),
                                                     shipList.map(function(sn) { return React.createElement('option', {key: sn, value: sn}, sn); })
                                                 ) : null,
-                                                React.createElement('button', {className:'btn btn-sm btn-primary', style:{fontWeight:700,padding:'6px 14px'}, disabled: !item.matchedShip, onClick: function() { acceptIncomingEmail(item); }}, '✓ Accept'),
+                                                React.createElement('button', {className:'btn btn-sm btn-primary', style:{fontWeight:700,padding:'6px 14px'}, disabled: !item.matchedShip || item.matchedShip === 'UNMATCHED', onClick: function() { acceptIncomingEmail(item); }}, '\u2713 Accept'),
                                                 React.createElement('button', {className:'btn btn-sm', style:{color:'var(--red)',padding:'6px 10px'}, onClick: function() { rejectIncomingEmail(item); }}, '✕')
                                             )
                                         )
