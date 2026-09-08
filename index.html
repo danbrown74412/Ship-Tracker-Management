@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T076";
+    var APP_BUILD = "2026-02-27T077";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -3195,6 +3195,9 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                     item.importedBy ? React.createElement('span', {style: {fontSize:'10px',color:'var(--text-muted)'}}, 'via ' + item.importedBy) : null
                                                 ),
                                                 React.createElement('div', {style: {fontSize:'13px',fontWeight:600,marginBottom:'4px'}}, item._cleanSubject || item.subject || 'No subject'),
+                                                (item.body && item.body.length > 0) ? React.createElement('div', {style: {fontSize:'11px',color:'var(--text-dim)',lineHeight:'1.5',marginBottom:'6px',padding:'8px 10px',background:'var(--bg-card)',borderRadius:'6px',borderLeft:'2px solid var(--border)',maxHeight:'60px',overflow:'hidden',whiteSpace:'pre-wrap'}}, 
+                                                    item.body.replace(/From:.*?(?=\n|$)/gi, '').replace(/Sent:.*?(?=\n|$)/gi, '').replace(/To:.*?(?=\n|$)/gi, '').replace(/Cc:.*?(?=\n|$)/gi, '').replace(/<[^>]*@[^>]*>/g, '').replace(/_{5,}/g, '').replace(/-{5,}/g, '').replace(/\n{2,}/g, ' ').trim().substring(0, 200)
+                                                ) : null,
                                                 React.createElement('div', {style: {fontSize:'11px',color:'var(--text-dim)',display:'flex',gap:'16px',flexWrap:'wrap'}},
                                                     React.createElement('span', null, 'From: ' + mapTeamName(item.senderName, item.senderEmail)),
                                                     React.createElement('span', null, 'To: ' + mapTeamName(item.toName, item.toEmail)),
