@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T072";
+    var APP_BUILD = "2026-02-27T074";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -2026,12 +2026,50 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                 data._cleanSubject = (data.subject || '').replace(/^(RE|FW|FWD):\s*/gi, '').replace(/^(RE|FW|FWD):\s*/gi, '').trim();
                 pending.push(data);
             });
-            setPendingEmails(pending);
+            // Deduplicate: same outlookEntryId or same subject+sender+time
+            var seen = {};
+            var existingHistory = [];
+            try { existingHistory = JSON.parse(localStorage.getItem('emailParseHistory') || '[]'); } catch(ex) {}
+            var deduped = pending.filter(function(item) {
+                // Check by Outlook EntryID
+                var eid = item.outlookEntryId || '';
+                if (eid) {
+                    if (seen[eid]) return false;
+                    seen[eid] = true;
+                    // Check if already accepted in history
+                    if (existingHistory.some(function(h) { return h.id === 'AE_' + item._docId; })) return false;
+                }
+                // Check by subject + sender + timestamp combo
+                var key = (item.subject || '') + '|' + (item.senderEmail || '') + '|' + (item.receivedAt || '');
+                if (seen[key]) return false;
+                seen[key] = true;
+                // Check if this exact email already exists in history
+                if (existingHistory.some(function(h) {
+                    return h.fromEmail === (item.senderEmail || '').toLowerCase() && 
+                           h.timestamp === (item.receivedAt || item.timestamp);
+                })) return false;
+                return true;
+            });
+            setPendingEmails(deduped);
         });
         return function() { unsub(); };
     }, [ships]);
     
     // Accept an incoming email — add to ship timeline
+    // Team name mapping — clean usernames to real names
+    var mapTeamName = function(name, email) {
+        if (!name && !email) return 'Unknown';
+        var n = (name || '').toLowerCase();
+        var e = (email || '').toLowerCase();
+        if (n.indexOf('dbrown') !== -1 || n.indexOf('daniel') !== -1 || e.indexOf('dbrown') !== -1 || e.indexOf('daniel.brown') !== -1 || e.indexOf('daniel.k.brown') !== -1 || e.indexOf('d.brown') !== -1) return 'Daniel Brown';
+        if (n.indexOf('clyde') !== -1 || n.indexOf('cgrant') !== -1 || e.indexOf('clyde') !== -1 || e.indexOf('cgrant') !== -1 || e.indexOf('c.grant') !== -1) return 'Clyde Grant';
+        if (n.indexOf('uriel') !== -1 || n.indexOf('up_reap') !== -1 || n.indexOf('u_pena') !== -1 || e.indexOf('uriel') !== -1 || e.indexOf('up_reap') !== -1 || e.indexOf('upena') !== -1 || e.indexOf('u.pena') !== -1) return 'Uriel Pena';
+        if (n.indexOf('jayleel') !== -1 || n.indexOf('jayreap') !== -1 || n.indexOf('jay_reap') !== -1 || n.indexOf('kazimm') !== -1 || e.indexOf('jayleel') !== -1 || e.indexOf('jayreap') !== -1 || e.indexOf('kazimm') !== -1) return 'Jayleel Kazimm';
+        // Handle "Last, First" format
+        if (name && name.indexOf(',') !== -1) { var p = name.split(','); return (p[1] || '').trim() + ' ' + (p[0] || '').trim(); }
+        return name || email || 'Unknown';
+    };
+    
     var acceptIncomingEmail = function(item) {
         var ship = ships.find(function(s) { return s.name === item.matchedShip; });
         if (!ship) { toast('Ship not found: ' + item.matchedShip, 'error'); return; }
@@ -2051,8 +2089,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
             toName: item.toName || '',
             result: {
                 emailSummary: item._cleanSubject || 'Imported email',
-                sender: item._isOutgoing ? { name: item.senderName || 'Team', email: item.senderEmail || '' } : { name: '__SHIP__', email: item.senderEmail || '' },
-                contactedBy: item._isOutgoing ? (item.senderName || 'Team') : ('Ship (' + (item.senderName || 'Unknown') + ')'),
+                sender: item._isOutgoing ? { name: mapTeamName(item.senderName, item.senderEmail), email: item.senderEmail || '' } : { name: '__SHIP__', email: item.senderEmail || '' },
+                contactedBy: item._isOutgoing ? mapTeamName(item.senderName, item.senderEmail) : ('Ship (' + mapTeamName(item.senderName, item.senderEmail) + ')'),
                 waitingReply: item._isOutgoing,
                 isFYI: false
             }
@@ -3158,8 +3196,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                 ),
                                                 React.createElement('div', {style: {fontSize:'13px',fontWeight:600,marginBottom:'4px'}}, item._cleanSubject || item.subject || 'No subject'),
                                                 React.createElement('div', {style: {fontSize:'11px',color:'var(--text-dim)',display:'flex',gap:'16px',flexWrap:'wrap'}},
-                                                    React.createElement('span', null, 'From: ' + (item.senderName || item.from || 'Unknown')),
-                                                    React.createElement('span', null, 'To: ' + (item.toName || item.to || '')),
+                                                    React.createElement('span', null, 'From: ' + mapTeamName(item.senderName, item.senderEmail)),
+                                                    React.createElement('span', null, 'To: ' + mapTeamName(item.toName, item.toEmail)),
                                                     item.receivedAt ? React.createElement('span', {style: {color:'var(--text-muted)'}}, fmtDate(item.receivedAt)) : null
                                                 )
                                             ),
