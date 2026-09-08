@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T079";
+    var APP_BUILD = "2026-02-27T080";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -3600,8 +3600,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                 
                                                 return React.createElement('div', {key: h.id, style: {display:'flex',flexDirection:'column',alignItems: isTeamSent ? 'flex-end' : 'flex-start',maxWidth:'100%'}},
                                                     
-                                                    // Sender name + timestamp header
-                                                    React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',fontSize:'10px',color:'var(--text-muted)',flexDirection: isTeamSent ? 'row-reverse' : 'row'}},
+                                                    // Sender name + timestamp header — always top left
+                                                    React.createElement('div', {style: {display:'flex',alignItems:'center',gap:'8px',marginBottom:'4px',fontSize:'10px',color:'var(--text-muted)'}},
                                                         React.createElement('span', {style: {fontWeight:700,color: bubbleColor}}, isFromShip ? '\uD83D\uDEA2 ' + senderName.replace('Ship (', '').replace(')', '') : senderName),
                                                         React.createElement('span', null, fmtDate(h.timestamp)),
                                                         isTeamSent ? React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'rgba(25,169,116,0.15)',color:'var(--primary)',fontWeight:600}}, '\u2192 Sent') : React.createElement('span', {style: {fontSize:'9px',padding:'1px 6px',borderRadius:'4px',background:'rgba(59,130,246,0.15)',color:'var(--blue)',fontWeight:600}}, '\u2190 Reply'),
