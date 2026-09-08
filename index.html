@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T060";
+    var APP_BUILD = "2026-02-27T061";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -5702,68 +5702,66 @@ function DailyChecks({ ships, setShips, checks, setChecks, installs, issues, toa
             {showEndOfDay && (() => {
                 const data = getEndOfDayData();
                 const dateLabel = parseLocalDate(date).toLocaleDateString('en-US', {weekday:'long',month:'long',day:'numeric',year:'numeric'});
-                const cs = {padding:'10px 14px',border:'1px solid #3a3a4e',fontSize:'13px',verticalAlign:'top',lineHeight:'1.7'};
-                const hd = {...cs, fontWeight:700, background:'#252540',textAlign:'center',fontSize:'12px',color:'#aab',letterSpacing:'0.5px',padding:'12px 14px'};
-                const sec = {padding:'12px 16px',background:'#1e3a5f',textAlign:'center',fontWeight:700,fontSize:'14px',color:'#fff',border:'1px solid #3a3a4e',letterSpacing:'1px'};
-                const sn = {...cs, fontWeight:700, fontSize:'14px', minWidth:'70px', background:'#16162e'};
-                const onC = {color:'#51cf66'};
-                const offC = {color:'#ff6b6b'};
-                const renderRows = (rows) => rows.map((r, i) => (
-                    <tr key={i} style={{background: i % 2 === 0 ? '#1a1a2e' : '#1e1e34'}}>
-                        <td style={sn}>{r.name}</td>
-                        <td style={{...cs, textAlign:'center', ...(r.amUp ? onC : offC), fontWeight:700, fontSize:'13px'}}>{r.am}{r.amPing && <div style={{fontSize:'12px',fontWeight:600,marginTop:'2px',color:'#aab'}}>{r.amPing}</div>}</td>
-                        <td style={{...cs, textAlign:'center', ...(r.pmUp ? onC : offC), fontWeight:700, fontSize:'13px'}}>{r.pm}{r.pmPing && <div style={{fontSize:'12px',fontWeight:600,marginTop:'2px',color:'#aab'}}>{r.pmPing}</div>}</td>
-                        <td style={{...cs, textAlign:'center', color:'#aab'}}>{r.files}</td>
-                        <td style={{...cs, textAlign:'center', fontWeight:600, color: r.diode === 'Up' ? '#51cf66' : r.diode === 'Down' || r.diode === 'Output-down' ? '#ff6b6b' : '#666'}}>{r.diode}</td>
-                        <td style={{...cs, textAlign:'center', fontWeight:600, color: r.phone === 'Up' ? '#51cf66' : r.phone === 'Down' ? '#ff6b6b' : '#666'}}>{r.phone}</td>
-                        <td style={{...cs, whiteSpace:'pre-wrap', minWidth:'300px', fontSize:'12px', color:'#d4d4e0', lineHeight:'1.8'}}>{r.notes}</td>
-                    </tr>
-                ));
+                const bc = '#1b1b2f';
+                const bd = '1px solid #333';
+                const renderRows = function(rows) { return rows.map(function(r, i) {
+                    var bg = i % 2 === 0 ? '#1b1b2f' : '#22223a';
+                    return React.createElement('tr', {key: i, style: {background: bg}},
+                        React.createElement('td', {style: {padding:'10px 14px',border:bd,fontWeight:700,fontSize:'14px',color:'#fff',whiteSpace:'nowrap'}}, r.name),
+                        React.createElement('td', {style: {padding:'10px 12px',border:bd,textAlign:'center',fontWeight:700,fontSize:'13px',color: r.amUp ? '#4ade80' : '#f87171'}},
+                            r.am, r.amPing ? React.createElement('div', {style: {fontSize:'12px',color:'#9ca3af',marginTop:'2px'}}, r.amPing) : null),
+                        React.createElement('td', {style: {padding:'10px 12px',border:bd,textAlign:'center',fontWeight:700,fontSize:'13px',color: r.pmUp ? '#4ade80' : '#f87171'}},
+                            r.pm, r.pmPing ? React.createElement('div', {style: {fontSize:'12px',color:'#9ca3af',marginTop:'2px'}}, r.pmPing) : null),
+                        React.createElement('td', {style: {padding:'10px 12px',border:bd,textAlign:'center',fontSize:'13px',color:'#9ca3af'}}, r.files),
+                        React.createElement('td', {style: {padding:'10px 12px',border:bd,textAlign:'center',fontWeight:600,fontSize:'13px',color: r.diode==='Up'?'#4ade80':r.diode==='Down'||r.diode==='Output-down'?'#f87171':'#6b7280'}}, r.diode),
+                        React.createElement('td', {style: {padding:'10px 12px',border:bd,textAlign:'center',fontWeight:600,fontSize:'13px',color: r.phone==='Up'?'#4ade80':r.phone==='Down'?'#f87171':'#6b7280'}}, r.phone),
+                        React.createElement('td', {style: {padding:'10px 14px',border:bd,fontSize:'12px',color:'#d1d5db',lineHeight:'1.7',whiteSpace:'pre-wrap'}}, r.notes)
+                    );
+                }); };
+                var secHead = function(label, bg) { return React.createElement('tr', null,
+                    React.createElement('td', {colSpan:7, style:{padding:'10px 16px',background:bg,textAlign:'center',fontWeight:700,fontSize:'14px',color:'#fff',border:bd,letterSpacing:'1px'}}, label)
+                ); };
+                var thStyle = {padding:'10px 14px',background:'#2d2d44',border:bd,fontWeight:700,fontSize:'12px',color:'#9ca3af',textAlign:'center',letterSpacing:'0.5px'};
                 return (
-                <div style={{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'}} onClick={e => { if(e.target === e.currentTarget) setShowEndOfDay(false); }}>
-                    <div style={{background:'#12122a',borderRadius:'16px',width:'100%',maxWidth:'1100px',maxHeight:'92vh',overflow:'auto',border:'1px solid #3a3a4e',boxShadow:'0 24px 80px rgba(0,0,0,0.6)'}}>
-                        <div style={{padding:'18px 24px',borderBottom:'1px solid #3a3a4e',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,background:'#12122a',zIndex:1,borderRadius:'16px 16px 0 0'}}>
-                            <div>
-                                <div style={{fontSize:'17px',fontWeight:700,color:'#fff'}}>📧 End of Day Status Report</div>
-                                <div style={{fontSize:'12px',color:'#888',marginTop:'3px'}}>{dateLabel}</div>
-                            </div>
-                            <div style={{display:'flex',gap:'8px'}}>
-                                <button className="btn btn-primary" style={{fontWeight:700,padding:'10px 20px'}} onClick={copyEndOfDay}>📋 Copy for Email</button>
-                                <button onClick={() => setShowEndOfDay(false)} style={{background:'none',border:'1px solid #3a3a4e',color:'#888',fontSize:'16px',cursor:'pointer',borderRadius:'8px',width:'36px',height:'36px',display:'flex',alignItems:'center',justifyContent:'center'}}>✕</button>
-                            </div>
-                        </div>
-                        <div style={{padding:'20px 24px'}} id="eod-table-container">
-                            <table style={{width:'100%',borderCollapse:'collapse',background:'#1a1a2e',color:'#e0e0e0',fontFamily:'Segoe UI, Arial, sans-serif',borderRadius:'8px',overflow:'hidden'}}>
-                                <thead>
-                                    <tr>
-                                        <th style={{...hd,textAlign:'left',paddingLeft:'16px',minWidth:'70px'}}></th>
-                                        <th style={{...hd,minWidth:'80px'}}>AM</th>
-                                        <th style={{...hd,minWidth:'80px'}}>PM</th>
-                                        <th style={{...hd,minWidth:'55px'}}>Files</th>
-                                        <th style={{...hd,minWidth:'70px'}}>Diode</th>
-                                        <th style={{...hd,minWidth:'70px'}}>Phone</th>
-                                        <th style={hd}>Notes</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {data.fullReap.length > 0 && (<>
-                                        <tr><td colSpan={7} style={sec}>Full Reap</td></tr>
-                                        {renderRows(data.fullReap)}
-                                    </>)}
-                                    {data.miniReap.length > 0 && (<>
-                                        <tr><td colSpan={7} style={{...sec, background:'#1e5a3a'}}>Mini-Reap</td></tr>
-                                        {renderRows(data.miniReap)}
-                                    </>)}
-                                </tbody>
-                            </table>
-                        </div>
-                    </div>
-                </div>
+                React.createElement('div', {style:{position:'fixed',inset:0,background:'rgba(0,0,0,0.85)',zIndex:9999,display:'flex',alignItems:'center',justifyContent:'center',padding:'16px'},onClick:function(e){if(e.target===e.currentTarget)setShowEndOfDay(false)}},
+                    React.createElement('div', {style:{background:'#13132b',borderRadius:'12px',width:'100%',maxWidth:'1100px',maxHeight:'92vh',overflow:'auto',border:'1px solid #333'}},
+                        React.createElement('div', {style:{padding:'16px 24px',borderBottom:'1px solid #333',display:'flex',justifyContent:'space-between',alignItems:'center',position:'sticky',top:0,background:'#13132b',zIndex:1}},
+                            React.createElement('div', null,
+                                React.createElement('div', {style:{fontSize:'16px',fontWeight:700,color:'#fff'}}, 'End of Day Status Report'),
+                                React.createElement('div', {style:{fontSize:'12px',color:'#6b7280',marginTop:'2px'}}, dateLabel)
+                            ),
+                            React.createElement('div', {style:{display:'flex',gap:'8px'}},
+                                React.createElement('button', {className:'btn btn-primary',style:{fontWeight:700,padding:'8px 20px'},onClick:copyEndOfDay}, '📋 Copy for Email'),
+                                React.createElement('button', {onClick:function(){setShowEndOfDay(false)},style:{background:'none',border:'1px solid #333',color:'#6b7280',fontSize:'16px',cursor:'pointer',borderRadius:'6px',width:'34px',height:'34px'}}, '✕')
+                            )
+                        ),
+                        React.createElement('div', {style:{padding:'16px 20px'},id:'eod-table-container'},
+                            React.createElement('table', {style:{width:'100%',borderCollapse:'collapse',background:bc,color:'#e5e7eb',fontFamily:'Segoe UI, Arial, sans-serif'}},
+                                React.createElement('thead', null,
+                                    React.createElement('tr', null,
+                                        React.createElement('th', {style:{...thStyle,textAlign:'left',minWidth:'70px'}}, ''),
+                                        React.createElement('th', {style:{...thStyle,minWidth:'80px'}}, 'AM'),
+                                        React.createElement('th', {style:{...thStyle,minWidth:'80px'}}, 'PM'),
+                                        React.createElement('th', {style:{...thStyle,minWidth:'50px'}}, 'Files'),
+                                        React.createElement('th', {style:{...thStyle,minWidth:'65px'}}, 'Diode'),
+                                        React.createElement('th', {style:{...thStyle,minWidth:'65px'}}, 'Phone'),
+                                        React.createElement('th', {style:thStyle}, 'Notes')
+                                    )
+                                ),
+                                React.createElement('tbody', null,
+                                    data.fullReap.length > 0 ? [secHead('Full Reap','#1e3a5f')].concat(renderRows(data.fullReap)) : null,
+                                    data.miniReap.length > 0 ? [secHead('Mini-Reap','#1e5a3a')].concat(renderRows(data.miniReap)) : null
+                                )
+                            )
+                        )
+                    )
+                )
                 );
             })()}
         </div>
     );
 }
+
 
 function AddShip({ ships, setShips, toast, editing, setEditing, setPage, logActivity }) {
     const [form, setForm] = useState({ name: '', type: 'Full REAP', location: 'San Diego, CA', poc: '', email: '', reminder: '7', lastSaid: '', ciscoRouter: '', hddStar: '', hddData: '', crna1: '', crna2: '', notes: '', tags: [], pendingInstall: false, installDate: '', pendingDeinstall: false, deinstallDate: '' });
