@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T085";
+    var APP_BUILD = "2026-02-27T086";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -2108,13 +2108,32 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
         // Save to Firebase so ALL users see it
         db.collection('acceptedEmails').doc(newEntry.id).set(newEntry);
         
-        // Update ship
+        // Auto-save POC email if from ship (not team)
+        var pocEmail = !item._isOutgoing ? (item.senderEmail || '').toLowerCase() : (item.toEmail || '').toLowerCase();
+        var pocName = !item._isOutgoing ? mapTeamName(item.senderName, item.senderEmail) : mapTeamName(item.toName, item.toEmail);
+        // Only save if it looks like a real email and isn't a team member
+        var teamDomainCheck = ['niwc.navy', 'sonar.navy', 'spawar.navy', 'mcas'];
+        var isPocTeam = teamDomainCheck.some(function(d) { return pocEmail.indexOf(d) !== -1; });
+        
+        // Update ship - add POC if not duplicate
         setShips(function(p) { return p.map(function(sh) {
-            return sh.id === ship.id ? Object.assign({}, sh, {
+            if (sh.id !== ship.id) return sh;
+            var updates = {
                 lastSaid: item._cleanSubject || sh.lastSaid,
                 lastContact: newEntry.timestamp,
                 waitingReply: item._isOutgoing
-            }) : sh;
+            };
+            // Save POC email if it's from the ship side and not already saved
+            if (pocEmail && pocEmail.indexOf('@') !== -1 && !isPocTeam) {
+                if (!sh.email || sh.email.toLowerCase() !== pocEmail) {
+                    // Check if already in POC list or primary email
+                    if (!sh.email) {
+                        updates.email = pocEmail;
+                        updates.poc = pocName !== 'Unknown' && pocName !== pocEmail ? pocName : sh.poc;
+                    }
+                }
+            }
+            return Object.assign({}, sh, updates);
         }); });
         
         // Mark processed in Firebase
@@ -3573,10 +3592,10 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
 
                                     {/* Open Issues */}
                                     {selIssues.length > 0 && (
-                                        <div style={{marginBottom:'16px',borderRadius:'12px',overflow:'hidden',border: selIssues.some(i => i.threat === 'Urgent') ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(245,158,11,0.3)'}}>
-                                            <div style={{padding:'10px 16px',background: selIssues.some(i => i.threat === 'Urgent') ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-                                                <span style={{fontSize:'11px',fontWeight:700,letterSpacing:'0.5px',color: selIssues.some(i => i.threat === 'Urgent') ? 'var(--red)' : 'var(--amber)'}}>{selIssues.some(i => i.threat === 'Urgent') ? '🚨' : '⚠️'} {selIssues.length} OPEN ISSUE{selIssues.length > 1 ? 'S' : ''}</span>
-                                                <button className="btn btn-sm" style={{fontSize:'10px',padding:'3px 10px'}} onClick={() => setQuickIssueModal(true)}>+ Add Issue</button>
+                                        <div style={{marginBottom:'16px',borderRadius:'10px',overflow:'hidden',border: selIssues.some(i => i.threat === 'Urgent') ? '1px solid rgba(239,68,68,0.3)' : '1px solid rgba(245,158,11,0.3)',maxWidth:'400px'}}>
+                                            <div style={{padding:'8px 14px',background: selIssues.some(i => i.threat === 'Urgent') ? 'rgba(239,68,68,0.08)' : 'rgba(245,158,11,0.08)',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+                                                <span style={{fontSize:'10px',fontWeight:700,letterSpacing:'0.5px',color: selIssues.some(i => i.threat === 'Urgent') ? 'var(--red)' : 'var(--amber)'}}>{selIssues.some(i => i.threat === 'Urgent') ? '🚨' : '⚠️'} {selIssues.length} OPEN ISSUE{selIssues.length > 1 ? 'S' : ''}</span>
+                                                <button className="btn btn-sm" style={{fontSize:'9px',padding:'2px 8px'}} onClick={() => setQuickIssueModal(true)}>+ Add</button>
                                             </div>
                                             {selIssues.map((issue, idx) => (
                                                 <div key={issue.id} style={{padding:'10px 16px',borderTop:'1px solid var(--border)',display:'flex',alignItems:'flex-start',gap:'10px',background:'var(--bg-card)'}}>
