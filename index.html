@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T074";
+    var APP_BUILD = "2026-02-27T076";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -3661,13 +3661,20 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                                     </div>
                                                                 )}
                                                                 
-                                                                {/* Full email text */}
-                                                                {h.emailText && h.emailText !== 'Marked as contacted' && (
-                                                                    <details style={{marginTop:'10px'}} {...(isLatest ? {open:true} : {})}>
-                                                                        <summary style={{fontSize:'11px',color:'var(--primary)',cursor:'pointer',userSelect:'none',fontWeight:600,padding:'4px 0'}}>View full email</summary>
-                                                                        <div style={{padding:'12px 14px',marginTop:'6px',background:'var(--bg-input)',borderRadius:'10px',fontSize:'12px',fontFamily:'JetBrains Mono',whiteSpace:'pre-wrap',maxHeight:'200px',overflow:'auto',lineHeight:'1.6',color:'var(--text-dim)'}}>{(function(txt) { if (!txt) return ''; return txt.replace(/From:.*?(?=\n|$)/gi, '').replace(/Sent:.*?(?=\n|$)/gi, '').replace(/To:.*?(?=\n|$)/gi, '').replace(/Cc:.*?(?=\n|$)/gi, '').replace(/Subject:.*?(?=\n|$)/gi, '').replace(/<[^>]*@[^>]*>/g, '').replace(/_{10,}/g, '').replace(/-{10,}/g, '').replace(/\n{3,}/g, '\n\n').trim(); })(h.emailText)}</div>
-                                                                    </details>
-                                                                )}
+                                                                {/* Email body — show directly for ALL emails */}
+                                                                {(() => {
+                                                                    var bodyText = h.emailText || '';
+                                                                    if (bodyText === 'Marked as contacted' || bodyText === summary) bodyText = '';
+                                                                    if (bodyText) {
+                                                                        bodyText = bodyText.replace(/From:.*?(?=\n|$)/gi, '').replace(/Sent:.*?(?=\n|$)/gi, '').replace(/To:.*?(?=\n|$)/gi, '').replace(/Cc:.*?(?=\n|$)/gi, '').replace(/Subject:.*?(?=\n|$)/gi, '').replace(/<[^>]*@[^>]*>/g, '').replace(/_{10,}/g, '').replace(/-{10,}/g, '').replace(/\n{3,}/g, '\n\n').trim();
+                                                                    }
+                                                                    // Fallback: if no body text, show notes from the entry
+                                                                    if (!bodyText && h.result && h.result.emailSummary && h.result.emailSummary !== summary) {
+                                                                        bodyText = h.result.emailSummary;
+                                                                    }
+                                                                    if (!bodyText) return null;
+                                                                    return React.createElement('div', {style: {padding:'12px 14px',marginTop:'6px',background:'var(--bg-input)',borderRadius:'10px',fontSize:'12px',whiteSpace:'pre-wrap',maxHeight:'250px',overflow:'auto',lineHeight:'1.6',color:'var(--text-dim)'}}, bodyText);
+                                                                })()}
                                                                 
                                                                 {/* Changes */}
                                                                 {h.changes?.length > 0 && (
