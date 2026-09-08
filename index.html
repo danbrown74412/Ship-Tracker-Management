@@ -432,7 +432,7 @@ const hashPassword = (password) => {
 <!-- Auto-Update Checker -->
 <script>
 (function() {
-    var APP_BUILD = "2026-02-27T078";
+    var APP_BUILD = "2026-02-27T079";
     window.__APP_BUILD = APP_BUILD;
     
     function checkForUpdate() {
@@ -3610,10 +3610,8 @@ function Dashboard({ ships, setShips, issues, setIssues, dailyChecks, parts, ins
                                                     
                                                     // Chat bubble
                                                     React.createElement('div', {style: {maxWidth:'80%',padding:'12px 16px',borderRadius: isTeamSent ? '16px 16px 4px 16px' : '16px 16px 16px 4px',background: bubbleBg,border: '1px solid ' + bubbleBorder,position:'relative'}},
-                                                        // Subject line
-                                                        summary ? React.createElement('div', {style: {fontSize:'12px',fontWeight:700,color:'var(--text)',marginBottom: displayText ? '6px' : '0'}}, summary) : null,
-                                                        // Body text
-                                                        displayText && displayText !== summary ? React.createElement('div', {style: {fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6',whiteSpace:'pre-wrap',maxHeight:'200px',overflow:'auto'}}, displayText) : null
+                                                        // Body text only — no subject in bubble
+                                                        (displayText || summary) ? React.createElement('div', {style: {fontSize:'12px',color:'var(--text-dim)',lineHeight:'1.6',whiteSpace:'pre-wrap',maxHeight:'200px',overflow:'auto'}}, displayText || summary) : null
                                                     ),
                                                     
                                                     // Actions row
